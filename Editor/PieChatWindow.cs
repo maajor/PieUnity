@@ -38,12 +38,14 @@ namespace Pie.Editor
         private const string PREF_API_KEY      = "Pie_APIKey";
         private const string PREF_PROVIDER     = "Pie_Provider";
         private const string PREF_MODEL        = "Pie_Model";
+        private const string PREF_BASE_URL     = "Pie_BaseUrl";
         private const string PREF_SHOW_LOGS    = "Pie_ShowLogs";
         private const string PREF_VERBOSE_LOGS = "Pie_VerboseLogs";
 
         private string _apiKey    = "";
         private string _provider  = "openai";
         private string _model     = "gpt-4.1-mini";
+        private string _baseUrl   = "";
         private bool   _showApiKey = false;
         private bool   _showSettings = true;
         private bool   _showLogs = false;
@@ -64,6 +66,7 @@ namespace Pie.Editor
             _apiKey   = EditorPrefs.GetString(PREF_API_KEY, "");
             _provider = EditorPrefs.GetString(PREF_PROVIDER, "openai");
             _model    = EditorPrefs.GetString(PREF_MODEL, "gpt-4.1-mini");
+            _baseUrl  = EditorPrefs.GetString(PREF_BASE_URL, "");
             _showLogs = EditorPrefs.GetBool(PREF_SHOW_LOGS, false);
             _verboseLogs = EditorPrefs.GetBool(PREF_VERBOSE_LOGS, false);
             PieDiagnostics.CurrentLevel = _verboseLogs ? PieLogLevel.Verbose : PieLogLevel.Info;
@@ -218,6 +221,17 @@ namespace Pie.Editor
             {
                 _model = newModel;
                 EditorPrefs.SetString(PREF_MODEL, _model);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            // Base URL
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Base URL", GUILayout.Width(80));
+            var newBaseUrl = EditorGUILayout.TextField(_baseUrl);
+            if (newBaseUrl != _baseUrl)
+            {
+                _baseUrl = newBaseUrl;
+                EditorPrefs.SetString(PREF_BASE_URL, _baseUrl);
             }
             EditorGUILayout.EndHorizontal();
 
@@ -1036,8 +1050,9 @@ namespace Pie.Editor
             if (_bridge?.IsInitialized != true) return;
 
             var escaped = _apiKey.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            var escapedBaseUrl = _baseUrl.Replace("\\", "\\\\").Replace("\"", "\\\"");
             var verboseLogs = _verboseLogs ? "true" : "false";
-            var json = $"{{\"apiKey\":\"{escaped}\",\"provider\":\"{_provider}\",\"model\":\"{_model}\",\"verboseLogs\":{verboseLogs}}}";
+            var json = $"{{\"apiKey\":\"{escaped}\",\"provider\":\"{_provider}\",\"model\":\"{_model}\",\"baseUrl\":\"{escapedBaseUrl}\",\"verboseLogs\":{verboseLogs}}}";
             _bridge.SendToJs("set_config", json);
         }
 

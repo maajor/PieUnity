@@ -14643,14 +14643,15 @@ ${extensionSection.join("\n\n---\n\n")}
       extensionsPromptSection
     ].join("\n");
   }
-  function buildModel(provider, modelId) {
+  function buildModel(provider, modelId, baseUrlOverride = "") {
     const base = getBaseConfig(provider);
+    const effectiveBaseUrl = baseUrlOverride.trim().length > 0 ? baseUrlOverride.trim() : base.baseUrl;
     return {
       id: modelId,
       name: modelId,
       api: base.api,
       provider,
-      baseUrl: base.baseUrl,
+      baseUrl: effectiveBaseUrl,
       reasoning: false,
       input: ["text"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -14669,6 +14670,7 @@ ${extensionSection.join("\n\n---\n\n")}
   var _apiKey = "";
   var _provider = "openai";
   var _modelId = "gpt-4.1-mini";
+  var _baseUrl = "";
   var _verboseLogs = false;
   var _currentSession = createSessionRecord({
     provider: _provider,
@@ -14741,7 +14743,7 @@ ${extensionSection.join("\n\n---\n\n")}
   var agent = new Agent({
     initialState: {
       systemPrompt: buildSystemPrompt(projectRoot, isEditor),
-      model: buildModel(_provider, _modelId),
+      model: buildModel(_provider, _modelId, _baseUrl),
       tools: createBuiltinTools()
     },
     sessionId: _currentSession.id,
@@ -14783,7 +14785,7 @@ ${extensionSection.join("\n\n---\n\n")}
       todoState: []
     });
     agent.reset();
-    agent.setModel(buildModel(_provider, _modelId));
+    agent.setModel(buildModel(_provider, _modelId, _baseUrl));
     rebuildAgentSurface();
     todoTool.reset();
     syncSessionInfo();
@@ -14795,7 +14797,7 @@ ${extensionSection.join("\n\n---\n\n")}
     agent.reset();
     agent.replaceMessages(record.messages || []);
     agent.resetProcessingState();
-    agent.setModel(buildModel(_provider, _modelId));
+    agent.setModel(buildModel(_provider, _modelId, _baseUrl));
     rebuildAgentSurface();
     todoTool.restore(record.todoState || []);
     syncSessionInfo();
@@ -14828,7 +14830,7 @@ ${extensionSection.join("\n\n---\n\n")}
   function applyModelSelection(provider, modelId) {
     _provider = provider;
     _modelId = modelId;
-    agent.setModel(buildModel(_provider, _modelId));
+    agent.setModel(buildModel(_provider, _modelId, _baseUrl));
     rebuildAgentSurface();
     persistCurrentSession();
   }
@@ -15155,6 +15157,7 @@ ${initialMemory}`);
             if (data?.apiKey !== void 0) _apiKey = data.apiKey;
             if (data?.provider !== void 0) _provider = data.provider;
             if (data?.model !== void 0) _modelId = data.model;
+            if (data?.baseUrl !== void 0) _baseUrl = data.baseUrl;
             if (data?.verboseLogs !== void 0) _verboseLogs = data.verboseLogs === true;
             globalThis.__pieVerboseLogs = _verboseLogs;
             applyModelSelection(_provider, _modelId);

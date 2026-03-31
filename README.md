@@ -30,7 +30,7 @@ Install through Unity Package Manager:
 - Git release repository:
   `Add package from git URL...`
 - Current public Git URL:
-  `https://github.com/Cydream-Tech/PieUnity.git#0.1.1`
+  `https://github.com/Cydream-Tech/PieUnity.git#0.1.2`
 
 After installation, you can import the `Extension Demo` sample from the Package Manager Samples section.
 
@@ -39,7 +39,7 @@ After installation, you can import the `Extension Demo` sample from the Package 
 ### Editor
 
 1. Open `Tools > Pie > Pie Chat`
-2. Enter your `apiKey`, `provider`, and `model`
+2. Enter your `apiKey`, `provider`, `model`, and optional `baseUrl`
 3. Start chatting
 
 Available local commands include:
@@ -76,7 +76,7 @@ public class Demo : MonoBehaviour
     private void Start()
     {
         runner.Reinitialize(Path.Combine(Application.persistentDataPath, "PieWorkspace"));
-        runner.SetConfig("YOUR_API_KEY", "openai", "gpt-4.1-mini");
+        runner.SetConfig("YOUR_API_KEY", "openai", "gpt-4.1-mini", "https://api.openai.com/v1");
         runner.OnAssistantMessage += msg => Debug.Log("AI: " + msg);
         runner.SendMessage("Create a cube at (0,1,0).");
     }
@@ -111,6 +111,13 @@ Create a settings asset from:
 - `Skill Search Paths`
 
 Paths are scanned in order, and later paths override earlier items with the same skill or extension name.
+
+Connection settings:
+
+- `apiKey` authenticates with the selected provider
+- `provider` selects the built-in API family
+- `model` selects the model ID
+- `baseUrl` is optional; when set, it overrides the built-in provider endpoint
 
 ## Skills
 

@@ -64,14 +64,15 @@ namespace Pie
             _bridge = null;
         }
 
-        public bool SetConfig(string apiKey, string provider = null, string model = null)
+        public bool SetConfig(string apiKey, string provider = null, string model = null, string baseUrl = null)
         {
             if (_bridge?.IsInitialized != true) return false;
 
             var safeApiKey = EscapeJsonString(apiKey ?? "");
             var safeProvider = EscapeJsonString(provider ?? "");
             var safeModel = EscapeJsonString(model ?? "");
-            var json = $"{{\"apiKey\":\"{safeApiKey}\",\"provider\":\"{safeProvider}\",\"model\":\"{safeModel}\"}}";
+            var safeBaseUrl = EscapeJsonString(baseUrl ?? "");
+            var json = $"{{\"apiKey\":\"{safeApiKey}\",\"provider\":\"{safeProvider}\",\"model\":\"{safeModel}\",\"baseUrl\":\"{safeBaseUrl}\"}}";
             return _bridge.SendToJs("set_config", json);
         }
 
