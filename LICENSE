@@ -1,0 +1,11 @@
+Pie Unity is currently distributed as UNLICENSED source.
+
+Copyright (c) Pie Team. All rights reserved.
+
+Until this file is replaced with an explicit public license, no permission is
+granted to copy, modify, distribute, sublicense, or use this package except by
+separate written agreement from the copyright holder.
+
+Before publishing a public standalone repository or OpenUPM package, replace
+this file and the `license` field in `package.json` with the intended final
+license terms.
