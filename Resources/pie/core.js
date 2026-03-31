@@ -14590,9 +14590,9 @@ ${skill.content}`
     "ollama": { baseUrl: "http://localhost:11434/v1", api: "openai-completions" }
   };
   var MODEL_PRESETS = {
-    "kimi-fast": { provider: "kimi-cn", modelId: "kimi-k2.5", label: "Kimi K2.5" },
     "openai-fast": { provider: "openai", modelId: "gpt-4.1-mini", label: "GPT-4.1 mini" },
     "openai-strong": { provider: "openai", modelId: "gpt-4.1", label: "GPT-4.1" },
+    "kimi-fast": { provider: "kimi-cn", modelId: "kimi-k2.5", label: "Kimi K2.5" },
     "claude-fast": { provider: "anthropic", modelId: "claude-3-5-haiku-latest", label: "Claude 3.5 Haiku" },
     "claude-strong": { provider: "anthropic", modelId: "claude-3-7-sonnet-latest", label: "Claude Sonnet" }
   };
@@ -14667,8 +14667,8 @@ ${extensionSection.join("\n\n---\n\n")}
     };
   }
   var _apiKey = "";
-  var _provider = "kimi-cn";
-  var _modelId = "moonshot-v1-8k";
+  var _provider = "openai";
+  var _modelId = "gpt-4.1-mini";
   var _verboseLogs = false;
   var _currentSession = createSessionRecord({
     provider: _provider,

@@ -42,8 +42,8 @@ namespace Pie.Editor
         private const string PREF_VERBOSE_LOGS = "Pie_VerboseLogs";
 
         private string _apiKey    = "";
-        private string _provider  = "kimi-cn";
-        private string _model     = "moonshot-v1-8k";
+        private string _provider  = "openai";
+        private string _model     = "gpt-4.1-mini";
         private bool   _showApiKey = false;
         private bool   _showSettings = true;
         private bool   _showLogs = false;
@@ -62,8 +62,8 @@ namespace Pie.Editor
         private void OnEnable()
         {
             _apiKey   = EditorPrefs.GetString(PREF_API_KEY, "");
-            _provider = EditorPrefs.GetString(PREF_PROVIDER, "kimi-cn");
-            _model    = EditorPrefs.GetString(PREF_MODEL, "moonshot-v1-8k");
+            _provider = EditorPrefs.GetString(PREF_PROVIDER, "openai");
+            _model    = EditorPrefs.GetString(PREF_MODEL, "gpt-4.1-mini");
             _showLogs = EditorPrefs.GetBool(PREF_SHOW_LOGS, false);
             _verboseLogs = EditorPrefs.GetBool(PREF_VERBOSE_LOGS, false);
             PieDiagnostics.CurrentLevel = _verboseLogs ? PieLogLevel.Verbose : PieLogLevel.Info;
@@ -1016,7 +1016,7 @@ namespace Pie.Editor
             try
             {
                 var projectRoot = System.IO.Directory.GetParent(Application.dataPath).FullName;
-                var agentsPath = System.IO.Path.Combine(projectRoot, ".pie", "AGENTS.md");
+                var agentsPath = Pie.PieProjectPaths.GetProjectMemoryPath(projectRoot);
                 var memory = System.IO.File.Exists(agentsPath)
                     ? System.IO.File.ReadAllText(agentsPath)
                     : "No AGENTS.md found yet.";
@@ -1054,7 +1054,7 @@ namespace Pie.Editor
             try
             {
                 var projectRoot = System.IO.Directory.GetParent(Application.dataPath).FullName;
-                var sessionsDir = System.IO.Path.Combine(projectRoot, ".pie", "sessions");
+                var sessionsDir = Pie.PieProjectPaths.GetSessionsDirectory();
                 _sessions.Clear();
                 if (!System.IO.Directory.Exists(sessionsDir)) return;
 
