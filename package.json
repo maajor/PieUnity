@@ -23,6 +23,6 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cydream-Tech/PieUnity.git"
+    "url": "git@github.com:Cydream-Tech/PieUnity.git"
   }
 }

@@ -120,6 +120,12 @@ namespace Pie
             EditorApplication.update -= Tick;
 #endif
 
+            // Domain reload can happen while a streaming request is still in flight.
+            // Cancel all background bridge work before tearing down JsEnv so old-domain
+            // tasks do not block assembly reload.
+            PieHttpBridge.CancelAllRequests();
+            PieFileBridge.CancelAllRequests();
+
             _jsEnv?.Dispose();
             _jsEnv = null;
 

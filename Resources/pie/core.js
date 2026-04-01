@@ -14183,6 +14183,12 @@ ${rootObjectLines}
   }
 
   // src/session-store.ts
+  function isSessionEmpty(record) {
+    if (!record) return true;
+    const messageCount = Array.isArray(record.messages) ? record.messages.length : 0;
+    const todoCount = Array.isArray(record.todoState) ? record.todoState.length : 0;
+    return messageCount === 0 && todoCount === 0;
+  }
   function getSessionsDir(projectRoot2) {
     const fromBridge = globalThis.pieBridge?.getSessionsDirectory?.();
     if (typeof fromBridge === "string" && fromBridge.length > 0) {
@@ -14257,6 +14263,12 @@ ${rootObjectLines}
     );
     return normalized;
   }
+  function deleteSession(projectRoot2, sessionId) {
+    const path = getSessionPath(projectRoot2, sessionId);
+    if (CS.System.IO.File.Exists(path)) {
+      CS.System.IO.File.Delete(path);
+    }
+  }
   function loadSession(projectRoot2, sessionId) {
     const path = getSessionPath(projectRoot2, sessionId);
     if (!CS.System.IO.File.Exists(path)) return null;
@@ -14271,6 +14283,9 @@ ${rootObjectLines}
     for (const path of listSessionFiles(projectRoot2)) {
       try {
         const session = JSON.parse(CS.System.IO.File.ReadAllText(path));
+        if (isSessionEmpty(session)) {
+          continue;
+        }
         sessions.push({
           id: session.id,
           title: session.title,
@@ -14767,16 +14782,32 @@ ${extensionSection.join("\n\n---\n\n")}
     return result;
   }
   function persistCurrentSession() {
-    _currentSession = saveSession(projectRoot, {
+    const nextRecord = {
       ..._currentSession,
       provider: _provider,
       modelId: _modelId,
       messages: agent.state.messages.slice(),
       todoState: todoTool.getState()
-    });
+    };
+    if (isSessionEmpty(nextRecord)) {
+      deleteSession(projectRoot, nextRecord.id);
+      _currentSession = {
+        ...nextRecord,
+        title: "New Session",
+        messageCount: 0
+      };
+      syncSessionInfo();
+      return;
+    }
+    _currentSession = saveSession(projectRoot, nextRecord);
     syncSessionInfo();
   }
+  function cancelActivePromptForSessionSwitch() {
+    agent.abort();
+    agent.resetProcessingState();
+  }
   function startFreshSession(parentSessionId) {
+    cancelActivePromptForSessionSwitch();
     _currentSession = createSessionRecord({
       parentSessionId,
       provider: _provider,
@@ -14789,18 +14820,19 @@ ${extensionSection.join("\n\n---\n\n")}
     rebuildAgentSurface();
     todoTool.reset();
     syncSessionInfo();
+    emitSessionSync();
   }
   function restoreSessionRecord(record) {
+    cancelActivePromptForSessionSwitch();
     _currentSession = record;
     _provider = record.provider || _provider;
     _modelId = record.modelId || _modelId;
-    agent.reset();
     agent.replaceMessages(record.messages || []);
-    agent.resetProcessingState();
     agent.setModel(buildModel(_provider, _modelId, _baseUrl));
     rebuildAgentSurface();
     todoTool.restore(record.todoState || []);
     syncSessionInfo();
+    emitSessionSync();
   }
   function forkFromRecord(record) {
     const forked = createSessionRecord({
@@ -14817,6 +14849,23 @@ ${extensionSection.join("\n\n---\n\n")}
     bridge.sendToUnity("message_update", { type: "text_full", text });
     bridge.sendToUnity("turn_end", { role: "assistant", stopReason: "stop" });
     bridge.sendToUnity("agent_end", {});
+  }
+  function emitSessionSync() {
+    const messages = (agent.state.messages || []).map((message) => ({
+      role: String(message?.role || "assistant"),
+      content: Array.isArray(message?.content) ? message.content.filter((block) => block && typeof block === "object").map((block) => ({
+        type: String(block?.type || "text"),
+        text: typeof block?.text === "string" ? block.text : ""
+      })) : [],
+      errorMessage: typeof message?.errorMessage === "string" ? message.errorMessage : "",
+      stopReason: typeof message?.stopReason === "string" ? message.stopReason : ""
+    }));
+    bridge.sendToUnity("session_sync", {
+      id: _currentSession.id,
+      title: _currentSession.title,
+      messageCount: messages.length,
+      messages
+    });
   }
   function emitSkillsList() {
     const skills = getAvailableSkills(projectRoot).map((skill) => ({
@@ -14863,6 +14912,39 @@ ${extensionSection.join("\n\n---\n\n")}
     }
     return args ?? {};
   }
+  function tryExplainExternalSessionId(sessionId) {
+    const trimmed = String(sessionId || "").trim();
+    if (!trimmed) return null;
+    const registryPath = CS.System.IO.Path.Combine(
+      CS.System.Environment.GetFolderPath(CS.System.Environment.SpecialFolder.UserProfile),
+      ".unity_skills",
+      "registry.json"
+    );
+    if (!CS.System.IO.File.Exists(registryPath)) {
+      return null;
+    }
+    try {
+      const registry = JSON.parse(String(CS.System.IO.File.ReadAllText(registryPath) || "{}"));
+      const entries = Object.values(registry || {});
+      const matched = entries.find((entry) => String(entry?.id || "") === trimmed);
+      if (!matched) {
+        return null;
+      }
+      const availableSessions = listSessions(projectRoot).slice(0, 8).map((session) => `- ${session.id} | ${session.title} | ${session.updatedAt}`);
+      const availableText = availableSessions.length > 0 ? `
+
+Available Pie sessions:
+${availableSessions.join("\n")}` : "\n\nNo Pie chat sessions have been saved yet.";
+      return [
+        `\`${trimmed}\` is a UnitySkills instance ID for project \`${matched.name || matched.path || "unknown"}\`, not a pie-unity chat session ID.`,
+        "pie-unity chat sessions use IDs like `sess_xxx` and are stored separately under Application.persistentDataPath/Pie/sessions.",
+        "Use `/resume` with one of the Pie session IDs shown in the Sessions panel or returned by `/resume` with no arguments.",
+        availableText
+      ].join("\n");
+    } catch {
+      return null;
+    }
+  }
   function handleLocalCommand(content) {
     const trimmed = content.trim();
     if (!trimmed.startsWith("/")) return false;
@@ -14883,7 +14965,8 @@ ${extensionSection.join("\n\n---\n\n")}
       }
       const loaded = loadSession(projectRoot, sessionId);
       if (!loaded) {
-        emitLocalAssistantMessage(`Session not found: ${sessionId}`);
+        const explanation = tryExplainExternalSessionId(sessionId);
+        emitLocalAssistantMessage(explanation || `Session not found: ${sessionId}`);
         return true;
       }
       restoreSessionRecord(loaded);
@@ -14922,7 +15005,8 @@ Loaded: ${loaded ? loaded.id : "(missing)"}`
       if (sessionId) {
         const source2 = loadSession(projectRoot, sessionId);
         if (!source2) {
-          emitLocalAssistantMessage(`Session not found: ${sessionId}`);
+          const explanation = tryExplainExternalSessionId(sessionId);
+          emitLocalAssistantMessage(explanation || `Session not found: ${sessionId}`);
           return true;
         }
         forkFromRecord(source2);
@@ -15025,6 +15109,7 @@ ${initialMemory}`);
     return false;
   }
   reloadProjectExtensions();
+  emitSessionSync();
   agent.subscribe((event) => {
     try {
       switch (event.type) {

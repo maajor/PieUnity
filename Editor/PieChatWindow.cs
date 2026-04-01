@@ -33,6 +33,9 @@ namespace Pie.Editor
         private string _skillEditorContent = "";
         private string _newSkillName = "";
         private bool _isCreatingSkill = false;
+        private string _activeSessionId = "";
+        private string _pendingRecoveryNotice = "";
+        private bool _recoveryRestoreScheduled = false;
 
         // Settings
         private const string PREF_API_KEY      = "Pie_APIKey";
@@ -50,6 +53,16 @@ namespace Pie.Editor
         private bool   _showSettings = true;
         private bool   _showLogs = false;
         private bool   _verboseLogs = false;
+
+        private const string SESSION_RECOVERY_PREFIX = "Pie_EditorRecovery_";
+        private const string SESSION_RECOVERY_ACTIVE_SESSION = SESSION_RECOVERY_PREFIX + "ActiveSessionId";
+        private const string SESSION_RECOVERY_WAS_STREAMING = SESSION_RECOVERY_PREFIX + "WasStreaming";
+        private const string SESSION_RECOVERY_LAST_USER = SESSION_RECOVERY_PREFIX + "LastUserMessage";
+        private const string SESSION_RECOVERY_DRAFT = SESSION_RECOVERY_PREFIX + "DraftInput";
+        private const string SESSION_RECOVERY_PROVIDER = SESSION_RECOVERY_PREFIX + "Provider";
+        private const string SESSION_RECOVERY_MODEL = SESSION_RECOVERY_PREFIX + "Model";
+        private const string SESSION_RECOVERY_BASE_URL = SESSION_RECOVERY_PREFIX + "BaseUrl";
+        private const string SESSION_RECOVERY_SAVED_AT = SESSION_RECOVERY_PREFIX + "SavedAtTicksUtc";
 
         // ─── Menu ─────────────────────────────────────────────────────────────
         [MenuItem("Tools/Pie/Pie Chat #&p")]   // Alt+Shift+P
@@ -70,12 +83,15 @@ namespace Pie.Editor
             _showLogs = EditorPrefs.GetBool(PREF_SHOW_LOGS, false);
             _verboseLogs = EditorPrefs.GetBool(PREF_VERBOSE_LOGS, false);
             PieDiagnostics.CurrentLevel = _verboseLogs ? PieLogLevel.Verbose : PieLogLevel.Info;
+            AssemblyReloadEvents.beforeAssemblyReload += HandleBeforeAssemblyReload;
 
             ConnectBridge();
+            ScheduleRecoveryRestore();
         }
 
         private void OnDisable()
         {
+            AssemblyReloadEvents.beforeAssemblyReload -= HandleBeforeAssemblyReload;
             DisposeBridge();
         }
 
@@ -106,6 +122,24 @@ namespace Pie.Editor
             }
 
             RefreshSessions();
+        }
+
+        private void HandleBeforeAssemblyReload()
+        {
+            SaveRecoverySnapshot();
+        }
+
+        private void ScheduleRecoveryRestore()
+        {
+            if (_recoveryRestoreScheduled)
+                return;
+
+            _recoveryRestoreScheduled = true;
+            EditorApplication.delayCall += () =>
+            {
+                _recoveryRestoreScheduled = false;
+                TryRestoreRecoverySnapshot();
+            };
         }
 
         private void DisposeBridge()
@@ -299,7 +333,8 @@ namespace Pie.Editor
             GUILayout.Space(depth * 14f);
             EditorGUILayout.BeginVertical("box");
             EditorGUILayout.LabelField($"{session.title} ({session.id})", EditorStyles.miniBoldLabel);
-            EditorGUILayout.LabelField($"{session.modelId} | {session.updatedAt}", EditorStyles.wordWrappedMiniLabel);
+            var messageLabel = session.messageCount == 1 ? "1 message" : $"{session.messageCount} messages";
+            EditorGUILayout.LabelField($"{session.modelId} | {messageLabel} | {session.updatedAt}", EditorStyles.wordWrappedMiniLabel);
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Resume", GUILayout.Width(60)))
                 SendCommand($"/resume {session.id}");
@@ -651,6 +686,7 @@ namespace Pie.Editor
                 case "tool_start":      HandleToolStart(json);     break;
                 case "tool_end":        HandleToolEnd(json);       break;
                 case "turn_end":        HandleTurnEnd(json);        break;
+                case "session_sync":    HandleSessionSync(json);    break;
                 case "skills_list":     HandleSkillsList(json);     break;
                 case "error":           HandleError(json);          break;
                 case "agent_end":
@@ -876,6 +912,46 @@ namespace Pie.Editor
             }
         }
 
+        private void HandleSessionSync(string json)
+        {
+            try
+            {
+                var payload = JsonUtility.FromJson<SessionSyncPayload>(json);
+                _activeSessionId = payload?.id ?? "";
+                _messages.Clear();
+
+                if (payload?.messages != null)
+                {
+                    foreach (var message in payload.messages)
+                    {
+                        var role = string.IsNullOrEmpty(message.role) ? "assistant" : message.role;
+                        var content = FlattenSessionContent(message);
+                        if (string.IsNullOrEmpty(content) && !string.IsNullOrEmpty(message.errorMessage))
+                            content = $"⚠ {message.errorMessage}";
+                        if (string.IsNullOrEmpty(content) && !string.IsNullOrEmpty(message.stopReason))
+                            content = $"[{message.stopReason}]";
+                        _messages.Add(new ChatMessage(role, content ?? ""));
+                    }
+                }
+
+                _isStreaming = false;
+                _statusText = payload == null
+                    ? "Session synced"
+                    : $"Session: {payload.title} ({payload.id})";
+                if (!string.IsNullOrEmpty(_pendingRecoveryNotice))
+                {
+                    AddSystemMessage(_pendingRecoveryNotice);
+                    _pendingRecoveryNotice = "";
+                }
+                RefreshSessions();
+                ScrollToBottomSoon();
+            }
+            catch (Exception ex)
+            {
+                PieDiagnostics.Warning($"[PieChatWindow] HandleSessionSync: {ex.Message}");
+            }
+        }
+
         private void HandleError(string json)
         {
             _isStreaming = false;
@@ -1082,7 +1158,7 @@ namespace Pie.Editor
                     {
                         var json = System.IO.File.ReadAllText(file);
                         var session = JsonUtility.FromJson<SessionInfo>(json);
-                        if (session != null && !string.IsNullOrEmpty(session.id))
+                        if (session != null && !string.IsNullOrEmpty(session.id) && session.messageCount > 0)
                             _sessions.Add(session);
                     }
                     catch
@@ -1472,6 +1548,154 @@ namespace Pie.Editor
             return sb.ToString();
         }
 
+        private void SaveRecoverySnapshot()
+        {
+            try
+            {
+                SessionState.SetString(SESSION_RECOVERY_ACTIVE_SESSION, _activeSessionId ?? "");
+                SessionState.SetBool(SESSION_RECOVERY_WAS_STREAMING, _isStreaming);
+                SessionState.SetString(SESSION_RECOVERY_LAST_USER, GetLatestUserMessage() ?? "");
+                SessionState.SetString(SESSION_RECOVERY_DRAFT, _inputText ?? "");
+                SessionState.SetString(SESSION_RECOVERY_PROVIDER, _provider ?? "");
+                SessionState.SetString(SESSION_RECOVERY_MODEL, _model ?? "");
+                SessionState.SetString(SESSION_RECOVERY_BASE_URL, _baseUrl ?? "");
+                SessionState.SetString(SESSION_RECOVERY_SAVED_AT, DateTime.UtcNow.Ticks.ToString());
+            }
+            catch (Exception ex)
+            {
+                PieDiagnostics.Warning($"[PieChatWindow] SaveRecoverySnapshot: {ex.Message}");
+            }
+        }
+
+        private void TryRestoreRecoverySnapshot()
+        {
+            try
+            {
+                if (_bridge?.IsInitialized != true)
+                {
+                    ScheduleRecoveryRestore();
+                    return;
+                }
+
+                var savedAtRaw = SessionState.GetString(SESSION_RECOVERY_SAVED_AT, "");
+                if (string.IsNullOrEmpty(savedAtRaw))
+                    return;
+
+                long savedAtTicksUtc;
+                if (!long.TryParse(savedAtRaw, out savedAtTicksUtc))
+                {
+                    ClearRecoverySnapshot();
+                    return;
+                }
+
+                var age = new TimeSpan(Math.Max(0, DateTime.UtcNow.Ticks - savedAtTicksUtc));
+                if (age > TimeSpan.FromMinutes(30))
+                {
+                    ClearRecoverySnapshot();
+                    return;
+                }
+
+                var snapshot = new RecoverySnapshot
+                {
+                    activeSessionId = SessionState.GetString(SESSION_RECOVERY_ACTIVE_SESSION, ""),
+                    wasStreaming = SessionState.GetBool(SESSION_RECOVERY_WAS_STREAMING, false),
+                    lastUserMessageText = SessionState.GetString(SESSION_RECOVERY_LAST_USER, ""),
+                    draftInputText = SessionState.GetString(SESSION_RECOVERY_DRAFT, ""),
+                    provider = SessionState.GetString(SESSION_RECOVERY_PROVIDER, ""),
+                    model = SessionState.GetString(SESSION_RECOVERY_MODEL, ""),
+                    baseUrl = SessionState.GetString(SESSION_RECOVERY_BASE_URL, ""),
+                    savedAtTicksUtc = savedAtTicksUtc,
+                };
+                ClearRecoverySnapshot();
+
+                if (!string.IsNullOrEmpty(snapshot.provider))
+                    _provider = snapshot.provider;
+                if (!string.IsNullOrEmpty(snapshot.model))
+                    _model = snapshot.model;
+                if (snapshot.baseUrl != null)
+                    _baseUrl = snapshot.baseUrl;
+
+                if (snapshot.wasStreaming)
+                {
+                    var restoredInput = IsRestorableInputText(snapshot.draftInputText)
+                        ? snapshot.draftInputText
+                        : (IsRestorableInputText(snapshot.lastUserMessageText) ? snapshot.lastUserMessageText : "");
+                    if (!string.IsNullOrEmpty(restoredInput))
+                        _inputText = restoredInput;
+                    _pendingRecoveryNotice = "Previous response was interrupted by C# compilation. The last prompt has been restored to the input box.";
+                }
+                else if (IsRestorableInputText(snapshot.draftInputText))
+                {
+                    _inputText = snapshot.draftInputText;
+                    _pendingRecoveryNotice = "Draft input restored after C# compilation.";
+                }
+
+                if (!string.IsNullOrEmpty(snapshot.activeSessionId) && _bridge?.IsInitialized == true)
+                {
+                    SendCommand($"/resume {snapshot.activeSessionId}");
+                }
+                else if (!string.IsNullOrEmpty(_pendingRecoveryNotice))
+                {
+                    AddSystemMessage(_pendingRecoveryNotice);
+                    _pendingRecoveryNotice = "";
+                }
+            }
+            catch (Exception ex)
+            {
+                PieDiagnostics.Warning($"[PieChatWindow] TryRestoreRecoverySnapshot: {ex.Message}");
+            }
+        }
+
+        private void ClearRecoverySnapshot()
+        {
+            SessionState.EraseString(SESSION_RECOVERY_ACTIVE_SESSION);
+            SessionState.EraseBool(SESSION_RECOVERY_WAS_STREAMING);
+            SessionState.EraseString(SESSION_RECOVERY_LAST_USER);
+            SessionState.EraseString(SESSION_RECOVERY_DRAFT);
+            SessionState.EraseString(SESSION_RECOVERY_PROVIDER);
+            SessionState.EraseString(SESSION_RECOVERY_MODEL);
+            SessionState.EraseString(SESSION_RECOVERY_BASE_URL);
+            SessionState.EraseString(SESSION_RECOVERY_SAVED_AT);
+        }
+
+        private bool IsRestorableInputText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            var trimmed = value.Trim();
+            return !trimmed.StartsWith("/", StringComparison.Ordinal);
+        }
+
+        private string GetLatestUserMessage()
+        {
+            for (var i = _messages.Count - 1; i >= 0; i--)
+            {
+                if (_messages[i].Role == "user" && !string.IsNullOrWhiteSpace(_messages[i].Content))
+                    return _messages[i].Content;
+            }
+
+            return "";
+        }
+
+        private string FlattenSessionContent(SessionSyncMessage message)
+        {
+            if (message?.content == null || message.content.Length == 0)
+                return "";
+
+            var parts = new List<string>();
+            foreach (var block in message.content)
+            {
+                if (block == null)
+                    continue;
+
+                if (block.type == "text" && !string.IsNullOrEmpty(block.text))
+                    parts.Add(block.text);
+            }
+
+            return string.Join("", parts);
+        }
+
         // ─── Data ─────────────────────────────────────────────────────────────
         private class ChatMessage
         {
@@ -1516,6 +1740,44 @@ namespace Pie.Editor
             public string provider;
             public string modelId;
             public int messageCount;
+        }
+
+        [Serializable]
+        private class SessionSyncPayload
+        {
+            public string id;
+            public string title;
+            public int messageCount;
+            public SessionSyncMessage[] messages;
+        }
+
+        [Serializable]
+        private class SessionSyncMessage
+        {
+            public string role;
+            public string errorMessage;
+            public string stopReason;
+            public SessionSyncContent[] content;
+        }
+
+        [Serializable]
+        private class SessionSyncContent
+        {
+            public string type;
+            public string text;
+        }
+
+        [Serializable]
+        private class RecoverySnapshot
+        {
+            public string activeSessionId;
+            public bool wasStreaming;
+            public string lastUserMessageText;
+            public string draftInputText;
+            public string provider;
+            public string model;
+            public string baseUrl;
+            public long savedAtTicksUtc;
         }
     }
 }

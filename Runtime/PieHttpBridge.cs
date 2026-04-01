@@ -89,6 +89,24 @@ namespace Pie
             }
         }
 
+        public static void CancelAllRequests()
+        {
+            foreach (var requestId in _requests.Keys)
+            {
+                if (_requests.TryRemove(requestId, out var state))
+                {
+                    try
+                    {
+                        state.Cts.Cancel();
+                    }
+                    catch
+                    {
+                        // Ignore cancellation races during domain reload / disposal.
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// Get the HTTP status code for a request.
         /// Returns -1 if still waiting for response headers, 0 if unknown/finished.

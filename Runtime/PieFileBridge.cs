@@ -236,6 +236,28 @@ namespace Pie
                 state.Cts.Cancel();
         }
 
+        public static void CancelAllRequests()
+        {
+            foreach (var requestId in _requests.Keys)
+            {
+                if (_requests.TryRemove(requestId, out var state))
+                {
+                    try
+                    {
+                        state.Cts.Cancel();
+                    }
+                    catch
+                    {
+                        // Ignore cancellation races during domain reload / disposal.
+                    }
+                    finally
+                    {
+                        state.Cts.Dispose();
+                    }
+                }
+            }
+        }
+
         public static void ReleaseRequest(int requestId)
         {
             if (_requests.TryRemove(requestId, out var state))
