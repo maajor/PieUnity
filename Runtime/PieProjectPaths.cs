@@ -11,6 +11,32 @@ namespace Pie
 {
     public static class PieProjectPaths
     {
+        [Serializable]
+        public sealed class FileToolRootJson
+        {
+            public string name;
+            public string description;
+            public string path;
+            public string[] defaultPrefixes;
+        }
+
+        [Serializable]
+        public sealed class FileToolRootsPayload
+        {
+            public string defaultRoot;
+            public FileToolRootJson[] roots;
+        }
+
+        private sealed class FileToolRootCandidate
+        {
+            public string Name;
+            public string Description;
+            public string Path;
+            public bool AvailableInEditor;
+            public bool AvailableInRuntime;
+            public List<string> DefaultPrefixes = new List<string>();
+        }
+
         private const string DefaultSettingsAssetPath = "Assets/Pie/PieSettings.asset";
         private const string DefaultExtensionRelativePath = "Assets/Pie/Extensions";
         private const string DefaultSkillRelativePath = "Assets/Pie/Skills";
@@ -35,6 +61,12 @@ namespace Pie
         public static string GetSkillSearchPathsJson(string projectRoot, PieSettings settingsOverride)
         {
             return BuildJsonArray(GetSkillSearchPaths(projectRoot, settingsOverride));
+        }
+
+        public static string GetFileToolRootsJson(string projectRoot, PieSettings settingsOverride, bool isEditor)
+        {
+            var payload = BuildFileToolRootsPayload(projectRoot, settingsOverride, isEditor);
+            return JsonUtility.ToJson(payload);
         }
 
         public static string GetPrimaryExtensionDirectory(string projectRoot)
@@ -137,6 +169,210 @@ namespace Pie
 #else
             return null;
 #endif
+        }
+
+        private static IReadOnlyList<PieFileToolRootDefinition> LoadConfiguredFileToolRoots(PieSettings settingsOverride)
+        {
+            if (settingsOverride != null)
+                return settingsOverride.FileToolRoots;
+
+#if UNITY_EDITOR
+            var settings = LoadSettingsAsset();
+            if (settings == null)
+                return null;
+
+            return settings.FileToolRoots;
+#else
+            return null;
+#endif
+        }
+
+        private static string LoadConfiguredDefaultFileToolRoot(PieSettings settingsOverride, bool isEditor)
+        {
+            if (settingsOverride != null)
+                return isEditor ? settingsOverride.DefaultFileToolRootEditor : settingsOverride.DefaultFileToolRootRuntime;
+
+#if UNITY_EDITOR
+            var settings = LoadSettingsAsset();
+            if (settings == null)
+                return null;
+
+            return isEditor ? settings.DefaultFileToolRootEditor : settings.DefaultFileToolRootRuntime;
+#else
+            return null;
+#endif
+        }
+
+        private static FileToolRootsPayload BuildFileToolRootsPayload(string projectRoot, PieSettings settingsOverride, bool isEditor)
+        {
+            var roots = GetActiveFileToolRoots(projectRoot, settingsOverride, isEditor);
+            var payload = new FileToolRootsPayload
+            {
+                defaultRoot = ResolveDefaultFileToolRootName(roots, settingsOverride, isEditor),
+                roots = new FileToolRootJson[roots.Count],
+            };
+
+            for (var i = 0; i < roots.Count; i++)
+            {
+                payload.roots[i] = new FileToolRootJson
+                {
+                    name = roots[i].Name,
+                    description = roots[i].Description,
+                    path = roots[i].Path,
+                    defaultPrefixes = roots[i].DefaultPrefixes.ToArray(),
+                };
+            }
+
+            return payload;
+        }
+
+        private static List<FileToolRootCandidate> GetActiveFileToolRoots(string projectRoot, PieSettings settingsOverride, bool isEditor)
+        {
+            var merged = GetBuiltInFileToolRoots(projectRoot);
+            var configuredRoots = LoadConfiguredFileToolRoots(settingsOverride);
+
+            if (configuredRoots != null)
+            {
+                for (var i = 0; i < configuredRoots.Count; i++)
+                {
+                    var configured = configuredRoots[i];
+                    if (configured == null || string.IsNullOrWhiteSpace(configured.Name))
+                        continue;
+
+                    var name = configured.Name.Trim();
+                    var existing = merged.FindIndex(candidate => string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
+                    var resolvedPath = ResolveConfiguredFileToolRootPath(projectRoot, configured);
+
+                    if (existing >= 0)
+                    {
+                        if (!string.IsNullOrWhiteSpace(configured.Description))
+                            merged[existing].Description = configured.Description.Trim();
+
+                        if (!string.IsNullOrWhiteSpace(resolvedPath))
+                            merged[existing].Path = resolvedPath;
+
+                        merged[existing].AvailableInEditor = configured.AvailableInEditor;
+                        merged[existing].AvailableInRuntime = configured.AvailableInRuntime;
+
+                        if (configured.DefaultPrefixes != null && configured.DefaultPrefixes.Count > 0)
+                            merged[existing].DefaultPrefixes = NormalizePrefixes(configured.DefaultPrefixes);
+
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(resolvedPath))
+                        continue;
+
+                    merged.Add(new FileToolRootCandidate
+                    {
+                        Name = name,
+                        Description = configured.Description?.Trim() ?? "",
+                        Path = resolvedPath,
+                        AvailableInEditor = configured.AvailableInEditor,
+                        AvailableInRuntime = configured.AvailableInRuntime,
+                        DefaultPrefixes = NormalizePrefixes(configured.DefaultPrefixes),
+                    });
+                }
+            }
+
+            var active = new List<FileToolRootCandidate>();
+            for (var i = 0; i < merged.Count; i++)
+            {
+                var candidate = merged[i];
+                if (candidate == null || string.IsNullOrWhiteSpace(candidate.Name) || string.IsNullOrWhiteSpace(candidate.Path))
+                    continue;
+
+                var allowed = isEditor ? candidate.AvailableInEditor : candidate.AvailableInRuntime;
+                if (!allowed)
+                    continue;
+
+                if (!isEditor && string.Equals(candidate.Name, "project", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                active.Add(candidate);
+            }
+
+            return active;
+        }
+
+        private static List<FileToolRootCandidate> GetBuiltInFileToolRoots(string projectRoot)
+        {
+            return new List<FileToolRootCandidate>
+            {
+                new FileToolRootCandidate
+                {
+                    Name = "persistent",
+                    Description = "Runtime-owned files under Application.persistentDataPath.",
+                    Path = NormalizePath(Application.persistentDataPath),
+                    AvailableInEditor = true,
+                    AvailableInRuntime = true,
+                    DefaultPrefixes = new List<string>(),
+                },
+                new FileToolRootCandidate
+                {
+                    Name = "project",
+                    Description = "Unity project files under the project root, including Assets and Packages.",
+                    Path = NormalizePath(projectRoot),
+                    AvailableInEditor = true,
+                    AvailableInRuntime = false,
+                    DefaultPrefixes = new List<string> { "Assets", "Packages", "ProjectSettings" },
+                },
+            };
+        }
+
+        private static string ResolveDefaultFileToolRootName(
+            List<FileToolRootCandidate> roots,
+            PieSettings settingsOverride,
+            bool isEditor)
+        {
+            var configured = LoadConfiguredDefaultFileToolRoot(settingsOverride, isEditor);
+            if (!string.IsNullOrWhiteSpace(configured) &&
+                roots.Exists(root => string.Equals(root.Name, configured, StringComparison.OrdinalIgnoreCase)))
+            {
+                return configured.Trim();
+            }
+
+            if (roots.Exists(root => string.Equals(root.Name, "persistent", StringComparison.OrdinalIgnoreCase)))
+                return "persistent";
+
+            return roots.Count > 0 ? roots[0].Name : null;
+        }
+
+        private static string ResolveConfiguredFileToolRootPath(string projectRoot, PieFileToolRootDefinition configured)
+        {
+            if (configured == null)
+                return null;
+
+            if (!string.IsNullOrWhiteSpace(configured.AbsolutePath))
+                return NormalizePath(configured.AbsolutePath.Trim());
+
+            if (!string.IsNullOrWhiteSpace(configured.RelativePathFromProjectRoot))
+                return NormalizePath(Path.Combine(projectRoot ?? "", configured.RelativePathFromProjectRoot.Trim()));
+
+            return null;
+        }
+
+        private static List<string> NormalizePrefixes(IReadOnlyList<string> prefixes)
+        {
+            var results = new List<string>();
+            if (prefixes == null)
+                return results;
+
+            for (var i = 0; i < prefixes.Count; i++)
+            {
+                var value = prefixes[i];
+                if (string.IsNullOrWhiteSpace(value))
+                    continue;
+
+                var normalized = value.Trim().Replace("\\", "/").Trim('/');
+                if (string.IsNullOrWhiteSpace(normalized))
+                    continue;
+
+                if (!results.Contains(normalized))
+                    results.Add(normalized);
+            }
+
+            return results;
         }
 
 #if UNITY_EDITOR

@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -200,6 +201,7 @@ namespace Pie
             try
             {
                 using var request = new HttpRequestMessage(new HttpMethod(string.IsNullOrWhiteSpace(method) ? "POST" : method.ToUpperInvariant()), url);
+                request.Version = HttpVersion.Version11;
 
                 // Auth header
                 if (!string.IsNullOrEmpty(bearerToken))
@@ -238,6 +240,10 @@ namespace Pie
                     request.Content = new StringContent(body, Encoding.UTF8, "application/json");
                 }
 
+                request.Headers.Accept.Clear();
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
                 // Send, stream response
                 using var response = await _httpClient.SendAsync(
                     request,
@@ -247,9 +253,11 @@ namespace Pie
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorBody = await response.Content.ReadAsStringAsync();
+                    var contentType = response.Content?.Headers?.ContentType?.ToString() ?? "(none)";
                     state.StatusCode = (int)response.StatusCode;
                     state.Error = $"HTTP {(int)response.StatusCode}: {errorBody}";
-                    PieDiagnostics.Warning($"[PieHttpBridge] Request failed: {state.Error}");
+                    PieDiagnostics.Warning(
+                        $"[PieHttpBridge] Request failed: {method} {url} status={(int)response.StatusCode} contentType={contentType} body={ClipForLog(errorBody)}");
                     state.IsComplete = true;
                     return;
                 }
@@ -268,6 +276,11 @@ namespace Pie
                     }
                 }
             }
+            catch (HttpRequestException ex)
+            {
+                state.Error = ex.Message;
+                PieDiagnostics.Error($"[PieHttpBridge] Request error: {method} {url} failed: {ex.Message}");
+            }
             catch (OperationCanceledException)
             {
                 PieDiagnostics.Verbose("[PieHttpBridge] Request cancelled");
@@ -275,12 +288,23 @@ namespace Pie
             catch (Exception ex)
             {
                 state.Error = ex.Message;
-                PieDiagnostics.Error($"[PieHttpBridge] Request error: {ex.Message}");
+                PieDiagnostics.Error($"[PieHttpBridge] Request error: {method} {url} failed: {ex.Message}");
             }
             finally
             {
                 state.IsComplete = true;
             }
+        }
+
+        private static string ClipForLog(string text, int maxLength = 240)
+        {
+            if (string.IsNullOrEmpty(text))
+                return "(empty)";
+
+            text = text.Replace("\r", "\\r").Replace("\n", "\\n");
+            return text.Length <= maxLength
+                ? text
+                : text.Substring(0, maxLength) + "...";
         }
 
         /// <summary>

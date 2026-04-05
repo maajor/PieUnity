@@ -227,6 +227,7 @@ namespace Pie
             var isEditorJs = isEditor ? "true" : "false";
             var extensionSearchPathsJson = JsonString(PieProjectPaths.GetExtensionSearchPathsJson(projectRoot, settings));
             var skillSearchPathsJson = JsonString(PieProjectPaths.GetSkillSearchPathsJson(projectRoot, settings));
+            var fileToolRootsJson = JsonString(PieProjectPaths.GetFileToolRootsJson(projectRoot, settings, isEditor));
             var initCode = $@"
 (function() {{
     globalThis.pieBridge = {{
@@ -234,6 +235,7 @@ namespace Pie
         isEditor: {isEditorJs},
         extensionSearchPathsJson: {extensionSearchPathsJson},
         skillSearchPathsJson: {skillSearchPathsJson},
+        fileToolRootsJson: {fileToolRootsJson},
 
         getProjectRoot: function() {{
             return globalThis.pieBridge.projectRoot;
@@ -261,6 +263,10 @@ namespace Pie
 
         getSkillSearchPathsJson: function() {{
             return globalThis.pieBridge.skillSearchPathsJson;
+        }},
+
+        getFileToolRootsJson: function() {{
+            return globalThis.pieBridge.fileToolRootsJson;
         }},
 
         sendToUnity: function(eventName, data) {{

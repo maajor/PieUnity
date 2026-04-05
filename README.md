@@ -11,6 +11,23 @@ It uses a runtime-first architecture: the agent core runs in Runtime, while the 
 - Runtime state lives under `Application.persistentDataPath/Pie`
 - Project skills, project extensions, and project memory are first-class package concepts
 
+## Host Responsibility
+
+`ARCHITECTURE.md` is the shared architecture source of truth for Pie.
+
+`pie-unity` is responsible for mapping shared Pie semantics into Unity-native product experiences:
+
+- shared commands become Unity buttons, menus, or runtime actions
+- shared tool and status semantics become Unity panels, logs, or widgets
+- shared interaction requests become Unity dialogs, selections, or custom editor/runtime flows
+
+Unity can and should provide host-specific UX and richer workflows, but it should not redefine shared protocol meaning or push Unity-shaped UI APIs back into the shared layer.
+
+Example:
+
+- Positive: a shared `command` can be rendered as a toolbar action or menu item in Unity
+- Negative: Unity-specific dialog or widget APIs should not become the shared cross-host contract
+
 ## Requirements
 
 `pie-unity` depends on PuerTS:
@@ -30,7 +47,7 @@ Install through Unity Package Manager:
 - Git release repository:
   `Add package from git URL...`
 - Current public Git URL:
-  `https://github.com/Cydream-Tech/PieUnity.git#0.1.5`
+  `https://github.com/Cydream-Tech/PieUnity.git#0.1.6`
 
 After installation, you can import the `Extension Demo` sample from the Package Manager Samples section.
 
@@ -48,6 +65,7 @@ Available local commands include:
 - `/resume <sessionId>`
 - `/tree`
 - `/fork` or `/fork <sessionId>`
+- `/self-check`
 - `/session-check`
 - `/model`
 - `/skills`
@@ -109,6 +127,25 @@ Create a settings asset from:
 
 - `Extension Search Paths`
 - `Skill Search Paths`
+- `File Tool Roots`
+- `Default File Tool Root Editor`
+- `Default File Tool Root Runtime`
+
+File tool roots let you expose named filesystem roots to `read_file`, `write_file`, `edit_file`, `list_directory`, `search_file_content`, and `search_files`.
+
+Built-in roots:
+
+- `persistent`: maps to `Application.persistentDataPath`
+- `project`: maps to the Unity project root and is Editor-only
+
+Each configured root can define:
+
+- `Name`
+- `Description`
+- `Relative Path From Project Root` or `Absolute Path`
+- `Available In Editor`
+- `Available In Runtime`
+- `Default Prefixes`
 
 Paths are scanned in order, and later paths override earlier items with the same skill or extension name.
 
@@ -138,12 +175,33 @@ Default project extension directory:
 
 - `Assets/Pie/Extensions`
 
-Each extension is a `*.js` file and should register itself through `pieExtension((api) => { ... })`.
+Each extension is a `*.js` file and should export a module function. Use either:
+
+- `module.exports = (api) => { ... }`
+- `export default function (api) { ... }`
+
+The `api` object is a Unity host binding over `@pie/agent-framework`'s runtime extension contract. It includes the shared runtime fields:
+
+- `manifest`
+- `dir`
+- `config`
+- `log()`
+- `registerTool()`
+- `registerBeforeToolCall()`
+- `registerAfterToolCall()`
+- `registerOnError()`
+- `appendSystemPrompt()`
+- `callHost()`
+
+Unity also adds:
+
+- `projectRoot`
+- `isEditor`
 
 Minimal example:
 
 ```js
-pieExtension((api) => {
+module.exports = (api) => {
   api.appendSystemPrompt("Use the hello_world tool for greeting demos.");
 
   api.registerTool({
@@ -161,8 +219,29 @@ pieExtension((api) => {
       };
     },
   });
-});
+};
 ```
+
+## Recommended Smoke Test
+
+After opening `Tools > Pie > Pie Chat`, run these local commands in order:
+
+1. `/self-check`
+2. `/skills`
+3. `/extensions`
+4. `/extensions reload`
+5. `/session-check`
+
+Then send two real prompts:
+
+1. `演示一下 ask 工具`
+   Expected: Unity should show an interaction UI instead of appearing to hang.
+2. `演示一下 todo 工具，并持续执行直到 todo 结束`
+   Expected: todo state should progress and clear when complete.
+
+For repeatable regression steps and reliability runs, see:
+
+- [TESTING.md](/Users/fonzie/Documents/AIProjects/Pie/products/pie-unity/TESTING.md)
 
 ## Sessions And Memory
 

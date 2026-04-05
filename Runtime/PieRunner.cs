@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace Pie
 {
@@ -23,11 +24,26 @@ namespace Pie
         public event Action<string> OnAssistantDelta;
         public event Action<string> OnToolStart;
         public event Action<string, string> OnToolEnd;
+        public event Action<string> OnTurnEndDetailed;
         public event Action OnTurnEnd;
         public event Action<string> OnError;
 
+        [Serializable]
+        private class RunnerStatePayload
+        {
+            public bool isReady;
+            public string projectRootOverride;
+            public bool hasSettingsOverride;
+            public string lastAssistantText;
+        }
+
         private void Awake()
         {
+            PieDevRpcDispatcher.InitializeMainThread();
+            PieDevRpcServer.Start();
+            PieHostBridge.Register("pie.interaction", HandleInteractionHostCall);
+            PieHostBridge.Register("pie.dev_rpc", PieDevRpc.InvokeHostCall);
+            RegisterDevRpcMethods();
             InitializeBridge();
         }
 
@@ -53,15 +69,68 @@ namespace Pie
 
         private void Update()
         {
+            PieDevRpcDispatcher.Tick();
             _bridge?.Tick();
         }
 
         private void OnDestroy()
         {
+            PieDevRpcServer.Stop();
+            PieHostBridge.Unregister("pie.interaction");
+            UnregisterDevRpcMethods();
+            PieHostBridge.Unregister("pie.dev_rpc");
             if (_bridge == null) return;
             _bridge.OnJsEvent -= HandleJsEvent;
             _bridge.Dispose();
             _bridge = null;
+        }
+
+        private void RegisterDevRpcMethods()
+        {
+            PieDevRpc.Register("runner.get_state", _ => JsonUtility.ToJson(new RunnerStatePayload
+            {
+                isReady = IsReady,
+                projectRootOverride = _projectRootOverride ?? "",
+                hasSettingsOverride = _settingsOverride != null,
+                lastAssistantText = _lastAssistantText ?? "",
+            }));
+        }
+
+        private void UnregisterDevRpcMethods()
+        {
+            PieDevRpc.Unregister("runner.get_state");
+        }
+
+        private string HandleInteractionHostCall(string argsJson)
+        {
+            var request = JsonUtility.FromJson<PieInteractionRequest>(argsJson ?? "{}") ?? new PieInteractionRequest();
+            if (string.Equals(request.type, "notify", StringComparison.Ordinal))
+            {
+                var message = string.IsNullOrWhiteSpace(request.message) ? "(empty notification)" : request.message;
+                switch ((request.level ?? "info").ToLowerInvariant())
+                {
+                    case "error":
+                        Debug.LogError($"[Pie Interaction] {message}");
+                        break;
+                    case "warning":
+                        Debug.LogWarning($"[Pie Interaction] {message}");
+                        break;
+                    default:
+                        Debug.Log($"[Pie Interaction] {message}");
+                        break;
+                }
+
+                return PieInteractionResponse.ToJson(new PieInteractionResponse
+                {
+                    type = "notify",
+                    acknowledged = true,
+                });
+            }
+
+            return PieInteractionResponse.Unavailable(
+                request.type,
+                request.id,
+                $"Runtime host does not support interaction request: {request.type}");
         }
 
         public bool SetConfig(string apiKey, string provider = null, string model = null, string baseUrl = null)
@@ -150,9 +219,16 @@ namespace Pie
                     break;
                 }
                 case "turn_end":
+                {
+                    var stopReason = ExtractJsonString(json, "stopReason") ?? "";
+                    OnTurnEndDetailed?.Invoke(stopReason);
+                    if (stopReason == "toolUse")
+                        break;
+
                     _lastAssistantText = "";
                     OnTurnEnd?.Invoke();
                     break;
+                }
                 case "error":
                 {
                     var message = ExtractJsonString(json, "message") ?? json;

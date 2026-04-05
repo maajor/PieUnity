@@ -3044,7 +3044,7 @@ var _PieAgent = (() => {
   // ../../node_modules/@sinclair/typebox/build/esm/type/type/index.mjs
   var Type = type_exports3;
 
-  // ../../packages/ai/dist/api-registry.js
+  // ../../packages/ai/src/api-registry.ts
   var apiProviderRegistry = /* @__PURE__ */ new Map();
   function registerApiProvider(provider) {
     apiProviderRegistry.set(provider.api, {
@@ -3057,7 +3057,7 @@ var _PieAgent = (() => {
     return apiProviderRegistry.get(api);
   }
 
-  // ../../packages/ai/dist/env-api-keys.js
+  // ../../packages/ai/src/env-api-keys.ts
   var PROVIDER_ENV_MAP = {
     "kimi-cn": "KIMI_API_KEY",
     "bigmodel": "BIGMODEL_API_KEY",
@@ -3079,13 +3079,12 @@ var _PieAgent = (() => {
     const explicitEnv = getProviderEnvVar(provider);
     if (explicitEnv) {
       const value = env[explicitEnv];
-      if (value)
-        return value;
+      if (value) return value;
     }
     return void 0;
   }
 
-  // ../../packages/ai/dist/models.builtins.js
+  // ../../packages/ai/src/models.builtins.ts
   var BUILTIN_MODEL_DEFINITIONS = {
     "kimi-cn": {
       "kimi-k2.5": {
@@ -3178,7 +3177,7 @@ var _PieAgent = (() => {
   var KIMI_MODEL_DEFINITIONS = BUILTIN_MODEL_DEFINITIONS["kimi-cn"];
   var GLM_MODEL_DEFINITIONS = BUILTIN_MODEL_DEFINITIONS.bigmodel;
 
-  // ../../packages/ai/dist/models.js
+  // ../../packages/ai/src/models.ts
   function calculateCost(model, usage) {
     const input = model.cost.input / 1e6 * usage.input;
     const output = model.cost.output / 1e6 * usage.output;
@@ -3193,16 +3192,8 @@ var _PieAgent = (() => {
     };
   }
 
-  // ../../packages/ai/dist/utils/event-stream.js
+  // ../../packages/ai/src/utils/event-stream.ts
   var EventStream = class {
-    isComplete;
-    extractResult;
-    queue = [];
-    waiting = [];
-    done = false;
-    resultResolved = false;
-    finalResultPromise;
-    resolveFinalResult;
     constructor(isComplete, extractResult) {
       this.isComplete = isComplete;
       this.extractResult = extractResult;
@@ -3210,9 +3201,14 @@ var _PieAgent = (() => {
         this.resolveFinalResult = resolve;
       });
     }
+    queue = [];
+    waiting = [];
+    done = false;
+    resultResolved = false;
+    finalResultPromise;
+    resolveFinalResult;
     push(event) {
-      if (this.done)
-        return;
+      if (this.done) return;
       if (this.isComplete(event)) {
         this.done = true;
         if (!this.resultResolved) {
@@ -3246,8 +3242,7 @@ var _PieAgent = (() => {
           return;
         } else {
           const result = await new Promise((resolve) => this.waiting.push(resolve));
-          if (result.done)
-            return;
+          if (result.done) return;
           yield result.value;
         }
       }
@@ -3258,18 +3253,21 @@ var _PieAgent = (() => {
   };
   var AssistantMessageEventStream = class extends EventStream {
     constructor() {
-      super((event) => event.type === "done" || event.type === "error", (event) => {
-        if (event.type === "done") {
-          return event.message;
-        } else if (event.type === "error") {
-          return event.error;
+      super(
+        (event) => event.type === "done" || event.type === "error",
+        (event) => {
+          if (event.type === "done") {
+            return event.message;
+          } else if (event.type === "error") {
+            return event.error;
+          }
+          throw new Error("Unexpected event type for final result");
         }
-        throw new Error("Unexpected event type for final result");
-      });
+      );
     }
   };
 
-  // ../../packages/platform/dist/detector.js
+  // ../../packages/platform/src/detector.ts
   function isPuerTS() {
     try {
       return typeof CS !== "undefined" && CS !== null;
@@ -3306,7 +3304,7 @@ var _PieAgent = (() => {
     return url ? String(url).replace(/^file:\/\//, "") : "/";
   }
 
-  // ../../packages/platform/dist/node-fs.js
+  // ../../packages/platform/src/node-fs.ts
   var __filename = fileURLToPath("file:///pie/core.js");
   var require2 = createRequire(__filename);
   var nodeFs = null;
@@ -3427,16 +3425,54 @@ var _PieAgent = (() => {
     }
   };
 
-  // ../../packages/platform/dist/puerts-fs.js
+  // ../../packages/platform/src/puerts-fs.ts
   function getSystemIO() {
     if (typeof CS === "undefined" || !CS?.System?.IO) {
       throw new Error("CS.System.IO not available - not running in PuerTS environment");
     }
     return CS.System.IO;
   }
+  function getPieFileBridge() {
+    if (typeof CS === "undefined" || !CS?.Pie?.PieFileBridge) {
+      throw new Error("CS.Pie.PieFileBridge not available - runtime file bridge is missing");
+    }
+    return CS.Pie.PieFileBridge;
+  }
+  async function taskToPromise(task) {
+    const promiseFactory = globalThis?.puer?.$promise ?? (typeof puer !== "undefined" ? puer?.$promise : void 0);
+    if (typeof promiseFactory === "function") {
+      return await promiseFactory(task);
+    }
+    if (task && typeof task.then === "function") {
+      return await task;
+    }
+    return task;
+  }
+  function toJsStringArray(value) {
+    if (Array.isArray(value)) {
+      return value.map((entry) => String(entry ?? ""));
+    }
+    if (value && typeof value.Length === "number") {
+      const results = [];
+      for (let i = 0; i < value.Length; i++) {
+        const entry = typeof value.get_Item === "function" ? value.get_Item(i) : value[i];
+        results.push(String(entry ?? ""));
+      }
+      return results;
+    }
+    return [];
+  }
+  function convertBridgeStatResult(result) {
+    return {
+      name: String(result?.Name || ""),
+      isDirectory: !!result?.IsDirectory,
+      isFile: !!result?.IsFile,
+      size: Number(result?.Size || 0),
+      mtime: new Date((Number(result?.LastWriteTicksUtc || 0) - 621355968e9) / 1e4)
+    };
+  }
   function convertDateTime(dateTime) {
-    if (!dateTime)
-      return /* @__PURE__ */ new Date(0);
+    if (!dateTime) return /* @__PURE__ */ new Date(0);
     const ticks = dateTime.get_Ticks?.() || 0;
     const epochTicks = 621355968e9;
     const ms = (ticks - epochTicks) / 1e4;
@@ -3473,11 +3509,13 @@ var _PieAgent = (() => {
     // File operations
     async readFile(path, encoding = "utf-8") {
       const IO = getSystemIO();
+      const bridge2 = getPieFileBridge();
       const normalizedPath = this.normalizePath(path);
       if (!IO.File.Exists(normalizedPath)) {
         throw new Error(`ENOENT: no such file or directory, open '${path}'`);
       }
-      return IO.File.ReadAllText(normalizedPath);
+      const content = await taskToPromise(bridge2.ReadAllTextAsync(normalizedPath));
+      return String(content ?? "");
     }
     readFileSync(path, encoding = "utf-8") {
       const IO = getSystemIO();
@@ -3488,13 +3526,9 @@ var _PieAgent = (() => {
       return IO.File.ReadAllText(normalizedPath);
     }
     async writeFile(path, data, encoding = "utf-8") {
-      const IO = getSystemIO();
+      const bridge2 = getPieFileBridge();
       const normalizedPath = this.normalizePath(path);
-      const dir = IO.Path.GetDirectoryName(normalizedPath);
-      if (dir && !IO.Directory.Exists(dir)) {
-        IO.Directory.CreateDirectory(dir);
-      }
-      IO.File.WriteAllText(normalizedPath, data);
+      await taskToPromise(bridge2.WriteAllTextAsync(normalizedPath, data));
     }
     writeFileSync(path, data, encoding = "utf-8") {
       const IO = getSystemIO();
@@ -3508,19 +3542,18 @@ var _PieAgent = (() => {
     // Directory operations
     async mkdir(path, options) {
       const IO = getSystemIO();
+      const bridge2 = getPieFileBridge();
       const normalizedPath = this.normalizePath(path);
       if (IO.Directory.Exists(normalizedPath)) {
         return;
       }
-      if (options?.recursive) {
-        IO.Directory.CreateDirectory(normalizedPath);
-      } else {
+      if (!options?.recursive) {
         const parent = IO.Path.GetDirectoryName(normalizedPath);
         if (parent && !IO.Directory.Exists(parent)) {
           throw new Error(`ENOENT: no such file or directory, mkdir '${path}'`);
         }
-        IO.Directory.CreateDirectory(normalizedPath);
       }
+      await taskToPromise(bridge2.CreateDirectoryAsync(normalizedPath));
     }
     mkdirSync(path, options) {
       const IO = getSystemIO();
@@ -3540,20 +3573,13 @@ var _PieAgent = (() => {
     }
     async readdir(path) {
       const IO = getSystemIO();
+      const bridge2 = getPieFileBridge();
       const normalizedPath = this.normalizePath(path);
       if (!IO.Directory.Exists(normalizedPath)) {
         throw new Error(`ENOENT: no such file or directory, scandir '${path}'`);
       }
-      const entries = [];
-      const files = IO.Directory.GetFiles(normalizedPath);
-      for (let i = 0; i < files.Length; i++) {
-        entries.push(IO.Path.GetFileName(files.get_Item(i)));
-      }
-      const dirs = IO.Directory.GetDirectories(normalizedPath);
-      for (let i = 0; i < dirs.Length; i++) {
-        entries.push(IO.Path.GetFileName(dirs.get_Item(i)));
-      }
-      return entries;
+      const entries = await taskToPromise(bridge2.ReadDirectoryAsync(normalizedPath));
+      return toJsStringArray(entries);
     }
     readdirSync(path) {
       const IO = getSystemIO();
@@ -3574,9 +3600,9 @@ var _PieAgent = (() => {
     }
     // Path checks
     async exists(path) {
-      const IO = getSystemIO();
+      const bridge2 = getPieFileBridge();
       const normalizedPath = this.normalizePath(path);
-      return IO.File.Exists(normalizedPath) || IO.Directory.Exists(normalizedPath);
+      return !!await taskToPromise(bridge2.ExistsAsync(normalizedPath));
     }
     existsSync(path) {
       const IO = getSystemIO();
@@ -3585,16 +3611,13 @@ var _PieAgent = (() => {
     }
     async stat(path) {
       const IO = getSystemIO();
+      const bridge2 = getPieFileBridge();
       const normalizedPath = this.normalizePath(path);
-      if (IO.File.Exists(normalizedPath)) {
-        const info = new IO.FileInfo(normalizedPath);
-        return convertFileSystemInfo(info);
+      if (!IO.File.Exists(normalizedPath) && !IO.Directory.Exists(normalizedPath)) {
+        throw new Error(`ENOENT: no such file or directory, stat '${path}'`);
       }
-      if (IO.Directory.Exists(normalizedPath)) {
-        const info = new IO.DirectoryInfo(normalizedPath);
-        return convertFileSystemInfo(info);
-      }
-      throw new Error(`ENOENT: no such file or directory, stat '${path}'`);
+      const result = await taskToPromise(bridge2.StatAsync(normalizedPath));
+      return convertBridgeStatResult(result);
     }
     statSync(path) {
       const IO = getSystemIO();
@@ -3619,12 +3642,12 @@ var _PieAgent = (() => {
     // File manipulation
     async unlink(path) {
       const IO = getSystemIO();
+      const bridge2 = getPieFileBridge();
       const normalizedPath = this.normalizePath(path);
-      if (IO.File.Exists(normalizedPath)) {
-        IO.File.Delete(normalizedPath);
-      } else {
+      if (!IO.File.Exists(normalizedPath)) {
         throw new Error(`ENOENT: no such file or directory, unlink '${path}'`);
       }
+      await taskToPromise(bridge2.DeleteFileAsync(normalizedPath));
     }
     unlinkSync(path) {
       const IO = getSystemIO();
@@ -3642,10 +3665,8 @@ var _PieAgent = (() => {
     dirname(path) {
       const normalized = path.replace(/\\/g, "/");
       const lastSlash = normalized.lastIndexOf("/");
-      if (lastSlash === -1)
-        return ".";
-      if (lastSlash === 0)
-        return "/";
+      if (lastSlash === -1) return ".";
+      if (lastSlash === 0) return "/";
       return normalized.slice(0, lastSlash);
     }
     basename(path, ext) {
@@ -3660,8 +3681,7 @@ var _PieAgent = (() => {
     extname(path) {
       const base = this.basename(path);
       const lastDot = base.lastIndexOf(".");
-      if (lastDot === -1 || lastDot === 0)
-        return "";
+      if (lastDot === -1 || lastDot === 0) return "";
       return base.slice(lastDot);
     }
     resolve(...paths) {
@@ -3723,7 +3743,7 @@ var _PieAgent = (() => {
   // node-stub:node:path
   var join = (...p) => p.filter(Boolean).join("/").replace(/\/+/g, "/");
 
-  // ../../packages/platform/dist/http.js
+  // ../../packages/platform/src/http.ts
   var __filename2 = fileURLToPath("file:///pie/core.js");
   var require3 = createRequire(__filename2);
   var _procEnv = typeof process !== "undefined" ? process.env : {};
@@ -3734,8 +3754,7 @@ var _PieAgent = (() => {
     return _procEnv.PIE_TUI_ACTIVE === "1" || _procEnv.PIE_TUI_ACTIVE === "true";
   }
   function initLogFile() {
-    if (!LOG_TO_FILE)
-      return null;
+    if (!LOG_TO_FILE) return null;
     try {
       const homeDir = _procEnv.HOME || _procEnv.USERPROFILE || "/tmp";
       const logDir = join(homeDir, ".pie", "logs");
@@ -3885,8 +3904,7 @@ var _PieAgent = (() => {
           const status = res.statusCode || 0;
           const responseHeaders = {};
           for (const [key, value] of Object.entries(res.headers)) {
-            if (value)
-              responseHeaders[key] = Array.isArray(value) ? value.join(", ") : String(value);
+            if (value) responseHeaders[key] = Array.isArray(value) ? value.join(", ") : String(value);
           }
           const response = {
             status,
@@ -3938,8 +3956,7 @@ var _PieAgent = (() => {
               let error = null;
               let waiting = null;
               const flushBuffer = () => {
-                if (bufferLength === 0)
-                  return;
+                if (bufferLength === 0) return;
                 const buffer = Buffer.concat(bufferChunks, bufferLength);
                 const bufferStr = buffer.toString("utf-8");
                 const lines = bufferStr.split("\n");
@@ -4011,15 +4028,13 @@ var _PieAgent = (() => {
                     queueHead = 0;
                   }
                   if (done) {
-                    if (error)
-                      throw error;
+                    if (error) throw error;
                     return;
                   }
                   const waitResult = await new Promise((r) => {
                     waiting = r;
                   });
-                  if (waitResult.done)
-                    break;
+                  if (waitResult.done) break;
                 }
               } finally {
                 if (!done && !res.destroyed) {
@@ -4103,8 +4118,7 @@ var _PieAgent = (() => {
                 const text = parsed.body || "";
                 const lines = text.split("\n");
                 for (const line of lines) {
-                  if (signal?.aborted)
-                    throw new Error("Request was aborted");
+                  if (signal?.aborted) throw new Error("Request was aborted");
                   yield line;
                 }
               }
@@ -4146,8 +4160,7 @@ var _PieAgent = (() => {
         }
         const asyncOp = request.SendWebRequest();
         const checkComplete = () => {
-          if (aborted)
-            return;
+          if (aborted) return;
           if (asyncOp.isDone) {
             const status = request.responseCode;
             const ok = status >= 200 && status < 300;
@@ -4155,8 +4168,7 @@ var _PieAgent = (() => {
             const headerKeys = request.GetResponseHeaderKeys?.() || [];
             for (const key of headerKeys) {
               const value = request.GetResponseHeader(key);
-              if (value)
-                responseHeaders[key] = value;
+              if (value) responseHeaders[key] = value;
             }
             const responseText = request.downloadHandler?.text || "";
             console.log(`[PuerTSHttpClient] Request completed: status=${status}, ok=${ok}, textLength=${responseText.length}`);
@@ -4209,15 +4221,353 @@ var _PieAgent = (() => {
     }
   };
 
-  // ../../packages/platform/dist/config.js
+  // ../../packages/platform/src/config.ts
   var __filename3 = fileURLToPath("file:///pie/core.js");
   var require4 = createRequire(__filename3);
+  var cachedConfig = null;
+  function getPlatformConfig() {
+    if (cachedConfig) {
+      return cachedConfig;
+    }
+    const platform = detectPlatform();
+    let config;
+    if (platform === "puerts" && typeof CS !== "undefined") {
+      config = createUnityConfig();
+    } else if (platform === "node") {
+      config = createNodeConfig();
+    } else {
+      config = createFallbackConfig();
+    }
+    cachedConfig = config;
+    return config;
+  }
+  function createUnityConfig() {
+    const UnityEngine = CS.UnityEngine;
+    const Path = CS.System.IO.Path;
+    const Directory = CS.System.IO.Directory;
+    const dataPath = UnityEngine.Application.persistentDataPath;
+    const pieDir = Path.Combine(dataPath, ".pie");
+    if (!Directory.Exists(pieDir)) {
+      Directory.CreateDirectory(pieDir);
+    }
+    return {
+      platform: "puerts",
+      dataPath,
+      skillsPath: Path.Combine(pieDir, "skills"),
+      sessionsPath: Path.Combine(pieDir, "sessions"),
+      extensionsPath: Path.Combine(pieDir, "extensions"),
+      promptsPath: Path.Combine(pieDir, "prompts"),
+      configPath: Path.Combine(pieDir, "config"),
+      sep: "/"
+      // Unity uses forward slashes
+    };
+  }
+  function createNodeConfig() {
+    const path = require4("path");
+    const fs = require4("fs");
+    const homeDir = process.env.HOME || process.env.USERPROFILE || ".";
+    const pieDir = path.join(homeDir, ".pie");
+    if (!fs.existsSync(pieDir)) {
+      fs.mkdirSync(pieDir, { recursive: true });
+    }
+    return {
+      platform: "node",
+      dataPath: homeDir,
+      skillsPath: path.join(pieDir, "skills"),
+      sessionsPath: path.join(pieDir, "sessions"),
+      extensionsPath: path.join(pieDir, "extensions"),
+      promptsPath: path.join(pieDir, "prompts"),
+      configPath: path.join(pieDir, "config"),
+      sep: path.sep
+    };
+  }
+  function createFallbackConfig() {
+    return {
+      platform: "unknown",
+      dataPath: ".",
+      skillsPath: ".pie/skills",
+      sessionsPath: ".pie/sessions",
+      extensionsPath: ".pie/extensions",
+      promptsPath: ".pie/prompts",
+      configPath: ".pie/config",
+      sep: "/"
+    };
+  }
 
-  // ../../packages/platform/dist/gateway.js
+  // ../../packages/platform/src/gateway.ts
   var __filename4 = fileURLToPath("file:///pie/core.js");
   var nodeRequire = createRequire(__filename4);
+  var FileSystemGateway = class {
+    config;
+    allowedRoots;
+    allowWrites;
+    sep;
+    constructor(options = {}) {
+      this.config = getPlatformConfig();
+      this.sep = this.config.sep;
+      this.allowedRoots = options.allowedRoots || [this.config.dataPath];
+      this.allowWrites = options.allowWrites !== false;
+    }
+    /**
+     * Check if a path is within allowed roots
+     */
+    isPathAllowed(path) {
+      const normalized = this.normalizePath(path);
+      for (const root of this.allowedRoots) {
+        const normalizedRoot = this.normalizePath(root);
+        if (normalized === normalizedRoot || normalized.startsWith(this.withTrailingSep(normalizedRoot))) {
+          return true;
+        }
+      }
+      return false;
+    }
+    /**
+     * Normalize path for comparison
+     */
+    normalizePath(path) {
+      const normalized = path.replace(/\\/g, "/").replace(/\/+/g, "/");
+      if (normalized === "/") return normalized;
+      return normalized.replace(/\/+$/, "").toLowerCase();
+    }
+    /**
+     * Normalize root path for prefix comparison
+     */
+    withTrailingSep(path) {
+      return path.endsWith("/") ? path : `${path}/`;
+    }
+    /**
+     * Detect actual path traversal segments without rejecting normal file names like a..b.txt
+     */
+    hasTraversalSegment(path) {
+      return path.replace(/\\/g, "/").split("/").some((segment) => segment === "..");
+    }
+    /**
+     * Validate path for security
+     * Throws error if path is not allowed
+     */
+    validatePath(path, operation) {
+      if (this.hasTraversalSegment(path)) {
+        throw new Error(`Path traversal detected: ${path}`);
+      }
+      if (!this.isPathAllowed(path)) {
+        throw new Error(`Access denied: ${operation} not allowed on ${path}`);
+      }
+    }
+    /**
+     * Join path segments
+     */
+    join(...parts) {
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        let result = parts[0] || "";
+        for (let i = 1; i < parts.length; i++) {
+          result = CS.System.IO.Path.Combine(result, parts[i]);
+        }
+        return result;
+      }
+      const path = nodeRequire("path");
+      return path.join(...parts);
+    }
+    /**
+     * Get directory name from path
+     */
+    dirname(path) {
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        return CS.System.IO.Path.GetDirectoryName(path) || "";
+      }
+      const p = nodeRequire("path");
+      return p.dirname(path);
+    }
+    /**
+     * Get file name from path
+     */
+    basename(path, ext) {
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        let name = CS.System.IO.Path.GetFileName(path) || "";
+        if (ext && name.endsWith(ext)) {
+          name = name.slice(0, -ext.length);
+        }
+        return name;
+      }
+      const p = nodeRequire("path");
+      return p.basename(path, ext);
+    }
+    /**
+     * Get file extension
+     */
+    extname(path) {
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        return CS.System.IO.Path.GetExtension(path) || "";
+      }
+      const p = nodeRequire("path");
+      return p.extname(path);
+    }
+    /**
+     * Check if file exists
+     */
+    exists(path) {
+      this.validatePath(path, "exists");
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        return CS.System.IO.File.Exists(path) || CS.System.IO.Directory.Exists(path);
+      }
+      const fs = nodeRequire("fs");
+      return fs.existsSync(path);
+    }
+    /**
+     * Read file content
+     */
+    readFile(path, encoding = "utf-8") {
+      this.validatePath(path, "read");
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        if (!CS.System.IO.File.Exists(path)) {
+          throw new Error(`File not found: ${path}`);
+        }
+        return CS.System.IO.File.ReadAllText(path);
+      }
+      const fs = nodeRequire("fs");
+      return fs.readFileSync(path, encoding);
+    }
+    /**
+     * Write file content
+     */
+    writeFile(path, content, encoding = "utf-8") {
+      if (!this.allowWrites) {
+        throw new Error(`Writes not allowed: ${path}`);
+      }
+      this.validatePath(path, "write");
+      const platform = detectPlatform();
+      const dir = this.dirname(path);
+      this.mkdir(dir, { recursive: true });
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        CS.System.IO.File.WriteAllText(path, content);
+        return;
+      }
+      const fs = nodeRequire("fs");
+      fs.writeFileSync(path, content, encoding);
+    }
+    /**
+     * Delete file
+     */
+    deleteFile(path) {
+      if (!this.allowWrites) {
+        throw new Error(`Writes not allowed: ${path}`);
+      }
+      this.validatePath(path, "delete");
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        if (CS.System.IO.File.Exists(path)) {
+          CS.System.IO.File.Delete(path);
+        }
+        return;
+      }
+      const fs = nodeRequire("fs");
+      if (fs.existsSync(path)) {
+        fs.unlinkSync(path);
+      }
+    }
+    /**
+     * Create directory
+     */
+    mkdir(path, options) {
+      if (!this.allowWrites) {
+        throw new Error(`Writes not allowed: ${path}`);
+      }
+      this.validatePath(path, "mkdir");
+      const platform = detectPlatform();
+      const recursive = options?.recursive ?? true;
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        if (!CS.System.IO.Directory.Exists(path)) {
+          CS.System.IO.Directory.CreateDirectory(path);
+        }
+        return;
+      }
+      const fs = nodeRequire("fs");
+      if (!fs.existsSync(path)) {
+        fs.mkdirSync(path, { recursive });
+      }
+    }
+    /**
+     * List directory contents
+     */
+    readdir(path) {
+      this.validatePath(path, "readdir");
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        if (!CS.System.IO.Directory.Exists(path)) {
+          return [];
+        }
+        const files = CS.System.IO.Directory.GetFiles(path);
+        const dirs = CS.System.IO.Directory.GetDirectories(path);
+        const result = [];
+        for (let i = 0; i < files.Length; i++) {
+          result.push(this.basename(files[i]));
+        }
+        for (let i = 0; i < dirs.Length; i++) {
+          result.push(this.basename(dirs[i]));
+        }
+        return result;
+      }
+      const fs = nodeRequire("fs");
+      if (!fs.existsSync(path)) {
+        return [];
+      }
+      return fs.readdirSync(path);
+    }
+    /**
+     * Check if path is a directory
+     */
+    isDirectory(path) {
+      this.validatePath(path, "isDirectory");
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        return CS.System.IO.Directory.Exists(path);
+      }
+      const fs = nodeRequire("fs");
+      if (!fs.existsSync(path)) return false;
+      return fs.statSync(path).isDirectory();
+    }
+    /**
+     * Check if path is a file
+     */
+    isFile(path) {
+      this.validatePath(path, "isFile");
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        return CS.System.IO.File.Exists(path);
+      }
+      const fs = nodeRequire("fs");
+      if (!fs.existsSync(path)) return false;
+      return fs.statSync(path).isFile();
+    }
+    /**
+     * Get file size in bytes
+     */
+    getFileSize(path) {
+      this.validatePath(path, "getFileSize");
+      const platform = detectPlatform();
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        if (!CS.System.IO.File.Exists(path)) return 0;
+        const info = CS.System.IO.FileInfo(path);
+        return info.Length;
+      }
+      const fs = nodeRequire("fs");
+      if (!fs.existsSync(path)) return 0;
+      return fs.statSync(path).size;
+    }
+    /**
+     * Get config
+     */
+    getConfig() {
+      return this.config;
+    }
+  };
 
-  // ../../packages/platform/dist/index.js
+  // ../../packages/platform/src/index.ts
   var fileSystemInstance = null;
   var httpClientInstance = null;
   var platformContextInstance = null;
@@ -4265,13 +4615,13 @@ var _PieAgent = (() => {
     platformContextInstance = null;
   }
 
-  // ../../packages/ai/dist/utils/http.js
+  // ../../packages/ai/src/utils/http.ts
   function httpRequest(url, options = {}) {
     const client = getHttpClient();
     return client.request(url, options);
   }
 
-  // ../../packages/ai/dist/utils/json-parse.js
+  // ../../packages/ai/src/utils/json-parse.ts
   var import_partial_json = __toESM(require_dist(), 1);
   function parseStreamingJson(partialJson) {
     if (!partialJson || partialJson.trim() === "") {
@@ -4289,7 +4639,7 @@ var _PieAgent = (() => {
     }
   }
 
-  // ../../packages/ai/dist/providers/simple-options.js
+  // ../../packages/ai/src/providers/simple-options.ts
   function buildBaseOptions(model, options, apiKey) {
     return {
       temperature: options?.temperature,
@@ -4325,12 +4675,11 @@ var _PieAgent = (() => {
     return { maxTokens, thinkingBudget };
   }
 
-  // ../../packages/ai/dist/providers/transform-messages.js
+  // ../../packages/ai/src/providers/transform-messages.ts
   function transformMessages(messages, model, normalizeToolCallId2) {
     const toolCallIdMap = /* @__PURE__ */ new Map();
     const transformed = messages.map((msg) => {
-      if (msg.role === "user")
-        return msg;
+      if (msg.role === "user") return msg;
       if (msg.role === "toolResult") {
         const normalizedId = toolCallIdMap.get(msg.toolCallId);
         if (normalizedId && normalizedId !== msg.toolCallId) {
@@ -4343,17 +4692,13 @@ var _PieAgent = (() => {
         const isSameModel = assistantMsg.provider === model.provider && assistantMsg.api === model.api && assistantMsg.model === model.id;
         const transformedContent = assistantMsg.content.flatMap((block) => {
           if (block.type === "thinking") {
-            if (isSameModel && block.thinkingSignature)
-              return block;
-            if (!block.thinking || block.thinking.trim() === "")
-              return [];
-            if (isSameModel)
-              return block;
+            if (isSameModel && block.thinkingSignature) return block;
+            if (!block.thinking || block.thinking.trim() === "") return [];
+            if (isSameModel) return block;
             return { type: "text", text: block.thinking };
           }
           if (block.type === "text") {
-            if (isSameModel)
-              return block;
+            if (isSameModel) return block;
             return { type: "text", text: block.text };
           }
           if (block.type === "toolCall") {
@@ -4452,7 +4797,7 @@ var _PieAgent = (() => {
     return result;
   }
 
-  // ../../packages/ai/dist/providers/openai-compat.js
+  // ../../packages/ai/src/providers/openai-compat.ts
   var streamOpenAICompletions = (model, context, options) => {
     const stream = new AssistantMessageEventStream();
     (async () => {
@@ -4537,12 +4882,10 @@ var _PieAgent = (() => {
         for await (const line of response.readSSELines(options?.signal)) {
           {
             const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith(":"))
-              continue;
+            if (!trimmed || trimmed.startsWith(":")) continue;
             if (trimmed.startsWith("data: ")) {
               const data = trimmed.slice(6);
-              if (data === "[DONE]")
-                continue;
+              if (data === "[DONE]") continue;
               let chunk;
               try {
                 chunk = JSON.parse(data);
@@ -4573,8 +4916,7 @@ var _PieAgent = (() => {
                 }
               }
               const choice = chunk.choices?.[0];
-              if (!choice)
-                continue;
+              if (!choice) continue;
               if (choice.finish_reason) {
                 output.stopReason = mapStopReason(choice.finish_reason);
               }
@@ -4657,15 +4999,16 @@ var _PieAgent = (() => {
                       });
                     }
                     if (currentBlock.type === "toolCall") {
-                      if (toolCall.id)
-                        currentBlock.id = toolCall.id;
+                      if (toolCall.id) currentBlock.id = toolCall.id;
                       if (toolCall.function?.name)
                         currentBlock.name = toolCall.function.name;
                       let delta = "";
                       if (toolCall.function?.arguments) {
                         delta = toolCall.function.arguments;
                         currentBlock.partialArgs += toolCall.function.arguments;
-                        currentBlock.arguments = parseStreamingJson(currentBlock.partialArgs);
+                        currentBlock.arguments = parseStreamingJson(
+                          currentBlock.partialArgs
+                        );
                       }
                       stream.push({
                         type: "toolcall_delta",
@@ -4776,16 +5119,12 @@ var _PieAgent = (() => {
         } else {
           const content = msg.content.flatMap((item) => convertUserContentItem(item));
           const filteredContent = content.filter((c) => {
-            if (c.type === "text")
-              return true;
-            if (c.type === "image_url")
-              return model.input.includes("image");
-            if (c.type === "video_url")
-              return model.input.includes("video");
+            if (c.type === "text") return true;
+            if (c.type === "image_url") return model.input.includes("image");
+            if (c.type === "video_url") return model.input.includes("video");
             return true;
           });
-          if (filteredContent.length === 0)
-            continue;
+          if (filteredContent.length === 0) continue;
           params.push({ role: "user", content: filteredContent });
         }
       } else if (msg.role === "assistant") {
@@ -4802,7 +5141,9 @@ var _PieAgent = (() => {
           }));
         }
         const thinkingBlocks = msg.content.filter((b) => b.type === "thinking");
-        const nonEmptyThinkingBlocks = thinkingBlocks.filter((b) => b.thinking && b.thinking.trim().length > 0);
+        const nonEmptyThinkingBlocks = thinkingBlocks.filter(
+          (b) => b.thinking && b.thinking.trim().length > 0
+        );
         if (nonEmptyThinkingBlocks.length > 0) {
           if (compat.requiresThinkingAsText) {
             const thinkingText = nonEmptyThinkingBlocks.map((b) => b.thinking).join("\n\n");
@@ -4899,8 +5240,7 @@ var _PieAgent = (() => {
     }));
   }
   function mapStopReason(reason) {
-    if (reason === null)
-      return "stop";
+    if (reason === null) return "stop";
     switch (reason) {
       case "stop":
         return "stop";
@@ -4933,8 +5273,7 @@ var _PieAgent = (() => {
   }
   function getCompat(model) {
     const detected = detectCompat(model);
-    if (!model.compat)
-      return detected;
+    if (!model.compat) return detected;
     return {
       supportsStore: model.compat.supportsStore ?? detected.supportsStore,
       supportsDeveloperRole: model.compat.supportsDeveloperRole ?? detected.supportsDeveloperRole,
@@ -8243,7 +8582,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   var { HUMAN_PROMPT, AI_PROMPT } = Anthropic;
   var sdk_default = Anthropic;
 
-  // ../../packages/ai/dist/providers/anthropic.js
+  // ../../packages/ai/src/providers/anthropic.ts
   function sanitizeSurrogates(text) {
     return text.replace(/[\uD800-\uDFFF]/g, "");
   }
@@ -8338,20 +8677,17 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
           const blocks = convertUserContentBlocks(msg.content);
           let filteredBlocks = !model?.input.includes("image") ? blocks.filter((b) => b.type !== "image") : blocks;
           filteredBlocks = filteredBlocks.filter((b) => b.type === "text" ? b.text.trim().length > 0 : true);
-          if (filteredBlocks.length === 0)
-            continue;
+          if (filteredBlocks.length === 0) continue;
           params.push({ role: "user", content: filteredBlocks });
         }
       } else if (msg.role === "assistant") {
         const blocks = [];
         for (const block of msg.content) {
           if (block.type === "text") {
-            if (block.text.trim().length === 0)
-              continue;
+            if (block.text.trim().length === 0) continue;
             blocks.push({ type: "text", text: sanitizeSurrogates(block.text) });
           } else if (block.type === "thinking") {
-            if (block.thinking.trim().length === 0)
-              continue;
+            if (block.thinking.trim().length === 0) continue;
             if (!block.thinkingSignature || block.thinkingSignature.trim().length === 0) {
               blocks.push({ type: "text", text: sanitizeSurrogates(block.thinking) });
             } else {
@@ -8365,8 +8701,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
             blocks.push({ type: "tool_use", id: block.id, name: block.name, input: block.arguments ?? {} });
           }
         }
-        if (blocks.length === 0)
-          continue;
+        if (blocks.length === 0) continue;
         params.push({ role: "assistant", content: blocks });
       } else if (msg.role === "toolResult") {
         const toolResults = [];
@@ -8394,8 +8729,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     return params;
   }
   function convertTools2(tools) {
-    if (!tools)
-      return [];
+    if (!tools) return [];
     return tools.map((tool) => {
       const jsonSchema = tool.parameters;
       return {
@@ -8585,12 +8919,9 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
             if (event.delta.stop_reason) {
               output.stopReason = mapStopReason2(event.delta.stop_reason);
             }
-            if (event.usage.input_tokens != null)
-              output.usage.input = event.usage.input_tokens;
-            if (event.usage.output_tokens != null)
-              output.usage.output = event.usage.output_tokens;
-            if (event.usage.cache_read_input_tokens != null)
-              output.usage.cacheRead = event.usage.cache_read_input_tokens;
+            if (event.usage.input_tokens != null) output.usage.input = event.usage.input_tokens;
+            if (event.usage.output_tokens != null) output.usage.output = event.usage.output_tokens;
+            if (event.usage.cache_read_input_tokens != null) output.usage.cacheRead = event.usage.cache_read_input_tokens;
             if (event.usage.cache_creation_input_tokens != null)
               output.usage.cacheWrite = event.usage.cache_creation_input_tokens;
             output.usage.totalTokens = output.usage.input + output.usage.output + output.usage.cacheRead + output.usage.cacheWrite;
@@ -8603,8 +8934,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         stream.push({ type: "done", reason: output.stopReason, message: output });
         stream.end();
       } catch (error) {
-        for (const block of output.content)
-          delete block.index;
+        for (const block of output.content) delete block.index;
         output.stopReason = options?.signal?.aborted ? "aborted" : "error";
         output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
         stream.push({ type: "error", reason: output.stopReason, error: output });
@@ -8631,7 +8961,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     });
   };
 
-  // ../../packages/ai/dist/stream.js
+  // ../../packages/ai/src/stream.ts
   function resolveApiProvider(api) {
     const provider = getApiProvider(api);
     if (!provider) {
@@ -11905,7 +12235,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   };
   var ParseRegistry;
   (function(ParseRegistry2) {
-    const registry = /* @__PURE__ */ new Map([
+    const registry2 = /* @__PURE__ */ new Map([
       ["Assert", (type, references, value) => {
         Assert(type, references, value);
         return value;
@@ -11919,15 +12249,15 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       ["Encode", (type, references, value) => HasTransform(type, references) ? TransformEncode(type, references, value) : value]
     ]);
     function Delete5(key) {
-      registry.delete(key);
+      registry2.delete(key);
     }
     ParseRegistry2.Delete = Delete5;
     function Set5(key, callback) {
-      registry.set(key, callback);
+      registry2.set(key, callback);
     }
     ParseRegistry2.Set = Set5;
     function Get4(key) {
-      return registry.get(key);
+      return registry2.get(key);
     }
     ParseRegistry2.Get = Get4;
   })(ParseRegistry || (ParseRegistry = {}));
@@ -11978,7 +12308,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     ValueErrorIterator: () => ValueErrorIterator
   });
 
-  // ../../packages/ai/dist/utils/validation.js
+  // ../../packages/ai/src/utils/validation.ts
   function validateToolArguments(tool, toolCall) {
     const args = toolCall.arguments ?? {};
     if (value_exports2.Check(tool.parameters, args)) {
@@ -11992,7 +12322,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     throw new Error(`Invalid arguments for tool "${tool.name}" at ${path}: ${firstError.message}`);
   }
 
-  // ../../packages/ai/dist/index.js
+  // ../../packages/ai/src/index.ts
   registerApiProvider({
     api: "openai-completions",
     stream: streamOpenAICompletions,
@@ -12004,7 +12334,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     streamSimple: streamSimpleAnthropic
   });
 
-  // ../../packages/agent-core/dist/agent-loop.js
+  // ../../packages/agent-core/src/agent-loop.ts
   function agentLoop(prompts, context, config, signal, streamFn) {
     const stream = createAgentStream();
     (async () => {
@@ -12071,7 +12401,10 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     return stream;
   }
   function createAgentStream() {
-    return new EventStream((event) => event.type === "agent_end", (event) => event.type === "agent_end" ? event.messages : []);
+    return new EventStream(
+      (event) => event.type === "agent_end",
+      (event) => event.type === "agent_end" ? event.messages : []
+    );
   }
   async function runLoop(currentContext, newMessages, config, signal, stream, streamFn) {
     let firstTurn = true;
@@ -12112,7 +12445,14 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         hasMoreToolCalls = toolCalls.length > 0;
         const toolResults = [];
         if (hasMoreToolCalls) {
-          const toolExecution = await executeToolCalls(currentContext.tools, message, signal, stream, config.getSteeringMessages, config.hooks);
+          const toolExecution = await executeToolCalls(
+            currentContext.tools,
+            message,
+            signal,
+            stream,
+            config.getSteeringMessages,
+            config.hooks
+          );
           toolResults.push(...toolExecution.toolResults);
           steeringAfterTools = toolExecution.steeringMessages ?? null;
           for (const result of toolResults) {
@@ -12221,15 +12561,16 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       } catch (e) {
         console.warn(`[AgentLoop] beforeToolCall hook failed for ${toolCall.name}:`, e);
       }
-      stream.push({
-        type: "tool_execution_start",
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
-        args: toolCall.arguments
-      });
       let result;
       let isError = false;
+      let executionArgs = toolCall.arguments;
       if (blocked) {
+        stream.push({
+          type: "tool_execution_start",
+          toolCallId: toolCall.id,
+          toolName: toolCall.name,
+          args: executionArgs
+        });
         result = {
           content: [{ type: "text", text: `Tool execution blocked: ${blockReason}` }],
           details: { blocked: true, reason: blockReason }
@@ -12238,6 +12579,12 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       } else {
         try {
           if (!tool) {
+            stream.push({
+              type: "tool_execution_start",
+              toolCallId: toolCall.id,
+              toolName: toolCall.name,
+              args: executionArgs
+            });
             const availableTools = tools?.map((t) => t.name).join(", ") || "none";
             const blockMessage = `I don't have permission to use the "${toolCall.name}" tool. My available tools are: [${availableTools}]. I can only perform read-only operations. Would you like me to help you with something else?`;
             console.warn(`[AgentLoop] BLOCKED: Tool "${toolCall.name}" not in whitelist. Available: [${availableTools}]`);
@@ -12248,17 +12595,31 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
             isError = false;
           } else {
             const validatedArgs = validateToolArguments(tool, toolCall);
+            executionArgs = validatedArgs;
+            stream.push({
+              type: "tool_execution_start",
+              toolCallId: toolCall.id,
+              toolName: toolCall.name,
+              args: executionArgs
+            });
             result = await tool.execute(toolCall.id, validatedArgs, signal, (partialResult) => {
               stream.push({
                 type: "tool_execution_update",
                 toolCallId: toolCall.id,
                 toolName: toolCall.name,
-                args: toolCall.arguments,
+                args: executionArgs,
                 partialResult
               });
             });
+            isError = isError || !!result.isError;
           }
         } catch (e) {
+          stream.push({
+            type: "tool_execution_start",
+            toolCallId: toolCall.id,
+            toolName: toolCall.name,
+            args: executionArgs
+          });
           result = {
             content: [{ type: "text", text: e instanceof Error ? e.message : String(e) }],
             details: {}
@@ -12279,6 +12640,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         type: "tool_execution_end",
         toolCallId: toolCall.id,
         toolName: toolCall.name,
+        args: executionArgs,
         result,
         isError
       });
@@ -12323,6 +12685,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       type: "tool_execution_end",
       toolCallId: toolCall.id,
       toolName: toolCall.name,
+      args: toolCall.arguments,
       result,
       isError: true
     });
@@ -12340,7 +12703,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     return toolResultMessage;
   }
 
-  // ../../packages/agent-core/dist/agent.js
+  // ../../packages/agent-core/src/agent.ts
   function defaultConvertToLlm(messages) {
     return messages.filter((m) => m.role === "user" || m.role === "assistant" || m.role === "toolResult");
   }
@@ -12357,6 +12720,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   var Agent = class {
     _state;
     listeners = /* @__PURE__ */ new Set();
+    semanticListeners = /* @__PURE__ */ new Set();
     abortController;
     convertToLlm;
     transformContext;
@@ -12372,6 +12736,12 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     resolveRunningPrompt;
     _thinkingBudgets;
     _maxRetryDelayMs;
+    hooks;
+    statusSnapshot = {
+      phase: "idle",
+      turnState: "completed",
+      hasPendingToolContinuation: false
+    };
     constructor(opts = {}) {
       this._state = {
         systemPrompt: "",
@@ -12396,6 +12766,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       this.getApiKey = opts.getApiKey;
       this._thinkingBudgets = opts.thinkingBudgets;
       this._maxRetryDelayMs = opts.maxRetryDelayMs;
+      this.hooks = opts.initialState?.hooks;
     }
     get sessionId() {
       return this._sessionId;
@@ -12428,6 +12799,13 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       this.listeners.add(fn);
       return () => this.listeners.delete(fn);
     }
+    subscribeSemantic(fn) {
+      this.semanticListeners.add(fn);
+      return () => this.semanticListeners.delete(fn);
+    }
+    getStatusSnapshot() {
+      return { ...this.statusSnapshot };
+    }
     setSystemPrompt(v) {
       this._state.systemPrompt = v;
     }
@@ -12439,6 +12817,9 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     }
     setTools(t) {
       this._state.tools = t;
+    }
+    setHooks(hooks) {
+      this.hooks = hooks;
     }
     replaceMessages(ms) {
       this._state.messages = ms.slice();
@@ -12522,6 +12903,13 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       this.followUpQueue = [];
       this.runningPrompt = void 0;
       this.resolveRunningPrompt = void 0;
+      this.updateStatusSnapshot({
+        phase: "idle",
+        turnState: "completed",
+        activeToolName: void 0,
+        lastStopReason: void 0,
+        hasPendingToolContinuation: false
+      });
     }
     /**
      * Reset only the processing state without clearing messages.
@@ -12537,6 +12925,13 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       this.runningPrompt = void 0;
       this.resolveRunningPrompt = void 0;
       this.abortController = void 0;
+      this.updateStatusSnapshot({
+        phase: "idle",
+        turnState: "completed",
+        activeToolName: void 0,
+        lastStopReason: void 0,
+        hasPendingToolContinuation: false
+      });
     }
     async prompt(input, images) {
       if (this.runningPrompt) {
@@ -12551,8 +12946,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       this.runningPrompt = promise;
       try {
         const model = this._state.model;
-        if (!model)
-          throw new Error("No model configured");
+        if (!model) throw new Error("No model configured");
         let msgs;
         if (Array.isArray(input)) {
           if (input.length > 0 && input.every((item) => isUserContentBlock(item))) {
@@ -12620,8 +13014,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     }
     async _runLoop(messages, options) {
       const model = this._state.model;
-      if (!model)
-        throw new Error("No model configured");
+      if (!model) throw new Error("No model configured");
       this.abortController = new AbortController();
       this._state.isStreaming = true;
       this._state.streamMessage = null;
@@ -12643,6 +13036,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         convertToLlm: this.convertToLlm,
         transformContext: this.transformContext,
         getApiKey: this.getApiKey,
+        hooks: this.hooks,
         getSteeringMessages: async () => {
           if (skipInitialSteeringPoll) {
             skipInitialSteeringPoll = false;
@@ -12695,7 +13089,9 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
           this.emit(event);
         }
         if (partial && partial.role === "assistant" && partial.content?.length > 0) {
-          const onlyEmpty = !partial.content.some((c) => c.type === "thinking" && c.thinking?.trim().length > 0 || c.type === "text" && c.text?.trim().length > 0 || c.type === "toolCall" && c.name?.trim().length > 0);
+          const onlyEmpty = !partial.content.some(
+            (c) => c.type === "thinking" && c.thinking?.trim().length > 0 || c.type === "text" && c.text?.trim().length > 0 || c.type === "toolCall" && c.name?.trim().length > 0
+          );
           if (!onlyEmpty) {
             this.appendMessage(partial);
           }
@@ -12733,10 +13129,2348 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       for (const listener of this.listeners) {
         listener(e);
       }
+      this.emitDerivedSemanticEvents(e);
+    }
+    emitSemantic(e) {
+      for (const listener of this.semanticListeners) {
+        listener(e);
+      }
+    }
+    updateStatusSnapshot(next) {
+      const snapshot = {
+        ...this.statusSnapshot,
+        ...next
+      };
+      if (snapshot.phase === this.statusSnapshot.phase && snapshot.turnState === this.statusSnapshot.turnState && snapshot.activeToolName === this.statusSnapshot.activeToolName && snapshot.lastStopReason === this.statusSnapshot.lastStopReason && snapshot.hasPendingToolContinuation === this.statusSnapshot.hasPendingToolContinuation) {
+        return;
+      }
+      this.statusSnapshot = snapshot;
+      this.emitSemantic({ type: "status_snapshot_changed", snapshot: { ...snapshot } });
+    }
+    emitDerivedSemanticEvents(event) {
+      switch (event.type) {
+        case "message_start":
+          if (event.message.role === "assistant") {
+            this.updateStatusSnapshot({
+              phase: "responding",
+              turnState: "continuing",
+              activeToolName: void 0,
+              lastStopReason: void 0,
+              hasPendingToolContinuation: false
+            });
+            this.emitSemantic({ type: "assistant_response_started", message: event.message });
+          }
+          break;
+        case "message_update":
+          if (event.message.role === "assistant" && event.assistantMessageEvent.type === "text_delta") {
+            this.updateStatusSnapshot({ phase: "responding" });
+            this.emitSemantic({
+              type: "assistant_response_delta",
+              message: event.message,
+              delta: event.assistantMessageEvent.delta
+            });
+          }
+          break;
+        case "message_end":
+          if (event.message.role === "assistant") {
+            this.emitSemantic({ type: "assistant_response_finished", message: event.message });
+          }
+          break;
+        case "tool_execution_start":
+          this.updateStatusSnapshot({
+            phase: "running_tool",
+            turnState: "continuing",
+            activeToolName: event.toolName,
+            lastStopReason: void 0,
+            hasPendingToolContinuation: false
+          });
+          this.emitSemantic({
+            type: "tool_started",
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            args: event.args
+          });
+          break;
+        case "tool_execution_update":
+          this.emitSemantic({
+            type: "tool_progressed",
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            args: event.args,
+            partialResult: event.partialResult
+          });
+          break;
+        case "tool_execution_end":
+          this.updateStatusSnapshot({
+            phase: this._state.isStreaming ? "responding" : "completed",
+            activeToolName: void 0
+          });
+          this.emitSemantic({
+            type: "tool_finished",
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            args: event.args,
+            result: event.result,
+            isError: event.isError
+          });
+          break;
+        case "turn_end": {
+          const stopReason = event.message.role === "assistant" ? event.message.stopReason : void 0;
+          if (stopReason === "toolUse") {
+            this.updateStatusSnapshot({
+              phase: "responding",
+              turnState: "continuing",
+              lastStopReason: stopReason,
+              hasPendingToolContinuation: true,
+              activeToolName: void 0
+            });
+            this.emitSemantic({
+              type: "turn_continues",
+              message: event.message,
+              toolResults: event.toolResults
+            });
+          } else if (stopReason === "error" || stopReason === "aborted") {
+            this.updateStatusSnapshot({
+              phase: "failed",
+              turnState: "failed",
+              lastStopReason: stopReason,
+              hasPendingToolContinuation: false,
+              activeToolName: void 0
+            });
+            this.emitSemantic({
+              type: "turn_failed",
+              message: event.message,
+              toolResults: event.toolResults
+            });
+          } else {
+            this.updateStatusSnapshot({
+              phase: "completed",
+              turnState: "completed",
+              lastStopReason: stopReason,
+              hasPendingToolContinuation: false,
+              activeToolName: void 0
+            });
+            this.emitSemantic({
+              type: "turn_completed",
+              message: event.message,
+              toolResults: event.toolResults
+            });
+          }
+          break;
+        }
+        case "agent_end": {
+          const lastMessage = event.messages[event.messages.length - 1];
+          if (lastMessage?.role === "assistant" && (lastMessage.stopReason === "error" || lastMessage.stopReason === "aborted")) {
+            this.updateStatusSnapshot({
+              phase: "failed",
+              turnState: "failed",
+              lastStopReason: lastMessage.stopReason,
+              hasPendingToolContinuation: false,
+              activeToolName: void 0
+            });
+            this.emitSemantic({
+              type: "turn_failed",
+              message: lastMessage,
+              toolResults: []
+            });
+          }
+          this.updateStatusSnapshot({
+            phase: "idle",
+            activeToolName: void 0,
+            hasPendingToolContinuation: false
+          });
+          break;
+        }
+      }
     }
   };
 
-  // ../../packages/tools-fs/dist/path-utils.js
+  // ../../packages/agent-framework/src/skills/parser.ts
+  function parseFrontmatter(yaml) {
+    const result = {};
+    const lines = yaml.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const colonIndex = trimmed.indexOf(":");
+      if (colonIndex === -1) continue;
+      const key = trimmed.slice(0, colonIndex).trim();
+      let value = trimmed.slice(colonIndex + 1).trim();
+      if (typeof value === "string") {
+        if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
+          value = value.slice(1, -1);
+        }
+      }
+      if (typeof value === "string" && value.startsWith("[") && value.endsWith("]")) {
+        const items = value.slice(1, -1).split(",").map((s) => s.trim()).filter((s) => s.length > 0).map((s) => s.replace(/^["']|["']$/g, ""));
+        value = items;
+      }
+      switch (key) {
+        case "name":
+          result.name = String(value);
+          break;
+        case "displayName":
+          result.displayName = String(value);
+          break;
+        case "description":
+          result.description = String(value);
+          break;
+        case "tools":
+          if (Array.isArray(value)) {
+            result.tools = value;
+          } else if (typeof value === "string") {
+            result.tools = value.split(",").map((s) => s.trim());
+          }
+          break;
+        case "tags":
+          if (Array.isArray(value)) {
+            result.tags = value;
+          } else if (typeof value === "string") {
+            result.tags = value.split(",").map((s) => s.trim());
+          }
+          break;
+        case "author":
+          result.author = String(value);
+          break;
+        case "version":
+          result.version = String(value);
+          break;
+      }
+    }
+    return result;
+  }
+  function parseSkillFile(content, filePath) {
+    const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
+    if (frontmatterMatch) {
+      const frontmatter = parseFrontmatter(frontmatterMatch[1]);
+      const skillContent = frontmatterMatch[2].trim();
+      return { frontmatter, content: skillContent };
+    }
+    return {
+      frontmatter: {},
+      content: content.trim()
+    };
+  }
+  function createSkill(parsed, fileName, filePath) {
+    const { frontmatter, content } = parsed;
+    const name = frontmatter.name || fileName.replace(/\.md$/i, "");
+    const displayName = frontmatter.displayName || name;
+    let description = frontmatter.description || "";
+    if (!description && content) {
+      const firstLine = content.split("\n").find((line) => line.trim());
+      if (firstLine) {
+        description = firstLine.trim().slice(0, 200);
+      }
+    }
+    return {
+      name,
+      displayName,
+      description,
+      prompt: content,
+      allowedTools: Array.isArray(frontmatter.tools) ? frontmatter.tools : typeof frontmatter.tools === "string" ? [frontmatter.tools] : void 0,
+      tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : typeof frontmatter.tags === "string" ? [frontmatter.tags] : void 0,
+      author: frontmatter.author,
+      version: frontmatter.version,
+      filePath
+    };
+  }
+  function parseSkill(content, fileName, filePath) {
+    const parsed = parseSkillFile(content, filePath);
+    return createSkill(parsed, fileName, filePath);
+  }
+
+  // ../../packages/agent-framework/src/skills/loader.ts
+  var SKILL_EXTENSION = ".md";
+  var DIRECTORY_SKILL_ENTRY = "SKILL.md";
+  function loadSkillsFromDir(dir, source) {
+    const skills = [];
+    const diagnostics = [];
+    if (!dir) {
+      return { skills, diagnostics };
+    }
+    const gateway = new FileSystemGateway({
+      allowedRoots: [dir, getPlatformConfig().dataPath].filter(Boolean)
+    });
+    if (!gateway.exists(dir)) {
+      return { skills, diagnostics };
+    }
+    const entries = gateway.readdir(dir);
+    for (const entryName of entries) {
+      const entryPath = gateway.join(dir, entryName);
+      if (gateway.isDirectory(entryPath)) {
+        const skillPath = gateway.join(entryPath, DIRECTORY_SKILL_ENTRY);
+        if (!gateway.isFile(skillPath)) {
+          continue;
+        }
+        try {
+          const content = gateway.readFile(skillPath, "utf-8");
+          const skill = parseSkill(content, DIRECTORY_SKILL_ENTRY, skillPath);
+          skills.push({
+            ...skill,
+            name: skill.name || entryName,
+            loadedAt: Date.now(),
+            isActive: false,
+            source,
+            baseDir: entryPath
+          });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : "Failed to parse skill";
+          diagnostics.push({ type: "warning", message, path: skillPath });
+        }
+        continue;
+      }
+      if (!entryName.endsWith(SKILL_EXTENSION)) continue;
+      if (!gateway.isFile(entryPath)) continue;
+      try {
+        const content = gateway.readFile(entryPath, "utf-8");
+        const skill = parseSkill(content, entryName, entryPath);
+        skills.push({
+          ...skill,
+          loadedAt: Date.now(),
+          isActive: false,
+          source,
+          baseDir: dir
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Failed to parse skill";
+        diagnostics.push({ type: "warning", message, path: entryPath });
+      }
+    }
+    return { skills, diagnostics };
+  }
+  function loadSkills(options) {
+    const { userDir, projectDir } = options;
+    const skillMap = /* @__PURE__ */ new Map();
+    const allDiagnostics = [];
+    const userResult = loadSkillsFromDir(userDir, "user");
+    allDiagnostics.push(...userResult.diagnostics);
+    for (const skill of userResult.skills) {
+      skillMap.set(skill.name, skill);
+    }
+    const projectResult = loadSkillsFromDir(projectDir, "project");
+    for (const skill of projectResult.skills) {
+      if (skillMap.has(skill.name)) {
+        const existing = skillMap.get(skill.name);
+        allDiagnostics.push({
+          type: "collision",
+          message: `Skill "${skill.name}" collision: user skill takes precedence`,
+          path: skill.filePath,
+          collision: {
+            resourceType: "skill",
+            name: skill.name,
+            winnerPath: existing.filePath,
+            loserPath: skill.filePath
+          }
+        });
+      } else {
+        skillMap.set(skill.name, skill);
+      }
+    }
+    allDiagnostics.push(...projectResult.diagnostics);
+    return {
+      skills: Array.from(skillMap.values()),
+      diagnostics: allDiagnostics
+    };
+  }
+  function formatSkillsForPrompt(skills) {
+    if (skills.length === 0) {
+      return "";
+    }
+    const lines = [
+      "\n\nThe following skills provide specialized instructions for specific tasks.",
+      "Use the read tool to load a skill's file when the task matches its description.",
+      "When a skill file references a relative path, resolve it against the skill directory.",
+      "",
+      "<available_skills>"
+    ];
+    for (const skill of skills) {
+      lines.push("  <skill>");
+      lines.push(`    <name>${escapeXml(skill.name)}</name>`);
+      lines.push(`    <description>${escapeXml(skill.description)}</description>`);
+      lines.push(`    <location>${escapeXml(skill.filePath || "")}</location>`);
+      lines.push("  </skill>");
+    }
+    lines.push("</available_skills>");
+    return lines.join("\n");
+  }
+  function escapeXml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  }
+  var SkillLoader = class {
+    userDir;
+    projectDir;
+    cache;
+    loaded = false;
+    constructor(options = {}) {
+      this.userDir = options.skillsDir || "";
+      this.projectDir = "";
+      if (options.cache !== false) {
+        this.cache = /* @__PURE__ */ new Map();
+      }
+    }
+    /**
+     * Load all skills from configured directories
+     */
+    loadAll() {
+      const result = loadSkills({ userDir: this.userDir, projectDir: this.projectDir });
+      if (this.cache) {
+        this.cache.clear();
+        for (const skill of result.skills) {
+          this.cache.set(skill.name, skill);
+        }
+      }
+      this.loaded = true;
+      return result;
+    }
+    /**
+     * Load a skill by name from the directory
+     */
+    loadSkill(name) {
+      if (this.cache?.has(name)) {
+        return this.cache.get(name);
+      }
+      if (this.userDir) {
+        const gateway = new FileSystemGateway({
+          allowedRoots: [this.userDir, getPlatformConfig().dataPath].filter(Boolean)
+        });
+        const filePath = gateway.join(this.userDir, `${name}.md`);
+        if (gateway.isFile(filePath)) {
+          try {
+            const content = gateway.readFile(filePath, "utf-8");
+            const skill = parseSkill(content, `${name}.md`, filePath);
+            const entry = {
+              ...skill,
+              loadedAt: Date.now(),
+              isActive: false,
+              source: "user",
+              baseDir: this.userDir
+            };
+            this.cache?.set(name, entry);
+            return entry;
+          } catch (e) {
+          }
+        }
+      }
+      return null;
+    }
+    /**
+     * List all available skill names
+     */
+    listSkillNames() {
+      if (!this.loaded) {
+        this.loadAll();
+      }
+      return this.cache ? Array.from(this.cache.keys()) : [];
+    }
+    hasSkill(name) {
+      return this.loadSkill(name) !== null;
+    }
+    /**
+     * Register a skill directly (for project-local skills)
+     */
+    registerSkill(skill) {
+      if (this.cache) {
+        this.cache.set(skill.name, {
+          ...skill,
+          loadedAt: Date.now(),
+          isActive: false,
+          source: skill.source || "path",
+          baseDir: skill.baseDir || ""
+        });
+      }
+    }
+    /**
+     * Get a cached skill by name
+     */
+    getSkill(name) {
+      return this.cache?.get(name);
+    }
+    /**
+     * Get all cached skills
+     */
+    getAllSkills() {
+      return this.cache ? Array.from(this.cache.values()) : [];
+    }
+  };
+  function createSkillLoader(options) {
+    return new SkillLoader(options);
+  }
+
+  // ../../packages/agent-framework/src/session/compaction.ts
+  var SUMMARY_PREFIX = `Another language model started to solve this problem and produced a summary of its thinking process. You also have access to the state of the tools that were used by that language model. Use this to build on the work that has already been done and avoid duplicating work. Here is the summary produced by the other language model, use the information in this summary to assist with your own analysis:`;
+  function formatCompactSummaryText(summaryText, summaryPrefix = SUMMARY_PREFIX) {
+    const compactSummary = summaryText.trim() || "(no summary available)";
+    return `${summaryPrefix}
+${compactSummary}`;
+  }
+
+  // ../../packages/agent-framework/src/session/types.ts
+  function generateEntryId() {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 8);
+    return `entry-${timestamp}-${random}`;
+  }
+  function buildTree(entries, activeEntryId) {
+    const byId = /* @__PURE__ */ new Map();
+    const childrenMap = /* @__PURE__ */ new Map();
+    for (const entry of entries) {
+      byId.set(entry.id, entry);
+      if (entry.parentId) {
+        const siblings = childrenMap.get(entry.parentId) ?? [];
+        siblings.push(entry.id);
+        childrenMap.set(entry.parentId, siblings);
+      }
+    }
+    const rootIds = entries.filter((e) => e.parentId === null).map((e) => e.id);
+    const activePath = /* @__PURE__ */ new Set();
+    if (activeEntryId) {
+      let current = activeEntryId;
+      while (current) {
+        activePath.add(current);
+        const entry = byId.get(current);
+        current = entry?.parentId ?? null;
+      }
+    }
+    function buildNode(entryId, depth) {
+      const entry = byId.get(entryId);
+      const childIds = childrenMap.get(entryId) ?? [];
+      return {
+        id: entryId,
+        parentId: entry.parentId,
+        entry,
+        children: childIds.map((id) => buildNode(id, depth + 1)),
+        depth,
+        isActive: activePath.has(entryId)
+      };
+    }
+    return rootIds.map((id) => buildNode(id, 0));
+  }
+  function flattenTreeToMessages(entries, activeEntryId) {
+    const byId = new Map(entries.map((e) => [e.id, e]));
+    const messages = [];
+    const path = [];
+    let current = activeEntryId;
+    while (current) {
+      path.unshift(current);
+      const entry = byId.get(current);
+      current = entry?.parentId ?? null;
+    }
+    const pathEntries = path.map((entryId) => byId.get(entryId)).filter((entry) => Boolean(entry));
+    const latestCompactionIndex = findLatestCompactionIndex(pathEntries);
+    if (latestCompactionIndex === -1) {
+      for (const entry of pathEntries) {
+        if (entry.type === "message" && entry.message) {
+          messages.push(entry.message);
+        }
+      }
+      return messages;
+    }
+    const compactionEntry = pathEntries[latestCompactionIndex];
+    const compactionData = compactionEntry.compactionData;
+    if (!compactionData) {
+      for (const entry of pathEntries) {
+        if (entry.type === "message" && entry.message) {
+          messages.push(entry.message);
+        }
+      }
+      return messages;
+    }
+    messages.push(createCompactionSummaryMessage(compactionData.summary, compactionEntry.timestamp));
+    let foundFirstKept = false;
+    for (let i = 0; i < latestCompactionIndex; i++) {
+      const entry = pathEntries[i];
+      if (entry.id === compactionData.firstKeptEntryId) {
+        foundFirstKept = true;
+      }
+      if (foundFirstKept && entry.type === "message" && entry.message) {
+        messages.push(entry.message);
+      }
+    }
+    for (let i = latestCompactionIndex + 1; i < pathEntries.length; i++) {
+      const entry = pathEntries[i];
+      if (entry.type === "message" && entry.message) {
+        messages.push(entry.message);
+      }
+    }
+    return messages;
+  }
+  function findLatestCompactionIndex(entries) {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      if (entries[i].type === "compaction" && entries[i].compactionData) {
+        return i;
+      }
+    }
+    return -1;
+  }
+  function createCompactionSummaryMessage(summary, timestamp) {
+    return {
+      role: "user",
+      content: [{ type: "text", text: formatCompactSummaryText(summary) }],
+      timestamp
+    };
+  }
+
+  // ../../packages/agent-framework/src/session/store.ts
+  var SESSION_VERSION = 2;
+  function isSessionEntry(value) {
+    return !!value && typeof value === "object" && "id" in value && "type" in value;
+  }
+  function normalizeEntriesInput(entriesOrMessages) {
+    if (entriesOrMessages.every(isSessionEntry)) {
+      return entriesOrMessages;
+    }
+    const entries = [];
+    let parentId = null;
+    for (const message of entriesOrMessages) {
+      const entry = {
+        id: generateEntryId(),
+        parentId,
+        type: "message",
+        timestamp: Date.now(),
+        message
+      };
+      entries.push(entry);
+      parentId = entry.id;
+    }
+    return entries;
+  }
+  var LEGACY_VERSION = 1;
+  function getDefaultSessionsDir() {
+    return getPlatformConfig().sessionsPath;
+  }
+  function migrateV1ToV2(data) {
+    console.log(`[SessionStore] Migrating session ${data.metadata.id} from v1 to v2`);
+    const messages = data.messages ?? [];
+    const entries = [];
+    let parentId = null;
+    for (const message of messages) {
+      const entry = {
+        id: generateEntryId(),
+        parentId,
+        type: "message",
+        timestamp: Date.now(),
+        message
+      };
+      entries.push(entry);
+      parentId = entry.id;
+    }
+    const activeEntryId = entries.length > 0 ? entries[entries.length - 1].id : null;
+    const rootEntryId = entries.length > 0 ? entries[0].id : null;
+    return {
+      version: SESSION_VERSION,
+      metadata: {
+        ...data.metadata,
+        entryCount: entries.length,
+        messageCount: messages.length,
+        activeEntryId,
+        rootEntryId
+      },
+      entries,
+      messages
+      // Keep for backward compatibility
+    };
+  }
+  function writeFileAtomic(gateway, filePath, content) {
+    const tempPath = filePath + ".tmp";
+    gateway.writeFile(tempPath, content, "utf-8");
+    try {
+      const req = globalThis.require;
+      if (typeof req === "function") {
+        req("fs").renameSync(tempPath, filePath);
+      } else {
+        gateway.writeFile(filePath, content, "utf-8");
+        try {
+          gateway.deleteFile(tempPath);
+        } catch {
+        }
+      }
+    } catch {
+      gateway.writeFile(filePath, content, "utf-8");
+      try {
+        gateway.deleteFile(tempPath);
+      } catch {
+      }
+    }
+  }
+  var FileSessionStore = class {
+    sessionsDir;
+    gateway;
+    constructor(sessionsDir) {
+      this.sessionsDir = sessionsDir || getDefaultSessionsDir();
+      this.gateway = new FileSystemGateway({
+        allowedRoots: [this.sessionsDir, getPlatformConfig().dataPath]
+      });
+      this.ensureDirectory();
+    }
+    /**
+     * Ensure the sessions directory exists
+     */
+    ensureDirectory() {
+      try {
+        if (!this.gateway.exists(this.sessionsDir)) {
+          this.gateway.mkdir(this.sessionsDir, { recursive: true });
+        }
+      } catch (e) {
+        console.warn(`[FileSessionStore] Could not create sessions directory: ${e}`);
+      }
+    }
+    /**
+     * Get the full path for a session file
+     */
+    getSessionPath(sessionId) {
+      const safeId = sessionId.replace(/[^a-zA-Z0-9_-]/g, "_");
+      return this.gateway.join(this.sessionsDir, `${safeId}.json`);
+    }
+    /**
+     * Save a session to disk (v2 format)
+     */
+    async save(sessionId, entries, metadata) {
+      const normalizedEntries = normalizeEntriesInput(entries);
+      const now = Date.now();
+      const existing = await this.load(sessionId);
+      const messageCount = normalizedEntries.filter((e) => e.type === "message" && e.message).length;
+      const rootEntry = normalizedEntries.find((e) => e.parentId === null);
+      const activeEntryId = metadata?.activeEntryId ?? existing?.metadata.activeEntryId ?? normalizedEntries[normalizedEntries.length - 1]?.id ?? null;
+      const sessionData = {
+        version: SESSION_VERSION,
+        metadata: {
+          id: sessionId,
+          name: metadata?.name ?? existing?.metadata.name ?? `Session ${sessionId.slice(0, 8)}`,
+          createdAt: existing?.metadata.createdAt ?? now,
+          updatedAt: now,
+          entryCount: normalizedEntries.length,
+          messageCount,
+          activeEntryId: activeEntryId ?? rootEntry?.id ?? null,
+          rootEntryId: rootEntry?.id ?? null,
+          tags: metadata?.tags ?? existing?.metadata.tags,
+          ...metadata
+        },
+        entries: normalizedEntries,
+        messages: flattenTreeToMessages(normalizedEntries, activeEntryId ?? null)
+      };
+      const json = JSON.stringify(sessionData, null, 2);
+      const filePath = this.getSessionPath(sessionId);
+      writeFileAtomic(this.gateway, filePath, json);
+    }
+    /**
+     * Legacy save method for backward compatibility
+     * @deprecated Use save() with entries instead
+     */
+    async saveLegacy(sessionId, messages, metadata) {
+      console.warn("[FileSessionStore] Using deprecated saveLegacy() - consider migrating to v2");
+      const entries = [];
+      let parentId = null;
+      for (const message of messages) {
+        const entry = {
+          id: generateEntryId(),
+          parentId,
+          type: "message",
+          timestamp: Date.now(),
+          message
+        };
+        entries.push(entry);
+        parentId = entry.id;
+      }
+      await this.save(sessionId, entries, metadata);
+    }
+    /**
+     * Load a session from disk
+     */
+    async load(sessionId) {
+      const filePath = this.getSessionPath(sessionId);
+      if (!this.gateway.exists(filePath)) {
+        return null;
+      }
+      try {
+        const json = this.gateway.readFile(filePath, "utf-8");
+        if (!json || json.trim().length === 0) {
+          console.warn(`[SessionStore] Empty session file: ${sessionId}, removing`);
+          this.gateway.deleteFile(filePath);
+          return null;
+        }
+        const data = JSON.parse(json);
+        if (data.version === LEGACY_VERSION || !data.version) {
+          const migrated = migrateV1ToV2(data);
+          const migratedJson = JSON.stringify(migrated, null, 2);
+          writeFileAtomic(this.gateway, filePath, migratedJson);
+          return migrated;
+        }
+        if (data.version !== SESSION_VERSION) {
+          console.warn(
+            `[SessionStore] Session version mismatch: ${data.version} vs ${SESSION_VERSION}`
+          );
+        }
+        if (!data.entries) {
+          data.entries = [];
+        }
+        return data;
+      } catch (e) {
+        console.error(`[SessionStore] Failed to load session: ${sessionId}`, e);
+        return null;
+      }
+    }
+    /**
+     * Delete a session
+     */
+    async delete(sessionId) {
+      const filePath = this.getSessionPath(sessionId);
+      if (!this.gateway.exists(filePath)) {
+        return false;
+      }
+      try {
+        this.gateway.deleteFile(filePath);
+        return true;
+      } catch (e) {
+        console.error(`[SessionStore] Failed to delete session: ${sessionId}`, e);
+        return false;
+      }
+    }
+    /**
+     * Check if a session exists
+     */
+    async exists(sessionId) {
+      const filePath = this.getSessionPath(sessionId);
+      return this.gateway.exists(filePath);
+    }
+    /**
+     * List all session IDs
+     */
+    async list() {
+      if (!this.gateway.exists(this.sessionsDir)) {
+        return [];
+      }
+      const files = this.gateway.readdir(this.sessionsDir);
+      return files.filter((f) => f.endsWith(".json")).filter((f) => !f.endsWith("-files.json")).map((f) => f.replace(/\.json$/i, ""));
+    }
+    /**
+     * List all session metadata
+     */
+    async listMetadata() {
+      const sessionIds = await this.list();
+      const metadata = [];
+      for (const id of sessionIds) {
+        const meta = await this.getMetadata(id);
+        if (meta) {
+          metadata.push(meta);
+        }
+      }
+      return metadata.sort((a, b) => b.updatedAt - a.updatedAt);
+    }
+    /**
+     * Get session metadata without loading full entries
+     */
+    async getMetadata(sessionId) {
+      const data = await this.load(sessionId);
+      return data?.metadata ?? null;
+    }
+  };
+
+  // ../../packages/agent-framework/src/session/manager.ts
+  function generateSessionId() {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 8);
+    return `${timestamp}-${random}`;
+  }
+  var SessionManager = class {
+    store;
+    activeSession = null;
+    options;
+    autoSaveTimer = null;
+    gateway;
+    constructor(options = {}) {
+      this.options = {
+        sessionsDir: options.sessionsDir ?? getDefaultSessionsDir(),
+        autoSaveInterval: options.autoSaveInterval ?? 0,
+        maxSessions: options.maxSessions ?? 100,
+        version: options.version ?? 2
+      };
+      this.gateway = new FileSystemGateway({
+        allowedRoots: [this.options.sessionsDir, getPlatformConfig().dataPath]
+      });
+      if (!this.gateway.exists(this.options.sessionsDir)) {
+        this.gateway.mkdir(this.options.sessionsDir, { recursive: true });
+      }
+      this.store = new FileSessionStore(this.options.sessionsDir);
+      if (this.options.autoSaveInterval > 0) {
+        this.startAutoSave();
+      }
+    }
+    /**
+     * Get the session store
+     */
+    getStore() {
+      return this.store;
+    }
+    /**
+     * Start auto-save timer
+     */
+    startAutoSave() {
+      if (this.autoSaveTimer) {
+        clearInterval(this.autoSaveTimer);
+      }
+      this.autoSaveTimer = setInterval(() => {
+        if (this.activeSession?.isDirty) {
+          this.save().catch((e) => {
+          });
+        }
+      }, this.options.autoSaveInterval);
+    }
+    /**
+     * Stop auto-save timer
+     */
+    stopAutoSave() {
+      if (this.autoSaveTimer) {
+        clearInterval(this.autoSaveTimer);
+        this.autoSaveTimer = null;
+      }
+    }
+    /**
+     * Create a new session with tree structure
+     */
+    async createSession(name, tags, sessionId) {
+      const id = sessionId || generateSessionId();
+      this.activeSession = {
+        id,
+        metadata: {
+          id,
+          name: name ?? `Session ${(/* @__PURE__ */ new Date()).toLocaleString()}`,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          entryCount: 0,
+          messageCount: 0,
+          activeEntryId: null,
+          rootEntryId: null,
+          tags
+        },
+        isDirty: true,
+        entries: [],
+        activeEntryId: null
+      };
+      await this.save();
+      return id;
+    }
+    /**
+     * Load an existing session
+     */
+    async loadSession(sessionId) {
+      const data = await this.store.load(sessionId);
+      if (!data) {
+        console.warn(`[SessionManager] Session not found: ${sessionId}`);
+        return false;
+      }
+      if (!data.entries) {
+        data.entries = [];
+      }
+      this.activeSession = {
+        id: sessionId,
+        metadata: data.metadata,
+        isDirty: false,
+        lastSavedAt: data.metadata.updatedAt,
+        entries: data.entries,
+        activeEntryId: data.metadata.activeEntryId ?? null
+      };
+      return true;
+    }
+    /**
+     * Save the current session
+     */
+    async save() {
+      if (!this.activeSession) {
+        throw new Error("No active session to save");
+      }
+      this.activeSession.metadata.entryCount = this.activeSession.entries.length;
+      this.activeSession.metadata.messageCount = this.activeSession.entries.filter(
+        (e) => e.type === "message" && e.message
+      ).length;
+      if (this.activeSession.metadata.messageCount === 0) {
+        if (await this.store.exists(this.activeSession.id)) {
+          await this.store.delete(this.activeSession.id);
+        }
+        this.activeSession.isDirty = false;
+        return;
+      }
+      this.activeSession.metadata.updatedAt = Date.now();
+      this.activeSession.metadata.activeEntryId = this.activeSession.activeEntryId;
+      this.activeSession.metadata.rootEntryId = this.activeSession.entries.find(
+        (e) => e.parentId === null
+      )?.id ?? null;
+      await this.store.save(
+        this.activeSession.id,
+        this.activeSession.entries,
+        this.activeSession.metadata
+      );
+      this.activeSession.isDirty = false;
+      this.activeSession.lastSavedAt = Date.now();
+    }
+    /**
+     * Add a new entry to the session
+     */
+    addEntry(entryType, message) {
+      if (!this.activeSession) {
+        throw new Error("No active session");
+      }
+      const entry = {
+        id: generateEntryId(),
+        parentId: this.activeSession.activeEntryId,
+        type: entryType,
+        timestamp: Date.now(),
+        message
+      };
+      this.activeSession.entries.push(entry);
+      this.activeSession.activeEntryId = entry.id;
+      this.activeSession.isDirty = true;
+      return entry;
+    }
+    /**
+     * Add a message entry to the session
+     */
+    addMessage(message) {
+      return this.addEntry("message", message);
+    }
+    /**
+     * Append a compaction checkpoint to the current active path.
+     * Full history remains in entries; active messages are reconstructed from this checkpoint onward.
+     */
+    appendCompaction(summary, firstKeptEntryId, tokensBefore) {
+      if (!this.activeSession) {
+        throw new Error("No active session");
+      }
+      const entry = {
+        id: generateEntryId(),
+        parentId: this.activeSession.activeEntryId,
+        type: "compaction",
+        timestamp: Date.now(),
+        compactionData: {
+          summary,
+          firstKeptEntryId,
+          tokensBefore
+        }
+      };
+      this.activeSession.entries.push(entry);
+      this.activeSession.activeEntryId = entry.id;
+      this.activeSession.isDirty = true;
+      return entry;
+    }
+    /**
+     * Update messages (legacy compatibility - rebuilds tree)
+     * @deprecated Use addMessage() instead
+     */
+    updateMessages(messages) {
+      if (!this.activeSession) {
+        throw new Error("No active session");
+      }
+      const newEntries = [];
+      let parentId = null;
+      for (const message of messages) {
+        const entry = {
+          id: generateEntryId(),
+          parentId,
+          type: "message",
+          timestamp: Date.now(),
+          message
+        };
+        newEntries.push(entry);
+        parentId = entry.id;
+      }
+      this.activeSession.entries = newEntries;
+      this.activeSession.activeEntryId = newEntries.length > 0 ? newEntries[newEntries.length - 1].id : null;
+      this.activeSession.isDirty = true;
+    }
+    /**
+     * Get current messages (linear path from root to active leaf)
+     */
+    getMessages() {
+      if (!this.activeSession) {
+        return [];
+      }
+      return flattenTreeToMessages(this.activeSession.entries, this.activeSession.activeEntryId);
+    }
+    /**
+     * Get current entries
+     */
+    getEntries() {
+      return this.activeSession?.entries ?? [];
+    }
+    /**
+     * Get active session info
+     */
+    getActiveSession() {
+      return this.activeSession;
+    }
+    /**
+     * Get active session ID
+     */
+    getActiveSessionId() {
+      return this.activeSession?.id ?? null;
+    }
+    /**
+     * Get current active entry ID
+     */
+    getActiveEntryId() {
+      return this.activeSession?.activeEntryId ?? null;
+    }
+    /**
+     * Set active entry (for navigation)
+     */
+    setActiveEntry(entryId) {
+      if (!this.activeSession) {
+        return false;
+      }
+      if (entryId === null) {
+        this.activeSession.activeEntryId = null;
+        this.activeSession.isDirty = true;
+        return true;
+      }
+      const entry = this.activeSession.entries.find((e) => e.id === entryId);
+      if (!entry) {
+        console.warn(`[SessionManager] Entry not found: ${entryId}`);
+        return false;
+      }
+      this.activeSession.activeEntryId = entryId;
+      this.activeSession.isDirty = true;
+      return true;
+    }
+    /**
+     * Get entry by ID
+     */
+    getEntry(entryId) {
+      if (!this.activeSession) {
+        return null;
+      }
+      return this.activeSession.entries.find((e) => e.id === entryId) ?? null;
+    }
+    /**
+     * Get children of an entry
+     */
+    getChildren(parentId) {
+      if (!this.activeSession) {
+        return [];
+      }
+      return this.activeSession.entries.filter((e) => e.parentId === parentId);
+    }
+    /**
+     * Get tree structure
+     */
+    getTree() {
+      if (!this.activeSession) {
+        return [];
+      }
+      return buildTree(this.activeSession.entries, this.activeSession.activeEntryId);
+    }
+    /**
+     * Branch from a specific entry (in-session branching)
+     * Moves the active entry pointer to the specified entry.
+     * Next addMessage() will create a child of that entry, forming a new branch.
+     * Existing entries are not modified or deleted.
+     */
+    branch(entryId) {
+      if (!this.activeSession) {
+        return false;
+      }
+      if (entryId === null) {
+        this.activeSession.activeEntryId = null;
+        this.activeSession.isDirty = true;
+        return true;
+      }
+      const entry = this.activeSession.entries.find((e) => e.id === entryId);
+      if (!entry) {
+        console.warn(`[SessionManager] Branch target not found: ${entryId}`);
+        return false;
+      }
+      this.activeSession.activeEntryId = entryId;
+      this.activeSession.isDirty = true;
+      return true;
+    }
+    /**
+     * Get all branch paths (all leaf nodes) in the session
+     * Returns array of entry IDs representing branch tips
+     */
+    getBranchTips() {
+      if (!this.activeSession) {
+        return [];
+      }
+      const hasChildren = /* @__PURE__ */ new Set();
+      for (const entry of this.activeSession.entries) {
+        if (entry.parentId) {
+          hasChildren.add(entry.parentId);
+        }
+      }
+      const leaves = this.activeSession.entries.filter((e) => !hasChildren.has(e.id)).map((e) => e.id);
+      return leaves;
+    }
+    /**
+     * Get the path from root to a specific entry
+     */
+    getPathToEntry(entryId) {
+      if (!this.activeSession) {
+        return [];
+      }
+      const path = [];
+      const byId = new Map(this.activeSession.entries.map((e) => [e.id, e]));
+      let current = entryId;
+      while (current) {
+        const entry = byId.get(current);
+        if (!entry) break;
+        path.unshift(entry);
+        current = entry.parentId;
+      }
+      return path;
+    }
+    /**
+     * Get the timestamp of the latest compaction entry on the active path.
+     */
+    getLatestCompactionTimestamp() {
+      if (!this.activeSession?.activeEntryId) {
+        return null;
+      }
+      const path = this.getPathToEntry(this.activeSession.activeEntryId);
+      for (let i = path.length - 1; i >= 0; i--) {
+        const entry = path[i];
+        if (entry.type === "compaction" && entry.compactionData) {
+          return entry.timestamp;
+        }
+      }
+      return null;
+    }
+    /**
+     * Rename the active session
+     */
+    async rename(name) {
+      if (!this.activeSession) {
+        throw new Error("No active session");
+      }
+      this.activeSession.metadata.name = name;
+      this.activeSession.isDirty = true;
+      await this.save();
+    }
+    /**
+     * Close the current session
+     */
+    async close() {
+      if (this.activeSession?.isDirty) {
+        await this.save();
+      }
+      this.activeSession = null;
+    }
+    /**
+     * Delete a session (active or inactive)
+     */
+    async deleteSession(sessionId) {
+      if (this.activeSession?.id === sessionId) {
+        await this.close();
+      }
+      return await this.store.delete(sessionId);
+    }
+    /**
+     * List all available sessions
+     */
+    async listSessions() {
+      return await this.store.listMetadata();
+    }
+    /**
+     * Check if a session exists
+     */
+    async hasSession(sessionId) {
+      return await this.store.exists(sessionId);
+    }
+    /**
+     * Fork the current session at a specific entry point
+     */
+    async forkAtEntry(entryId, newName) {
+      if (!this.activeSession) {
+        throw new Error("No active session to fork");
+      }
+      const sourceEntry = this.activeSession.entries.find((e) => e.id === entryId);
+      if (!sourceEntry) {
+        throw new Error(`Entry not found: ${entryId}`);
+      }
+      const newSessionId = generateSessionId();
+      const now = Date.now();
+      const subtreeEntries = [];
+      const forkEntry = {
+        id: generateEntryId(),
+        parentId: null,
+        type: "fork",
+        timestamp: now,
+        forkData: {
+          sourceEntryId: entryId,
+          sessionId: this.activeSession.id,
+          name: this.activeSession.metadata.name
+        }
+      };
+      subtreeEntries.push(forkEntry);
+      let currentId = entryId;
+      let newParentId = forkEntry.id;
+      while (currentId) {
+        const entry = this.activeSession.entries.find((e) => e.id === currentId);
+        if (!entry) break;
+        const newEntry = {
+          ...entry,
+          id: generateEntryId(),
+          parentId: newParentId,
+          timestamp: now
+        };
+        subtreeEntries.push(newEntry);
+        newParentId = newEntry.id;
+        const children = this.activeSession.entries.filter((e) => e.parentId === currentId);
+        if (children.length === 0) break;
+        const activePathChild = children.find((c) => {
+          let checkId = this.activeSession?.activeEntryId ?? null;
+          while (checkId) {
+            if (checkId === c.id) return true;
+            const checkEntry = this.activeSession?.entries.find((e) => e.id === checkId);
+            checkId = checkEntry?.parentId ?? null;
+          }
+          return false;
+        });
+        currentId = activePathChild?.id ?? children[0]?.id ?? null;
+      }
+      await this.store.save(
+        newSessionId,
+        subtreeEntries,
+        {
+          name: newName ?? `${this.activeSession.metadata.name} (Branch)`,
+          createdAt: now,
+          updatedAt: now,
+          tags: this.activeSession.metadata.tags
+        }
+      );
+      return newSessionId;
+    }
+    /**
+     * Fork the current session (create a copy with current state)
+     */
+    async fork(newName) {
+      if (!this.activeSession) {
+        throw new Error("No active session to fork");
+      }
+      const newSessionId = generateSessionId();
+      const now = Date.now();
+      const idMap = /* @__PURE__ */ new Map();
+      const newEntries = [];
+      for (const entry of this.activeSession.entries) {
+        idMap.set(entry.id, generateEntryId());
+      }
+      for (const entry of this.activeSession.entries) {
+        const newEntry = {
+          ...entry,
+          id: idMap.get(entry.id),
+          parentId: entry.parentId ? idMap.get(entry.parentId) : null,
+          timestamp: now
+        };
+        newEntries.push(newEntry);
+      }
+      const newActiveEntryId = this.activeSession.activeEntryId ? idMap.get(this.activeSession.activeEntryId) ?? null : null;
+      await this.store.save(
+        newSessionId,
+        newEntries,
+        {
+          name: newName ?? `${this.activeSession.metadata.name} (Copy)`,
+          createdAt: now,
+          updatedAt: now,
+          activeEntryId: newActiveEntryId,
+          tags: this.activeSession.metadata.tags
+        }
+      );
+      return newSessionId;
+    }
+    /**
+     * Clean up old sessions if exceeding maxSessions
+     */
+    async cleanup() {
+      if (this.options.maxSessions <= 0) {
+        return 0;
+      }
+      const sessions = await this.store.listMetadata();
+      if (sessions.length <= this.options.maxSessions) {
+        return 0;
+      }
+      const sorted = sessions.sort((a, b) => a.updatedAt - b.updatedAt);
+      const toDelete = sorted.slice(0, sessions.length - this.options.maxSessions);
+      let deleted = 0;
+      for (const session of toDelete) {
+        if (session.id !== this.activeSession?.id) {
+          await this.store.delete(session.id);
+          deleted++;
+        }
+      }
+      if (deleted > 0) {
+      }
+      return deleted;
+    }
+    /**
+     * Dispose the manager
+     */
+    dispose() {
+      this.stopAutoSave();
+    }
+  };
+  function createSessionManager(options) {
+    return new SessionManager(options);
+  }
+
+  // ../../packages/agent-framework/src/extensions/runtime-registry.ts
+  var typeBoxKind = Symbol.for("TypeBox.Kind");
+  function isTypeBoxSchema(value) {
+    return !!value && typeof value === "object" && typeBoxKind in value;
+  }
+  function convertJsonSchemaToTypeBox(schema) {
+    if (!schema || typeof schema !== "object") {
+      throw new Error("Tool parameters must be a TypeBox schema or a JSON schema object.");
+    }
+    if (isTypeBoxSchema(schema)) {
+      return schema;
+    }
+    const description = typeof schema.description === "string" ? schema.description : void 0;
+    const options = description ? { description } : void 0;
+    switch (schema.type) {
+      case "string":
+        return Type.String(options);
+      case "number":
+        return Type.Number(options);
+      case "integer":
+        return Type.Integer(options);
+      case "boolean":
+        return Type.Boolean(options);
+      case "null":
+        return Type.Null(options);
+      case "array":
+        return Type.Array(convertJsonSchemaToTypeBox(schema.items ?? { type: "string" }), options);
+      case "object": {
+        const properties = schema.properties ?? {};
+        const required = new Set(Array.isArray(schema.required) ? schema.required : []);
+        const converted = {};
+        for (const [key, value] of Object.entries(properties)) {
+          const child = convertJsonSchemaToTypeBox(value);
+          converted[key] = required.has(key) ? child : Type.Optional(child);
+        }
+        return Type.Object(converted, options);
+      }
+      default:
+        throw new Error(`Unsupported JSON schema type for extension tool: ${String(schema.type ?? "unknown")}`);
+    }
+  }
+  function extensionLog(context, message) {
+    context.log(`[extension] ${message}`);
+  }
+  function tryParseHostResult(raw) {
+    if (typeof raw !== "string") {
+      return raw;
+    }
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    const looksLikeJson = trimmed.startsWith("{") && trimmed.endsWith("}") || trimmed.startsWith("[") && trimmed.endsWith("]") || trimmed === "null" || trimmed === "true" || trimmed === "false" || /^-?\d+(\.\d+)?$/.test(trimmed);
+    if (!looksLikeJson) {
+      return raw;
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return raw;
+    }
+  }
+  var RuntimeExtensionRegistry = class {
+    extensionTools = [];
+    beforeToolCallHooks = [];
+    afterToolCallHooks = [];
+    onErrorHooks = [];
+    systemPromptPatches = [];
+    loadedExtensions = [];
+    reset() {
+      this.extensionTools.length = 0;
+      this.beforeToolCallHooks.length = 0;
+      this.afterToolCallHooks.length = 0;
+      this.onErrorHooks.length = 0;
+      this.systemPromptPatches.length = 0;
+      this.loadedExtensions.length = 0;
+    }
+    getTools() {
+      return this.extensionTools.slice();
+    }
+    getLoadedExtensions() {
+      return this.loadedExtensions.slice();
+    }
+    getSystemPromptPatches() {
+      return this.systemPromptPatches.slice();
+    }
+    buildHooks() {
+      if (this.beforeToolCallHooks.length === 0 && this.afterToolCallHooks.length === 0 && this.onErrorHooks.length === 0) {
+        return void 0;
+      }
+      return {
+        beforeToolCall: this.beforeToolCallHooks.length === 0 ? void 0 : async (toolName, args) => {
+          for (const hook of this.beforeToolCallHooks) {
+            const result = await hook(toolName, args);
+            if (result?.block) {
+              return result;
+            }
+          }
+          return void 0;
+        },
+        afterToolCall: this.afterToolCallHooks.length === 0 ? void 0 : async (toolName, args, result, isError) => {
+          for (const hook of this.afterToolCallHooks) {
+            await hook(toolName, args, result, isError);
+          }
+        },
+        onError: this.onErrorHooks.length === 0 ? void 0 : (error, ctx) => {
+          for (const hook of this.onErrorHooks) {
+            hook(error, ctx);
+          }
+        }
+      };
+    }
+    createContext(definition, context) {
+      return {
+        manifest: definition.manifest,
+        dir: definition.dir,
+        config: definition.config ?? {},
+        ...context,
+        registerTool: (tool) => {
+          const normalizedTool = {
+            ...tool,
+            parameters: convertJsonSchemaToTypeBox(tool.parameters)
+          };
+          this.extensionTools.push(normalizedTool);
+          extensionLog(context, `registered tool: ${tool.name}`);
+        },
+        registerBeforeToolCall: (hook) => {
+          this.beforeToolCallHooks.push(hook);
+          extensionLog(context, "registered beforeToolCall hook");
+        },
+        registerAfterToolCall: (hook) => {
+          this.afterToolCallHooks.push(hook);
+          extensionLog(context, "registered afterToolCall hook");
+        },
+        registerOnError: (hook) => {
+          this.onErrorHooks.push(hook);
+          extensionLog(context, "registered onError hook");
+        },
+        appendSystemPrompt: (text) => {
+          const trimmed = (text ?? "").trim();
+          if (!trimmed) return;
+          this.systemPromptPatches.push(trimmed);
+          extensionLog(context, "appended system prompt patch");
+        },
+        async callHost(name, args) {
+          if (!context.callHost) {
+            throw new Error(`Host bridge is unavailable for extension call: ${name}`);
+          }
+          const raw = await context.callHost(name, args);
+          return tryParseHostResult(raw);
+        }
+      };
+    }
+    createApi(context) {
+      return this.createContext(
+        {
+          manifest: { name: "runtime-extension", version: "0.0.0", main: "index.js" },
+          dir: ".",
+          config: {}
+        },
+        context
+      );
+    }
+    registerLoadedExtension(path) {
+      this.loadedExtensions.push(path);
+    }
+  };
+  function createRuntimeExtensionRegistry() {
+    return new RuntimeExtensionRegistry();
+  }
+
+  // ../../packages/agent-framework/src/extensions/runtime-discovery.ts
+  function normalizePath(path) {
+    return String(path ?? "").replace(/\\/g, "/");
+  }
+  function collectScriptFiles(gateway, root, out) {
+    if (!gateway.exists(root) || !gateway.isDirectory(root)) {
+      return;
+    }
+    for (const entry of gateway.readdir(root)) {
+      const fullPath = gateway.join(root, entry);
+      if (gateway.isDirectory(fullPath)) {
+        collectScriptFiles(gateway, fullPath, out);
+        continue;
+      }
+      if (gateway.isFile(fullPath) && gateway.extname(fullPath).toLowerCase() === ".js") {
+        out.push(normalizePath(fullPath));
+      }
+    }
+  }
+  function discoverRuntimeScriptExtensions(searchRoots) {
+    const roots = searchRoots.map((root) => normalizePath(root)).filter((root) => root.length > 0);
+    const gateway = new FileSystemGateway({
+      allowedRoots: roots,
+      allowWrites: false
+    });
+    const byName = /* @__PURE__ */ new Map();
+    for (const root of roots) {
+      const files = [];
+      collectScriptFiles(gateway, root, files);
+      for (const filePath of files) {
+        const fileName = gateway.basename(filePath, gateway.extname(filePath)).toLowerCase();
+        byName.delete(fileName);
+        byName.set(fileName, filePath);
+      }
+    }
+    return Array.from(byName.values());
+  }
+
+  // ../../packages/agent-framework/src/interaction.ts
+  var InteractionUnavailableError = class extends Error {
+    request;
+    constructor(message, request) {
+      super(message);
+      this.name = "InteractionUnavailableError";
+      this.request = request;
+    }
+  };
+  var currentInteractionHandler = null;
+  function registerInteractionHandler(handler) {
+    currentInteractionHandler = handler;
+  }
+  async function requestInteraction(request) {
+    if (!currentInteractionHandler) {
+      throw new InteractionUnavailableError(
+        `No interaction handler registered for request type: ${request.type}`,
+        request
+      );
+    }
+    return await currentInteractionHandler(request);
+  }
+
+  // ../../packages/agent-framework/src/project-memory.ts
+  var PROJECT_MEMORY_CLASSIFICATION = {
+    disposition: "future_shared_capability",
+    sharedContract: true,
+    hostSpecificExecutor: true
+  };
+  function defineProjectMemoryAdapter(adapter) {
+    return adapter;
+  }
+
+  // ../../packages/shared-headless-capabilities/src/capability.ts
+  function defineSharedCapability(definition) {
+    return definition;
+  }
+  function collectSharedCapabilityPromptAdditions(definitions, activeToolNames) {
+    const activeTools = activeToolNames ? new Set(activeToolNames) : null;
+    const additions = /* @__PURE__ */ new Set();
+    for (const definition of definitions) {
+      if (!definition.systemPromptAdditions?.length) continue;
+      if (activeTools && definition.tools?.length) {
+        const hasActiveTool = definition.tools.some((tool) => {
+          return typeof tool?.name === "string" && activeTools.has(tool.name);
+        });
+        if (!hasActiveTool) continue;
+      }
+      for (const addition of definition.systemPromptAdditions) {
+        const trimmed = addition.trim();
+        if (trimmed) additions.add(trimmed);
+      }
+    }
+    return [...additions];
+  }
+
+  // ../../packages/shared-headless-capabilities/src/read-skill.ts
+  var ReadSkillParamsSchema = Type.Object({
+    name: Type.String({ description: "Exact skill name from the available_skills list." })
+  });
+  function createReadSkillCapability(deps) {
+    async function resolveSkill(name) {
+      if (deps.resolveSkill) {
+        return deps.resolveSkill(name);
+      }
+      const skill = deps.skillLoader?.getSkill?.(name) ?? deps.skillLoader?.loadSkill?.(name);
+      if (!skill) {
+        return null;
+      }
+      return {
+        name: skill.name,
+        source: skill.filePath || "skill-registry",
+        content: skill.prompt
+      };
+    }
+    const tool = {
+      name: "read_skill",
+      label: "read_skill",
+      description: "Load the full contents of a builtin or project skill by exact name.",
+      parameters: ReadSkillParamsSchema,
+      async execute(toolCallIdOrArgs, maybeArgs) {
+        const args = typeof toolCallIdOrArgs === "string" ? maybeArgs : toolCallIdOrArgs;
+        const skillName = String(args?.name || "").trim();
+        const skill = await resolveSkill(skillName);
+        if (!skill?.content) {
+          return {
+            content: [{ type: "text", text: `Skill not found: ${skillName || "(empty)"}` }],
+            details: { found: false, name: skillName || void 0 },
+            isError: true
+          };
+        }
+        return {
+          content: [{
+            type: "text",
+            text: `# ${skill.name}
+source: ${skill.source}
+
+${skill.content}`
+          }],
+          details: { found: true, name: skill.name, source: skill.source }
+        };
+      }
+    };
+    return {
+      ...defineSharedCapability({
+        id: "read-skill",
+        description: "Shared capability for loading full skill contents through a host-provided skill resolver.",
+        tools: [tool]
+      }),
+      tool
+    };
+  }
+
+  // ../../packages/shared-headless-capabilities/src/todo.ts
+  var TodoItemSchema = Type.Object({
+    id: Type.Number({ description: "Unique identifier for the todo. Use sequential numbers starting from 1." }),
+    title: Type.String({ description: "Concise action-oriented todo label (3-7 words)." }),
+    description: Type.String({ description: "Detailed context or implementation notes." }),
+    status: Type.String({
+      description: "Progress state. Preferred values: not-started, in-progress, completed. Also accepts aliases like pending, todo, doing, done."
+    })
+  });
+  var ManageTodoListParamsSchema = Type.Object({
+    operation: Type.Union([Type.Literal("write"), Type.Literal("read")], {
+      description: "write: Replace the entire todo list. read: Return the current todo list."
+    }),
+    todoList: Type.Optional(
+      Type.Array(TodoItemSchema, {
+        description: "Required for write. Must include the full todo list with sequential ids starting from 1."
+      })
+    )
+  });
+  function cloneTodos(todos) {
+    return todos.map((todo) => ({ ...todo }));
+  }
+  function normalizeStatus(status) {
+    const value = String(status || "").trim().toLowerCase();
+    if (!value) return null;
+    if (value === "not-started" || value === "not_started" || value === "pending" || value === "todo" || value === "not started") {
+      return "not-started";
+    }
+    if (value === "in-progress" || value === "in_progress" || value === "in progress" || value === "doing" || value === "active" || value === "working") {
+      return "in-progress";
+    }
+    if (value === "completed" || value === "complete" || value === "done" || value === "finished") {
+      return "completed";
+    }
+    return null;
+  }
+  function normalizeTodos(todos) {
+    return todos.map((todo) => ({
+      ...todo,
+      status: normalizeStatus(todo.status) ?? todo.status
+    }));
+  }
+  function validateTodos(todos) {
+    const errors = [];
+    const validStatuses = /* @__PURE__ */ new Set(["not-started", "in-progress", "completed"]);
+    for (let index = 0; index < todos.length; index++) {
+      const item = todos[index];
+      const prefix = `Item ${index + 1}`;
+      if (typeof item?.id !== "number" || !Number.isInteger(item.id) || item.id < 1) {
+        errors.push(`${prefix}: 'id' must be a positive integer`);
+      }
+      if (item?.id !== index + 1) {
+        errors.push(`${prefix}: ids must be sequential starting from 1`);
+      }
+      if (typeof item?.title !== "string" || item.title.trim().length === 0) {
+        errors.push(`${prefix}: 'title' is required`);
+      }
+      if (typeof item?.description !== "string") {
+        errors.push(`${prefix}: 'description' must be a string`);
+      }
+      if (!validStatuses.has(item?.status)) {
+        errors.push(`${prefix}: 'status' must be one of: not-started, in-progress, completed`);
+      }
+    }
+    return errors;
+  }
+  function getTodoValidation(todos) {
+    const errors = validateTodos(todos);
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  }
+  function getTodoStats(todos) {
+    const total = todos.length;
+    const completed = todos.filter((todo) => todo.status === "completed").length;
+    const inProgress = todos.filter((todo) => todo.status === "in-progress").length;
+    return {
+      total,
+      completed,
+      inProgress,
+      notStarted: total - completed - inProgress
+    };
+  }
+  function buildTodoSuccessMessage(todos) {
+    const { completed, total } = getTodoStats(todos);
+    if (total > 0 && completed === total) {
+      return `Todos updated successfully. ${completed}/${total} completed. All todos are complete, so the list was cleared.`;
+    }
+    return `Todos updated successfully. ${completed}/${total} completed. Continue updating the list until all items are completed; it will clear automatically when done.`;
+  }
+  function executeManageTodoList(args, currentTodos) {
+    const safeCurrentTodos = cloneTodos(currentTodos);
+    if (args.operation === "read") {
+      return {
+        nextTodos: safeCurrentTodos,
+        result: {
+          content: [
+            {
+              type: "text",
+              text: safeCurrentTodos.length ? JSON.stringify(safeCurrentTodos, null, 2) : "No todos. Use write operation to create a todo list."
+            }
+          ],
+          details: { operation: "read", todos: safeCurrentTodos }
+        }
+      };
+    }
+    if (!Array.isArray(args.todoList)) {
+      return {
+        nextTodos: safeCurrentTodos,
+        result: {
+          content: [{ type: "text", text: "Error: todoList is required for write operation." }],
+          details: { operation: "write", todos: safeCurrentTodos, error: "todoList required" },
+          isError: true
+        }
+      };
+    }
+    const nextTodos = normalizeTodos(cloneTodos(args.todoList));
+    const errors = validateTodos(nextTodos);
+    if (errors.length > 0) {
+      return {
+        nextTodos: safeCurrentTodos,
+        result: {
+          content: [{ type: "text", text: `Validation failed:
+${errors.map((error) => `  - ${error}`).join("\n")}` }],
+          details: { operation: "write", todos: safeCurrentTodos, error: errors.join("; ") },
+          isError: true
+        }
+      };
+    }
+    const stats = getTodoStats(nextTodos);
+    const autoCleared = stats.total > 0 && stats.completed === stats.total;
+    const storedTodos = autoCleared ? [] : nextTodos;
+    return {
+      nextTodos: storedTodos,
+      result: {
+        content: [{ type: "text", text: buildTodoSuccessMessage(nextTodos) }],
+        details: {
+          operation: "write",
+          todos: cloneTodos(storedTodos),
+          autoCleared,
+          completedTodos: autoCleared ? cloneTodos(nextTodos) : void 0
+        }
+      }
+    };
+  }
+  function restoreTodoState(state) {
+    if (!Array.isArray(state)) {
+      return [];
+    }
+    const normalized = normalizeTodos(cloneTodos(state));
+    return validateTodos(normalized).length === 0 ? normalized : [];
+  }
+  function restoreTodosFromMessages(messages) {
+    let todos = [];
+    for (const message of messages || []) {
+      const toolResultMessage = message;
+      if (toolResultMessage.role !== "toolResult" || toolResultMessage.toolName !== "manage_todo_list") {
+        continue;
+      }
+      const details = toolResultMessage.details;
+      if (details?.todos) {
+        todos = restoreTodoState(details.todos);
+      }
+    }
+    return todos;
+  }
+  function createTodoStore(initialState) {
+    let todos = restoreTodoState(initialState);
+    return {
+      read() {
+        return cloneTodos(todos);
+      },
+      write(nextTodos) {
+        todos = restoreTodoState(nextTodos);
+      },
+      clear() {
+        todos = [];
+      },
+      restore(state) {
+        todos = restoreTodoState(state);
+      },
+      restoreFromMessages(messages) {
+        todos = restoreTodosFromMessages(messages);
+      },
+      getStats() {
+        return getTodoStats(todos);
+      },
+      validate(nextTodos) {
+        if (!Array.isArray(nextTodos)) {
+          return { valid: false, errors: ["todoList must be an array"] };
+        }
+        return getTodoValidation(normalizeTodos(cloneTodos(nextTodos)));
+      }
+    };
+  }
+  function createManageTodoCapability() {
+    const store = createTodoStore();
+    const tool = {
+      name: "manage_todo_list",
+      label: "manage_todo_list",
+      description: "Read or replace the shared todo checklist for the current session. Use this to actually create and update todo tracking when the user asks for a todo demonstration or progress checklist, not just to describe how todo tracking works.",
+      parameters: ManageTodoListParamsSchema,
+      async execute(args) {
+        const { nextTodos, result } = executeManageTodoList(args, store.read());
+        store.write(nextTodos);
+        return result;
+      }
+    };
+    return {
+      ...defineSharedCapability({
+        id: "todo",
+        description: "Shared headless todo/checklist capability.",
+        tools: [tool],
+        extensions: [{ name: "todo-state", description: "Provides capability-local todo state storage." }],
+        systemPromptAdditions: [
+          "When the user asks you to demonstrate or use todo tracking, call `manage_todo_list` instead of only describing how it works.",
+          "When you start using manage_todo_list for a task, keep the checklist updated whenever step status changes.",
+          "Maintain exactly one in-progress item while work is active, continue updating the checklist until every item is completed, and do not abandon a started checklist.",
+          "A todo demonstration is not complete until `manage_todo_list` has been updated through all steps and the list auto-clears.",
+          "manage_todo_list clears itself automatically when all items are completed, so drive the checklist to completion instead of leaving completed items behind."
+        ]
+      }),
+      tool,
+      createStore: createTodoStore
+    };
+  }
+
+  // ../../packages/shared-headless-capabilities/src/ask-user.ts
+  var OTHER_OPTION = "\u270F\uFE0F Other (type your own)";
+  var BACK_OPTION = "\u2190 Back";
+  var REVIEW_OPTION = "\u2630 Review all answers";
+  var CONFIRM_OPTION = "\u2713 Confirm and continue";
+  var RESTART_OPTION = "\u21BA Restart all";
+  var DEFAULT_ASK_TIMEOUT_MS = 6e4;
+  var AskUserParamsSchema = Type.Object({
+    question: Type.String({
+      description: "REQUIRED: The question text to ask the user"
+    }),
+    options: Type.Optional(Type.Array(
+      Type.String({ description: "An option label" })
+    )),
+    allowOther: Type.Optional(Type.Boolean({
+      description: "Whether to show 'Other' option (default: true when options provided)",
+      default: true
+    })),
+    allowBack: Type.Optional(Type.Boolean({
+      description: "Whether to allow going back (adds '\u2190 Back' option)",
+      default: false
+    })),
+    placeholder: Type.Optional(Type.String({
+      description: "Placeholder text for input field"
+    }))
+  });
+  var AskUserMultiParamsSchema = Type.Object({
+    prompt: Type.Optional(Type.String({
+      description: "Legacy-compatible shortcut for a single question. Equivalent to `question`."
+    })),
+    question: Type.Optional(Type.String({
+      description: "Preferred shortcut for a single question. Use this for the common case."
+    })),
+    options: Type.Optional(Type.Array(
+      Type.String({ description: "Shortcut options for the single-question form." })
+    )),
+    placeholder: Type.Optional(Type.String({
+      description: "Shortcut placeholder for the single-question form."
+    })),
+    questions: Type.Optional(Type.Array(
+      Type.Union([
+        Type.String({
+          description: "Lightweight question syntax. Use `Question text|Option A|Option B` for single choice, or just `Question text` for free text."
+        }),
+        Type.Object({
+          id: Type.Optional(Type.String({ description: "Question identifier; optional and auto-generated if omitted." })),
+          question: Type.String({ description: "Question text" }),
+          options: Type.Optional(Type.Array(Type.String())),
+          allowOther: Type.Optional(Type.Boolean()),
+          placeholder: Type.Optional(Type.String())
+        })
+      ]),
+      { description: "Questions to ask sequentially. Can be strings or lightweight objects." }
+    )),
+    allowReview: Type.Optional(Type.Boolean({
+      description: "Allow user to review and modify answers at the end",
+      default: true
+    }))
+  });
+  function buildUnsupportedResult(error) {
+    const message = error instanceof InteractionUnavailableError ? error.message : error instanceof Error ? error.message : String(error);
+    return {
+      content: [{ type: "text", text: `Interaction unavailable: ${message}` }],
+      details: { unsupported: true, error: message },
+      isError: true
+    };
+  }
+  function validateQuestions(questions) {
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return "'questions' must be a non-empty array";
+    }
+    for (let index = 0; index < questions.length; index++) {
+      const question = questions[index];
+      if (!question || typeof question !== "object") {
+        return `questions[${index}] must be an object`;
+      }
+      const candidate = question;
+      if (typeof candidate.id !== "string" || candidate.id.trim().length === 0) {
+        return `questions[${index}].id must be a non-empty string`;
+      }
+      if (typeof candidate.question !== "string" || candidate.question.trim().length === 0) {
+        return `questions[${index}].question must be a non-empty string`;
+      }
+      if (candidate.options !== void 0) {
+        if (!Array.isArray(candidate.options) || candidate.options.length === 0) {
+          return `questions[${index}].options must be a non-empty array when provided`;
+        }
+        for (let optionIndex = 0; optionIndex < candidate.options.length; optionIndex++) {
+          const option = candidate.options[optionIndex];
+          if (typeof option !== "string" || option.trim().length === 0) {
+            return `questions[${index}].options[${optionIndex}] must be a non-empty string`;
+          }
+        }
+      }
+    }
+    return null;
+  }
+  function normalizeStringQuestion(value, index) {
+    const parts = value.split("|").map((part) => part.trim()).filter((part) => part.length > 0);
+    if (parts.length === 0) return null;
+    const [question, ...options] = parts;
+    return {
+      id: `q${index + 1}`,
+      question,
+      options: options.length > 0 ? options : void 0
+    };
+  }
+  function normalizeQuestionObject(value, index) {
+    const options = Array.isArray(value.options) ? value.options.filter((option) => typeof option === "string").map((option) => option.trim()).filter((option) => option.length > 0) : void 0;
+    return {
+      id: typeof value.id === "string" && value.id.trim().length > 0 ? value.id.trim() : `q${index + 1}`,
+      question: typeof value.question === "string" ? value.question.trim() : "",
+      options: options && options.length > 0 ? options : void 0,
+      allowOther: typeof value.allowOther === "boolean" ? value.allowOther : void 0,
+      placeholder: typeof value.placeholder === "string" ? value.placeholder : void 0
+    };
+  }
+  function normalizeAskUserArgs(args) {
+    if (typeof args === "string") {
+      try {
+        args = JSON.parse(args);
+      } catch {
+        const preview = args.length > 200 ? `${args.slice(0, 200)}...` : args;
+        return { error: `Tool arguments must be an object or valid JSON object string (received string: ${preview})` };
+      }
+    }
+    const allowReview = args?.allowReview ?? true;
+    const singleQuestionText = typeof args?.question === "string" && args.question.trim().length > 0 ? args.question.trim() : typeof args?.prompt === "string" && args.prompt.trim().length > 0 ? args.prompt.trim() : void 0;
+    const normalizedSingleQuestion = singleQuestionText ? {
+      id: "q1",
+      question: singleQuestionText,
+      options: Array.isArray(args.options) ? args.options.filter((option) => typeof option === "string").map((option) => option.trim()).filter((option) => option.length > 0) : void 0,
+      placeholder: typeof args?.placeholder === "string" ? args.placeholder : void 0
+    } : void 0;
+    if (normalizedSingleQuestion && Array.isArray(args?.questions) && args.questions.length === 0) {
+      return { questions: [normalizedSingleQuestion], allowReview };
+    }
+    if (!Array.isArray(args?.questions)) {
+      if (normalizedSingleQuestion) {
+        return { questions: [normalizedSingleQuestion], allowReview };
+      }
+      return { error: "Provide `question` or `prompt` for a single question, or provide a non-empty `questions` array" };
+    }
+    const normalizedQuestions = args.questions.map((question, index) => {
+      if (typeof question === "string") {
+        return normalizeStringQuestion(question, index);
+      }
+      if (question && typeof question === "object") {
+        return normalizeQuestionObject(question, index);
+      }
+      return null;
+    }).filter((question) => {
+      if (question === null) return false;
+      return typeof question.question === "string" && question.question.trim().length > 0;
+    });
+    if (normalizedQuestions.length > 0) {
+      return { questions: normalizedQuestions, allowReview };
+    }
+    if (normalizedSingleQuestion) {
+      return { questions: [normalizedSingleQuestion], allowReview };
+    }
+    return { error: "Provide `question` or `prompt` for a single question, or provide a non-empty `questions` array" };
+  }
+  function buildSkippedResult(question, timedOut = false) {
+    return {
+      content: [{ type: "text", text: "(skipped)" }],
+      details: {
+        answer: "(skipped)",
+        skipped: true,
+        timedOut,
+        question,
+        cancelled: false
+      }
+    };
+  }
+  async function askSingleQuestion(args) {
+    const { question, options, allowOther = true, allowBack = false, allowReview = false, placeholder } = args;
+    if (!question || typeof question !== "string") {
+      return {
+        content: [{ type: "text", text: "Error: 'question' parameter is required" }],
+        isError: true
+      };
+    }
+    if (!options || options.length === 0) {
+      const response = await requestInteraction({
+        type: "multiline_input",
+        id: `ask-user:${Date.now()}`,
+        prompt: question,
+        timeoutMs: DEFAULT_ASK_TIMEOUT_MS
+      });
+      if (response.type === "multiline_input" && (response.skipped || response.timedOut)) {
+        return buildSkippedResult(question, response.timedOut === true);
+      }
+      const answer = response.type === "multiline_input" ? response.value : void 0;
+      if (answer === void 0) {
+        return { content: [{ type: "text", text: "User cancelled" }], details: { cancelled: true } };
+      }
+      return {
+        content: [{ type: "text", text: answer }],
+        details: { answer, cancelled: false }
+      };
+    }
+    const displayOptions = [...options];
+    if (allowOther !== false) displayOptions.push(OTHER_OPTION);
+    if (allowBack) displayOptions.push(BACK_OPTION);
+    if (allowReview) displayOptions.push(REVIEW_OPTION);
+    const selection = await requestInteraction({
+      type: "select_one",
+      id: `ask-user:select:${Date.now()}`,
+      prompt: question,
+      options: displayOptions,
+      timeoutMs: DEFAULT_ASK_TIMEOUT_MS
+    });
+    if (selection.type === "select_one" && (selection.skipped || selection.timedOut)) {
+      return buildSkippedResult(question, selection.timedOut === true);
+    }
+    if (selection.type !== "select_one" || selection.selection === void 0) {
+      return { content: [{ type: "text", text: "User cancelled" }], details: { cancelled: true } };
+    }
+    if (selection.selection === BACK_OPTION) {
+      return { content: [{ type: "text", text: "BACK" }], details: { goBack: true, cancelled: false } };
+    }
+    if (selection.selection === REVIEW_OPTION) {
+      return { content: [{ type: "text", text: "REVIEW" }], details: { goReview: true, cancelled: false } };
+    }
+    if (selection.selection === OTHER_OPTION) {
+      const response = await requestInteraction({
+        type: "text_input",
+        id: `ask-user:${Date.now()}`,
+        prompt: `${question} (Other)`,
+        placeholder,
+        timeoutMs: DEFAULT_ASK_TIMEOUT_MS
+      });
+      if (response.type === "text_input" && (response.skipped || response.timedOut)) {
+        return buildSkippedResult(question, response.timedOut === true);
+      }
+      const customAnswer = response.type === "text_input" ? response.value : void 0;
+      if (customAnswer === void 0) {
+        return { content: [{ type: "text", text: "User cancelled" }], details: { cancelled: true } };
+      }
+      return {
+        content: [{ type: "text", text: `Other: ${customAnswer}` }],
+        details: { answer: customAnswer, isOther: true, cancelled: false }
+      };
+    }
+    const selectedIndex = displayOptions.indexOf(selection.selection);
+    return {
+      content: [{ type: "text", text: `${String.fromCharCode(65 + selectedIndex)}. ${selection.selection}` }],
+      details: {
+        answer: selection.selection,
+        selectedIndex,
+        isOther: false,
+        cancelled: false
+      }
+    };
+  }
+  function createAskUserCapability() {
+    const tools = [
+      {
+        name: "ask_user_multi",
+        label: "Ask User",
+        description: `Ask one or more questions with review and back navigation. Use this for all user questioning flows, including demonstrations that should actually ask the user instead of only describing the questionnaire. When you decide to use this tool, invoke it immediately. Do not print explanatory preambles, numbered plans, or example JSON in chat before calling it. For a generic demo such as '\u6F14\u793A\u4E00\u4E0B ask \u5DE5\u5177', '\u6F14\u793A\u4E00\u4E0B\u63D0\u95EE\u5DE5\u5177', or 'ask me', ask exactly one simple single-choice question with 3-5 explicit options so the user sees a selector instead of a free-text editor. Do not switch to an open-ended or multi-question flow unless the user explicitly asks for it. Prefer the shortest valid shape. For a single question, use {"question":"Choose a color","options":["Red","Blue","Green"]}. You may also use {"prompt":"Choose a color","options":[...]} for compatibility. For multiple questions, use \`questions\`. Question ids are optional and will be auto-generated.`,
+        parameters: AskUserMultiParamsSchema,
+        async execute(toolCallIdOrArgs, maybeArgs) {
+          try {
+            const args = typeof toolCallIdOrArgs === "string" && maybeArgs !== void 0 ? maybeArgs : toolCallIdOrArgs;
+            const normalized = normalizeAskUserArgs(args);
+            if ("error" in normalized) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Error: ${normalized.error}. Use one of these shapes: {"question":"Choose a color","options":["Red","Blue","Green"]} or {"prompt":"Choose a color","options":["Red","Blue","Green"]} or {"questions":[{"question":"Choose a color","options":["Red","Blue","Green"]},{"question":"Describe why"}],"allowReview":true}`
+                  }
+                ],
+                isError: true
+              };
+            }
+            const { questions, allowReview } = normalized;
+            const validationError = validateQuestions(questions);
+            if (validationError) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Error: ${validationError}. Use one of these shapes: {"question":"Choose a color","options":["Red","Blue","Green"]} or {"prompt":"Choose a color","options":["Red","Blue","Green"]} or {"questions":["Choose a color|Red|Blue|Green","Describe why"],"allowReview":true}`
+                  }
+                ],
+                isError: true
+              };
+            }
+            const answers = {};
+            let currentIndex = 0;
+            while (currentIndex < questions.length) {
+              const q = questions[currentIndex];
+              const result = await askSingleQuestion({
+                question: `${currentIndex + 1}/${questions.length}: ${q.question}`,
+                options: q.options,
+                allowOther: q.allowOther,
+                allowBack: currentIndex > 0,
+                allowReview: allowReview && Object.keys(answers).length > 0,
+                placeholder: q.placeholder
+              });
+              if (result.details?.cancelled) {
+                return { content: [{ type: "text", text: "User cancelled" }], details: { cancelled: true } };
+              }
+              if (result.details?.goBack) {
+                currentIndex = Math.max(0, currentIndex - 1);
+                delete answers[questions[currentIndex].id];
+                continue;
+              }
+              if (result.details?.goReview) {
+                break;
+              }
+              answers[q.id] = {
+                question: q.question,
+                answer: result.details?.answer || result.content[0].text,
+                ...result.details
+              };
+              currentIndex++;
+            }
+            if (allowReview && Object.keys(answers).length > 0) {
+              while (true) {
+                const reviewOptions = [
+                  CONFIRM_OPTION,
+                  ...questions.map((q2, i) => {
+                    const answer = answers[q2.id]?.answer || "(not answered)";
+                    const displayAnswer = answer.length > 20 ? `${answer.substring(0, 20)}...` : answer;
+                    return `\u270F\uFE0F Q${i + 1}: ${displayAnswer}`;
+                  }),
+                  RESTART_OPTION
+                ];
+                const review = await requestInteraction({
+                  type: "select_one",
+                  id: `ask-user:review:${Date.now()}`,
+                  prompt: "\u2630 Review your answers (select to edit):",
+                  options: reviewOptions,
+                  timeoutMs: DEFAULT_ASK_TIMEOUT_MS
+                });
+                if (review.type === "select_one" && (review.skipped || review.timedOut)) {
+                  break;
+                }
+                if (review.type !== "select_one" || review.selection === void 0) {
+                  return { content: [{ type: "text", text: "User cancelled during review" }], details: { cancelled: true } };
+                }
+                const reviewIndex = reviewOptions.indexOf(review.selection);
+                if (review.selection === CONFIRM_OPTION) {
+                  break;
+                }
+                if (review.selection === RESTART_OPTION) {
+                  Object.keys(answers).forEach((key) => delete answers[key]);
+                  currentIndex = 0;
+                  break;
+                }
+                const questionIndex = reviewIndex - 1;
+                if (questionIndex < 0 || questionIndex >= questions.length) {
+                  continue;
+                }
+                const q = questions[questionIndex];
+                const result = await askSingleQuestion({
+                  question: `\u270F\uFE0F Edit Q${questionIndex + 1}/${questions.length}: ${q.question}`,
+                  options: q.options,
+                  allowOther: q.allowOther,
+                  allowBack: questionIndex > 0,
+                  allowReview: true,
+                  placeholder: q.placeholder
+                });
+                if (result.details?.cancelled) {
+                  return { content: [{ type: "text", text: "User cancelled" }], details: { cancelled: true } };
+                }
+                if (result.details?.goBack && questionIndex > 0) {
+                  delete answers[q.id];
+                  currentIndex = questionIndex - 1;
+                  break;
+                }
+                if (result.details?.goReview) {
+                  continue;
+                }
+                answers[q.id] = {
+                  question: q.question,
+                  answer: result.details?.answer || result.content[0].text,
+                  ...result.details
+                };
+              }
+            }
+            const summary = Object.entries(answers).map(([id, data]) => `${id}: ${data.answer}`).join("\n");
+            return {
+              content: [{ type: "text", text: summary }],
+              details: { answers, cancelled: false }
+            };
+          } catch (error) {
+            return buildUnsupportedResult(error);
+          }
+        }
+      }
+    ];
+    return {
+      ...defineSharedCapability({
+        id: "ask-user",
+        description: "Ask the user one or more questions through the shared interaction protocol.",
+        tools,
+        requiredInteractions: ["select_one", "confirm", "text_input", "multiline_input"],
+        systemPromptAdditions: [
+          "When the user asks you to ask questions, collect choices, or gather structured input, call `ask_user_multi` instead of describing the questions in plain text.",
+          "When demonstrating `ask_user_multi`, call it immediately instead of first printing explanations, plans, or example JSON.",
+          "When the user asks for a generic ask-tool demo, such as '\u6F14\u793A\u4E00\u4E0B ask \u5DE5\u5177', '\u6F14\u793A\u4E00\u4E0B\u63D0\u95EE\u5DE5\u5177', or 'ask me', ask exactly one simple single-choice question with explicit options so the interaction opens as a selector.",
+          "For a single question, prefer the shortest valid argument shape such as `question` plus optional `options`."
+        ]
+      }),
+      tools
+    };
+  }
+
+  // ../../packages/shared-headless-capabilities/src/builtin/fs/path-utils.ts
   function isInAllowlist(path, allowlistedDirs) {
     const normalized = normalizeForComparison(path);
     for (const dir of allowlistedDirs) {
@@ -12750,8 +15484,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   }
   function normalizeForComparison(path) {
     const normalized = path.replace(/\\/g, "/").replace(/\/+/g, "/");
-    if (normalized === "/")
-      return normalized;
+    if (normalized === "/") return normalized;
     return normalized.replace(/\/+$/, "");
   }
   function withTrailingSep(path) {
@@ -12762,7 +15495,84 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     const normalizedRoot = normalizeForComparison(root);
     return normalizedPath === normalizedRoot || normalizedPath.startsWith(withTrailingSep(normalizedRoot));
   }
-  function resolveInSandbox(filePath, sandboxRoot, options) {
+  function normalizePrefix(prefix) {
+    const normalized = normalizeForComparison(prefix);
+    return normalized.startsWith("/") ? normalized.slice(1) : normalized;
+  }
+  function getAvailableRoots(options) {
+    if (!options?.roots || options.roots.length === 0) {
+      return [];
+    }
+    const fs = getFileSystem();
+    const seen = /* @__PURE__ */ new Set();
+    const results = [];
+    for (const root of options.roots) {
+      if (!root || typeof root.name !== "string" || typeof root.path !== "string") {
+        continue;
+      }
+      const name = root.name.trim();
+      const path = root.path.trim();
+      if (!name || !path || seen.has(name)) {
+        continue;
+      }
+      seen.add(name);
+      results.push({
+        name,
+        path: fs.normalize(path),
+        description: root.description?.trim() || void 0,
+        defaultPrefixes: Array.isArray(root.defaultPrefixes) ? root.defaultPrefixes.map((prefix) => String(prefix || "").trim()).filter((prefix) => prefix.length > 0) : void 0
+      });
+    }
+    return results;
+  }
+  function getDefaultRootName(sandboxRoot, options) {
+    const roots = getAvailableRoots(options);
+    if (roots.length === 0) {
+      return void 0;
+    }
+    const configured = (options?.defaultRoot || "").trim();
+    if (configured && roots.some((root) => root.name === configured)) {
+      return configured;
+    }
+    const normalizedSandboxRoot = normalizeForComparison(sandboxRoot);
+    const sandboxMatch = roots.find(
+      (root) => normalizeForComparison(root.path) === normalizedSandboxRoot
+    );
+    if (sandboxMatch) {
+      return sandboxMatch.name;
+    }
+    return roots[0]?.name;
+  }
+  function getRootByName(name, sandboxRoot, options) {
+    const roots = getAvailableRoots(options);
+    if (roots.length === 0) {
+      return void 0;
+    }
+    const resolvedName = (name || "").trim() || getDefaultRootName(sandboxRoot, options);
+    if (!resolvedName) {
+      return void 0;
+    }
+    return roots.find((root) => root.name === resolvedName);
+  }
+  function findPrefixMatchedRoot(filePath, options) {
+    const normalizedPath = normalizeForComparison(filePath);
+    for (const root of getAvailableRoots(options)) {
+      for (const prefix of root.defaultPrefixes ?? []) {
+        const normalizedPrefix = normalizePrefix(prefix);
+        if (normalizedPath === normalizedPrefix || normalizedPath.startsWith(withTrailingSep(normalizedPrefix))) {
+          return root;
+        }
+      }
+    }
+    return void 0;
+  }
+  function getResolutionRoot(filePath, sandboxRoot, options, rootName) {
+    if (rootName) {
+      return getRootByName(rootName, sandboxRoot, options);
+    }
+    return findPrefixMatchedRoot(filePath, options) ?? getRootByName(void 0, sandboxRoot, options);
+  }
+  function resolveInSandbox(filePath, sandboxRoot, options, rootName) {
     const fs = getFileSystem();
     const allowlistedDirs = options?.allowlistedDirs ?? [];
     if (!filePath) {
@@ -12771,6 +15581,24 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     const cleaned = filePath.startsWith("@") ? filePath.slice(1) : filePath;
     if (fs.isAbsolute(cleaned)) {
       const normalized = fs.normalize(cleaned);
+      const selectedRoot2 = rootName ? getRootByName(rootName, sandboxRoot, options) : void 0;
+      if (rootName && !selectedRoot2) {
+        const available = getAvailableRoots(options).map((root) => root.name).join(", ");
+        throw new Error(
+          available ? `Unknown root '${rootName}'. Available roots: ${available}` : `Unknown root '${rootName}'. No named roots are configured.`
+        );
+      }
+      if (selectedRoot2) {
+        if (!isWithinRoot(normalized, selectedRoot2.path)) {
+          throw new Error(`Absolute path outside root '${selectedRoot2.name}': ${filePath}`);
+        }
+        return normalized;
+      }
+      for (const root of getAvailableRoots(options)) {
+        if (isWithinRoot(normalized, root.path)) {
+          return normalized;
+        }
+      }
       if (isInAllowlist(normalized, allowlistedDirs)) {
         return normalized;
       }
@@ -12779,7 +15607,21 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       }
       return normalized;
     }
-    const resolved = fs.resolve(sandboxRoot, cleaned);
+    const selectedRoot = getResolutionRoot(cleaned, sandboxRoot, options, rootName);
+    if (rootName && !selectedRoot) {
+      const available = getAvailableRoots(options).map((root) => root.name).join(", ");
+      throw new Error(
+        available ? `Unknown root '${rootName}'. Available roots: ${available}` : `Unknown root '${rootName}'. No named roots are configured.`
+      );
+    }
+    const resolvedBase = selectedRoot?.path ?? sandboxRoot;
+    const resolved = fs.resolve(resolvedBase, cleaned);
+    if (selectedRoot) {
+      if (!isWithinRoot(resolved, selectedRoot.path)) {
+        throw new Error(`Path escapes root '${selectedRoot.name}': ${filePath}`);
+      }
+      return resolved;
+    }
     if (!isWithinRoot(resolved, sandboxRoot) && !isInAllowlist(resolved, allowlistedDirs)) {
       throw new Error(`Path escapes sandbox: ${filePath}`);
     }
@@ -12788,7 +15630,59 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   var resolveToCwd = resolveInSandbox;
   var resolveReadPath = resolveInSandbox;
 
-  // ../../packages/tools-fs/dist/truncate.js
+  // ../../packages/shared-headless-capabilities/src/builtin/fs/schema-utils.ts
+  function formatPrefixes(prefixes) {
+    if (!prefixes || prefixes.length === 0) {
+      return "";
+    }
+    return prefixes.map((prefix) => {
+      const trimmed = prefix.trim();
+      return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+    }).join(", ");
+  }
+  function buildRootParameterSchema(sandboxRoot, options) {
+    const roots = getAvailableRoots(options);
+    if (roots.length === 0) {
+      return void 0;
+    }
+    const defaultRoot = getDefaultRootName(sandboxRoot, options);
+    const description = [
+      `Optional root name to resolve the path against. Available roots: ${roots.map((root) => root.name).join(", ")}.`,
+      defaultRoot ? `When omitted, the default root is '${defaultRoot}' unless a prefix rule matches first.` : ""
+    ].filter(Boolean).join(" ");
+    if (roots.length === 1) {
+      return Type.Optional(Type.Literal(roots[0].name, { description }));
+    }
+    return Type.Optional(
+      Type.Union(
+        roots.map((root) => Type.Literal(root.name)),
+        { description }
+      )
+    );
+  }
+  function buildPathResolutionDescription(sandboxRoot, options) {
+    const roots = getAvailableRoots(options);
+    if (roots.length === 0) {
+      return "Relative paths resolve against the workspace root.";
+    }
+    const rootSummaries = roots.map((root) => {
+      const pieces = [`'${root.name}'`];
+      if (root.description) {
+        pieces.push(root.description);
+      }
+      const prefixes = formatPrefixes(root.defaultPrefixes);
+      if (prefixes) {
+        pieces.push(`prefixes: ${prefixes}`);
+      }
+      return pieces.join(" - ");
+    });
+    const defaultRoot = getDefaultRootName(sandboxRoot, options);
+    const hasPrefixRules = roots.some((root) => (root.defaultPrefixes?.length ?? 0) > 0);
+    const defaultSentence = defaultRoot ? hasPrefixRules ? `When root is omitted, prefix-matched roots win first; otherwise '${defaultRoot}' is used.` : `When root is omitted, '${defaultRoot}' is used.` : "";
+    return `Available roots: ${rootSummaries.join("; ")}. ${defaultSentence}`.trim();
+  }
+
+  // ../../packages/shared-headless-capabilities/src/builtin/fs/truncate.ts
   var DEFAULT_MAX_LINES = 2e3;
   var DEFAULT_MAX_BYTES = 50 * 1024;
   var GREP_MAX_LINE_LENGTH = 500;
@@ -12871,175 +15765,179 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     };
   }
 
-  // ../../packages/tools-fs/dist/read.js
-  var readSchema = Type.Object({
-    path: Type.String({ description: "Path to the file to read (relative to sandbox root)" }),
-    offset: Type.Optional(Type.Number({ description: "Line number to start reading from (1-indexed)" })),
-    limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" }))
-  });
+  // ../../packages/shared-headless-capabilities/src/builtin/fs/read.ts
   function createReadTool(cwd, options) {
     const fs = getFileSystem();
+    const rootSchema = buildRootParameterSchema(cwd, options);
+    const readSchema = Type.Object({
+      path: Type.String({ description: "Path to the file to read. Example: 'Scripts/PlayerController.cs' or 'Assets/Gen/config.json'." }),
+      ...rootSchema ? { root: rootSchema } : {},
+      offset: Type.Optional(Type.Number({ description: "Line number to start reading from, 1-indexed. Example: 201." })),
+      limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read. Example: 120." }))
+    });
+    const pathResolutionDescription = buildPathResolutionDescription(cwd, options);
     return {
       name: "read",
       label: "read",
-      description: `Read the contents of a file. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`,
+      description: `Read a file's contents. Use this before editing, and use offset/limit for large files. Example: read_file path='Scripts/PlayerController.cs' or read_file path='Data/config.json'. ${pathResolutionDescription} For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). When you need the full file, continue with a larger offset until complete.`,
       parameters: readSchema,
       execute: async (_toolCallId, params, signal) => {
-        const { path, offset, limit } = params;
-        const absolutePath = resolveReadPath(path, cwd, options);
-        return new Promise((resolve, reject) => {
-          if (signal?.aborted) {
-            reject(new Error("Operation aborted"));
-            return;
-          }
-          let aborted = false;
-          const onAbort = () => {
-            aborted = true;
-            reject(new Error("Operation aborted"));
-          };
-          if (signal) {
-            signal.addEventListener("abort", onAbort, { once: true });
-          }
-          (async () => {
-            try {
-              await fs.access(absolutePath);
-              if (aborted)
-                return;
-              const content = await fs.readFile(absolutePath, "utf-8");
-              const allLines = content.split("\n");
-              const totalFileLines = allLines.length;
-              const startLine = offset ? Math.max(0, offset - 1) : 0;
-              const startLineDisplay = startLine + 1;
-              if (startLine >= allLines.length) {
-                throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
-              }
-              let selectedContent;
-              let userLimitedLines;
-              if (limit !== void 0) {
-                const endLine = Math.min(startLine + limit, allLines.length);
-                selectedContent = allLines.slice(startLine, endLine).join("\n");
-                userLimitedLines = endLine - startLine;
-              } else {
-                selectedContent = allLines.slice(startLine).join("\n");
-              }
-              const truncation = truncateHead(selectedContent);
-              let outputText;
-              let details;
-              if (truncation.firstLineExceedsLimit) {
-                const firstLineSize = formatSize(Buffer.byteLength(allLines[startLine], "utf-8"));
-                outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit.]`;
-                details = { truncation };
-              } else if (truncation.truncated) {
-                const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
-                const nextOffset = endLineDisplay + 1;
-                outputText = truncation.content;
-                if (truncation.truncatedBy === "lines") {
-                  outputText += `
+        const { path, root, offset, limit } = params;
+        const absolutePath = resolveReadPath(path, cwd, options, root);
+        return new Promise(
+          (resolve, reject) => {
+            if (signal?.aborted) {
+              reject(new Error("Operation aborted"));
+              return;
+            }
+            let aborted = false;
+            const onAbort = () => {
+              aborted = true;
+              reject(new Error("Operation aborted"));
+            };
+            if (signal) {
+              signal.addEventListener("abort", onAbort, { once: true });
+            }
+            (async () => {
+              try {
+                await fs.access(absolutePath);
+                if (aborted) return;
+                const content = String(await fs.readFile(absolutePath, "utf-8"));
+                const allLines = content.split("\n");
+                const totalFileLines = allLines.length;
+                const startLine = offset ? Math.max(0, offset - 1) : 0;
+                const startLineDisplay = startLine + 1;
+                if (startLine >= allLines.length) {
+                  throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
+                }
+                let selectedContent;
+                let userLimitedLines;
+                if (limit !== void 0) {
+                  const endLine = Math.min(startLine + limit, allLines.length);
+                  selectedContent = allLines.slice(startLine, endLine).join("\n");
+                  userLimitedLines = endLine - startLine;
+                } else {
+                  selectedContent = allLines.slice(startLine).join("\n");
+                }
+                const truncation = truncateHead(selectedContent);
+                let outputText;
+                let details;
+                if (truncation.firstLineExceedsLimit) {
+                  const firstLineSize = formatSize(Buffer.byteLength(allLines[startLine], "utf-8"));
+                  outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit.]`;
+                  details = { truncation };
+                } else if (truncation.truncated) {
+                  const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
+                  const nextOffset = endLineDisplay + 1;
+                  outputText = truncation.content;
+                  if (truncation.truncatedBy === "lines") {
+                    outputText += `
 
 [Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}. Use offset=${nextOffset} to continue.]`;
-                } else {
-                  outputText += `
+                  } else {
+                    outputText += `
 
 [Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]`;
-                }
-                details = { truncation };
-              } else if (userLimitedLines !== void 0 && startLine + userLimitedLines < allLines.length) {
-                const remaining = allLines.length - (startLine + userLimitedLines);
-                const nextOffset = startLine + userLimitedLines + 1;
-                outputText = truncation.content;
-                outputText += `
+                  }
+                  details = { truncation };
+                } else if (userLimitedLines !== void 0 && startLine + userLimitedLines < allLines.length) {
+                  const remaining = allLines.length - (startLine + userLimitedLines);
+                  const nextOffset = startLine + userLimitedLines + 1;
+                  outputText = truncation.content;
+                  outputText += `
 
 [${remaining} more lines in file. Use offset=${nextOffset} to continue.]`;
-              } else {
-                outputText = truncation.content;
+                } else {
+                  outputText = truncation.content;
+                }
+                const textContent = [{ type: "text", text: outputText }];
+                if (aborted) return;
+                if (signal) {
+                  signal.removeEventListener("abort", onAbort);
+                }
+                resolve({ content: textContent, details });
+              } catch (error) {
+                if (signal) {
+                  signal.removeEventListener("abort", onAbort);
+                }
+                if (!aborted) {
+                  reject(error);
+                }
               }
-              const textContent = [{ type: "text", text: outputText }];
-              if (aborted)
-                return;
-              if (signal) {
-                signal.removeEventListener("abort", onAbort);
-              }
-              resolve({ content: textContent, details });
-            } catch (error) {
-              if (signal) {
-                signal.removeEventListener("abort", onAbort);
-              }
-              if (!aborted) {
-                reject(error);
-              }
-            }
-          })();
-        });
+            })();
+          }
+        );
       }
     };
   }
 
-  // ../../packages/tools-fs/dist/write.js
-  var writeSchema = Type.Object({
-    path: Type.String({ description: "Path to the file to write (relative to sandbox root)" }),
-    content: Type.String({ description: "Content to write to the file" })
-  });
+  // ../../packages/shared-headless-capabilities/src/builtin/fs/write.ts
   function createWriteTool(cwd, options) {
     const fs = getFileSystem();
+    const rootSchema = buildRootParameterSchema(cwd, options);
+    const writeSchema = Type.Object({
+      path: Type.String({ description: "Path to the file to write." }),
+      ...rootSchema ? { root: rootSchema } : {},
+      content: Type.String({ description: "Content to write to the file" })
+    });
+    const pathResolutionDescription = buildPathResolutionDescription(cwd, options);
     return {
       name: "write",
       label: "write",
-      description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.",
+      description: `Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories. ${pathResolutionDescription}`,
       parameters: writeSchema,
       execute: async (_toolCallId, params, signal) => {
-        const { path: filePath, content } = params;
-        const absolutePath = resolveToCwd(filePath, cwd, options);
+        const { path: filePath, root, content } = params;
+        const absolutePath = resolveToCwd(filePath, cwd, options, root);
         const dir = fs.dirname(absolutePath);
-        return new Promise((resolve, reject) => {
-          if (signal?.aborted) {
-            reject(new Error("Operation aborted"));
-            return;
-          }
-          let aborted = false;
-          const onAbort = () => {
-            aborted = true;
-            reject(new Error("Operation aborted"));
-          };
-          if (signal) {
-            signal.addEventListener("abort", onAbort, { once: true });
-          }
-          (async () => {
-            try {
-              await fs.mkdir(dir, { recursive: true });
-              if (aborted)
-                return;
-              await fs.writeFile(absolutePath, content, "utf-8");
-              if (aborted)
-                return;
-              if (signal) {
-                signal.removeEventListener("abort", onAbort);
-              }
-              resolve({
-                content: [{ type: "text", text: `Successfully wrote ${content.length} bytes to ${filePath}` }],
-                details: void 0
-              });
-            } catch (error) {
-              if (signal) {
-                signal.removeEventListener("abort", onAbort);
-              }
-              if (!aborted) {
-                reject(error);
-              }
+        return new Promise(
+          (resolve, reject) => {
+            if (signal?.aborted) {
+              reject(new Error("Operation aborted"));
+              return;
             }
-          })();
-        });
+            let aborted = false;
+            const onAbort = () => {
+              aborted = true;
+              reject(new Error("Operation aborted"));
+            };
+            if (signal) {
+              signal.addEventListener("abort", onAbort, { once: true });
+            }
+            (async () => {
+              try {
+                await fs.mkdir(dir, { recursive: true });
+                if (aborted) return;
+                await fs.writeFile(absolutePath, content, "utf-8");
+                if (aborted) return;
+                if (signal) {
+                  signal.removeEventListener("abort", onAbort);
+                }
+                resolve({
+                  content: [{ type: "text", text: `Successfully wrote ${content.length} bytes to ${filePath}` }],
+                  details: void 0
+                });
+              } catch (error) {
+                if (signal) {
+                  signal.removeEventListener("abort", onAbort);
+                }
+                if (!aborted) {
+                  reject(error);
+                }
+              }
+            })();
+          }
+        );
       }
     };
   }
 
-  // ../../packages/tools-fs/dist/edit-diff.js
+  // ../../packages/shared-headless-capabilities/src/builtin/fs/edit-diff.ts
   function detectLineEnding(content) {
     const crlfIdx = content.indexOf("\r\n");
     const lfIdx = content.indexOf("\n");
-    if (lfIdx === -1)
-      return "\n";
-    if (crlfIdx === -1)
-      return "\n";
+    if (lfIdx === -1) return "\n";
+    if (crlfIdx === -1) return "\n";
     return crlfIdx < lfIdx ? "\r\n" : "\n";
   }
   function normalizeToLF(text) {
@@ -13102,22 +16000,25 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     return { diff, firstChangedLine };
   }
 
-  // ../../packages/tools-fs/dist/edit.js
-  var editSchema = Type.Object({
-    path: Type.String({ description: "Path to the file to edit (relative to sandbox root)" }),
-    oldText: Type.String({ description: "Exact text to find and replace (must match exactly)" }),
-    newText: Type.String({ description: "New text to replace the old text with" })
-  });
+  // ../../packages/shared-headless-capabilities/src/builtin/fs/edit.ts
   function createEditTool(cwd, options) {
     const fs = getFileSystem();
+    const rootSchema = buildRootParameterSchema(cwd, options);
+    const editSchema = Type.Object({
+      path: Type.String({ description: "Path to the file to edit." }),
+      ...rootSchema ? { root: rootSchema } : {},
+      oldText: Type.String({ description: "Exact text to find and replace (must match exactly)" }),
+      newText: Type.String({ description: "New text to replace the old text with" })
+    });
+    const pathResolutionDescription = buildPathResolutionDescription(cwd, options);
     return {
       name: "edit",
       label: "edit",
-      description: "Edit a file by replacing exact text. The oldText must match exactly (including whitespace). Use this for precise, surgical edits.",
+      description: `Edit a file by replacing exact text. The oldText must match exactly (including whitespace). Use this for precise, surgical edits. ${pathResolutionDescription}`,
       parameters: editSchema,
       execute: async (_toolCallId, params, signal) => {
-        const { path, oldText, newText } = params;
-        const absolutePath = resolveToCwd(path, cwd, options);
+        const { path, root, oldText, newText } = params;
+        const absolutePath = resolveToCwd(path, cwd, options, root);
         return new Promise((resolve, reject) => {
           if (signal?.aborted) {
             reject(new Error("Operation aborted"));
@@ -13136,16 +16037,13 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
               try {
                 await fs.access(absolutePath);
               } catch {
-                if (signal)
-                  signal.removeEventListener("abort", onAbort);
+                if (signal) signal.removeEventListener("abort", onAbort);
                 reject(new Error(`File not found: ${path}`));
                 return;
               }
-              if (aborted)
-                return;
+              if (aborted) return;
               const rawContent = await fs.readFile(absolutePath, "utf-8");
-              if (aborted)
-                return;
+              if (aborted) return;
               const { bom, text: content } = stripBom(rawContent);
               const originalEnding = detectLineEnding(content);
               const normalizedContent = normalizeToLF(content);
@@ -13153,34 +16051,41 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
               const normalizedNewText = normalizeToLF(newText);
               const matchResult = fuzzyFindText(normalizedContent, normalizedOldText);
               if (!matchResult.found) {
-                if (signal)
-                  signal.removeEventListener("abort", onAbort);
-                reject(new Error(`Could not find the exact text in ${path}. The old text must match exactly including all whitespace and newlines.`));
+                if (signal) signal.removeEventListener("abort", onAbort);
+                reject(
+                  new Error(
+                    `Could not find the exact text in ${path}. The old text must match exactly including all whitespace and newlines.`
+                  )
+                );
                 return;
               }
               const fuzzyContent = normalizedContent.replace(/\s+/g, " ");
               const fuzzyOldText = normalizedOldText.replace(/\s+/g, " ");
               const occurrences = fuzzyContent.split(fuzzyOldText).length - 1;
               if (occurrences > 1) {
-                if (signal)
-                  signal.removeEventListener("abort", onAbort);
-                reject(new Error(`Found ${occurrences} occurrences of the text in ${path}. The text must be unique. Please provide more context to make it unique.`));
+                if (signal) signal.removeEventListener("abort", onAbort);
+                reject(
+                  new Error(
+                    `Found ${occurrences} occurrences of the text in ${path}. The text must be unique. Please provide more context to make it unique.`
+                  )
+                );
                 return;
               }
-              if (aborted)
-                return;
+              if (aborted) return;
               const baseContent = matchResult.contentForReplacement;
               const newContent = baseContent.substring(0, matchResult.index) + normalizedNewText + baseContent.substring(matchResult.index + matchResult.matchLength);
               if (baseContent === newContent) {
-                if (signal)
-                  signal.removeEventListener("abort", onAbort);
-                reject(new Error(`No changes made to ${path}. The replacement produced identical content.`));
+                if (signal) signal.removeEventListener("abort", onAbort);
+                reject(
+                  new Error(
+                    `No changes made to ${path}. The replacement produced identical content.`
+                  )
+                );
                 return;
               }
               const finalContent = bom + restoreLineEndings(newContent, originalEnding);
               await fs.writeFile(absolutePath, finalContent, "utf-8");
-              if (aborted)
-                return;
+              if (aborted) return;
               if (signal) {
                 signal.removeEventListener("abort", onAbort);
               }
@@ -13209,18 +16114,21 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     };
   }
 
-  // ../../packages/tools-fs/dist/ls.js
-  var lsSchema = Type.Object({
-    path: Type.Optional(Type.String({ description: "Directory to list (default: sandbox root)" })),
-    limit: Type.Optional(Type.Number({ description: "Maximum number of entries to return (default: 500)" }))
-  });
+  // ../../packages/shared-headless-capabilities/src/builtin/fs/ls.ts
   var DEFAULT_LIMIT = 500;
   function createLsTool(cwd, options) {
     const fs = getFileSystem();
+    const rootSchema = buildRootParameterSchema(cwd, options);
+    const lsSchema = Type.Object({
+      path: Type.Optional(Type.String({ description: "Directory to list (default: workspace root). Example: 'Scripts' or 'Data'." })),
+      ...rootSchema ? { root: rootSchema } : {},
+      limit: Type.Optional(Type.Number({ description: "Maximum number of entries to return (default: 500)." }))
+    });
+    const pathResolutionDescription = buildPathResolutionDescription(cwd, options);
     return {
       name: "ls",
       label: "ls",
-      description: `List directory contents. Returns entries sorted alphabetically, with '/' suffix for directories. Includes dotfiles. Output is truncated to ${DEFAULT_LIMIT} entries or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
+      description: `List directory contents. Use this to inspect folders before reading or writing files. Example: list_directory path='Scripts' or list_directory path='Data'. ${pathResolutionDescription} Returns entries sorted alphabetically, with '/' suffix for directories. Includes dotfiles. Output is truncated to ${DEFAULT_LIMIT} entries or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
       parameters: lsSchema,
       execute: async (_toolCallId, params, signal) => {
         return new Promise((resolve, reject) => {
@@ -13232,23 +16140,23 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
           signal?.addEventListener("abort", onAbort, { once: true });
           (async () => {
             try {
-              const { path: dirPath, limit } = params;
-              const targetPath = resolveToCwd(dirPath || ".", cwd, options);
+              const { path: dirPath, root, limit } = params;
+              const targetPath = resolveToCwd(dirPath || ".", cwd, options, root);
               const effectiveLimit = limit ?? DEFAULT_LIMIT;
               if (!await fs.exists(targetPath)) {
                 reject(new Error(`Path not found: ${targetPath}`));
-                return;
-              }
-              const stat = await fs.stat(targetPath);
-              if (!stat.isDirectory) {
-                reject(new Error(`Not a directory: ${targetPath}`));
                 return;
               }
               let entries;
               try {
                 entries = await fs.readdir(targetPath);
               } catch (e) {
-                reject(new Error(`Cannot read directory: ${e.message}`));
+                const message = String(e?.message || e || "Unknown error");
+                if (/scandir/i.test(message) || /not a directory/i.test(message)) {
+                  reject(new Error(`Not a directory: ${targetPath}`));
+                  return;
+                }
+                reject(new Error(`Cannot read directory: ${message}`));
                 return;
               }
               entries.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -13308,25 +16216,17 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     };
   }
 
-  // ../../packages/tools-fs/dist/grep.js
-  var grepSchema = Type.Object({
-    pattern: Type.String({ description: "Search pattern (regex or literal string)" }),
-    path: Type.Optional(Type.String({ description: "Directory or file to search (default: sandbox root)" })),
-    glob: Type.Optional(Type.String({ description: "Filter files by glob pattern, e.g. '*.ts' or '**/*.js'" })),
-    ignoreCase: Type.Optional(Type.Boolean({ description: "Case-insensitive search (default: false)" })),
-    literal: Type.Optional(Type.Boolean({ description: "Treat pattern as literal string instead of regex (default: false)" })),
-    context: Type.Optional(Type.Number({ description: "Number of lines to show before and after each match (default: 0)" })),
-    limit: Type.Optional(Type.Number({ description: "Maximum number of matches to return (default: 100)" }))
-  });
-
-  // ../../packages/tools-fs/dist/find.js
-  var findSchema = Type.Object({
-    pattern: Type.String({
-      description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'"
-    }),
-    path: Type.Optional(Type.String({ description: "Directory to search in (default: sandbox root)" })),
-    limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" }))
-  });
+  // ../../packages/shared-headless-capabilities/src/index.ts
+  function getSharedCapabilityPromptAdditionsForToolNames(toolNames) {
+    const definitions = [
+      createManageTodoCapability(),
+      createAskUserCapability()
+    ];
+    return collectSharedCapabilityPromptAdditions(
+      definitions,
+      toolNames
+    );
+  }
 
   // src/unity-http-client.ts
   function sleep2(ms) {
@@ -13486,6 +16386,126 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     }
   };
 
+  // src/tools/manage-todo-list.ts
+  var TOOL_DESCRIPTION = `Manage a structured todo list for multi-step work.
+
+Use this tool when a task benefits from planning, progress tracking, or step-by-step execution.
+Always write the full list when updating it.
+
+Preferred status values:
+- not-started
+- in-progress
+- completed`;
+  function createManageTodoListTool() {
+    const store = createTodoStore();
+    const tool = {
+      name: "manage_todo_list",
+      label: "manage_todo_list",
+      description: TOOL_DESCRIPTION,
+      parameters: ManageTodoListParamsSchema,
+      execute: async (_toolCallId, args) => {
+        const execution = executeManageTodoList(args, store.read());
+        store.restore(execution.nextTodos);
+        return execution.result;
+      }
+    };
+    return {
+      tool,
+      getState() {
+        return store.read();
+      },
+      restore(state) {
+        store.restore(state);
+      },
+      reset() {
+        store.clear();
+      }
+    };
+  }
+
+  // src/file-tool-roots.ts
+  function normalizePrefixes(prefixes) {
+    if (!Array.isArray(prefixes)) return void 0;
+    const seen = /* @__PURE__ */ new Set();
+    const results = [];
+    for (const prefix of prefixes) {
+      const normalized = String(prefix || "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+      if (!normalized || seen.has(normalized)) continue;
+      seen.add(normalized);
+      results.push(normalized);
+    }
+    return results.length > 0 ? results : void 0;
+  }
+  function parseBridgePayload() {
+    try {
+      const bridge2 = globalThis.pieBridge;
+      if (typeof bridge2?.getFileToolRootsJson !== "function") {
+        return {};
+      }
+      const raw = String(bridge2.getFileToolRootsJson() || "");
+      if (!raw) {
+        return {};
+      }
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  function getActiveFileToolRootsConfig() {
+    const parsed = parseBridgePayload();
+    const seen = /* @__PURE__ */ new Set();
+    const roots = [];
+    for (const root of parsed.roots ?? []) {
+      const name = String(root?.name || "").trim();
+      const path = String(root?.path || "").trim();
+      if (!name || !path || seen.has(name)) continue;
+      seen.add(name);
+      roots.push({
+        name,
+        path: path.replace(/\\/g, "/"),
+        description: String(root?.description || "").trim() || void 0,
+        defaultPrefixes: normalizePrefixes(root?.defaultPrefixes)
+      });
+    }
+    const defaultRoot = String(parsed.defaultRoot || "").trim() || void 0;
+    const resolvedDefaultRoot = defaultRoot && roots.some((root) => root.name === defaultRoot) ? defaultRoot : void 0;
+    return {
+      roots,
+      defaultRoot: resolvedDefaultRoot
+    };
+  }
+  function buildFileToolPathOptions() {
+    const config = getActiveFileToolRootsConfig();
+    return {
+      roots: config.roots,
+      defaultRoot: config.defaultRoot
+    };
+  }
+  function buildFileToolPromptLines() {
+    const config = getActiveFileToolRootsConfig();
+    if (config.roots.length === 0) {
+      return [];
+    }
+    const lines = [
+      "Path-based file tools accept an optional `root` parameter.",
+      `Available roots for this session: ${config.roots.map((root) => root.name).join(", ")}.`
+    ];
+    for (const root of config.roots) {
+      const prefixNote = root.defaultPrefixes && root.defaultPrefixes.length > 0 ? ` Prefix fallback: ${root.defaultPrefixes.map((prefix) => `${prefix}/`).join(", ")}.` : "";
+      lines.push(`- \`${root.name}\`: ${root.description || root.path} Path: ${root.path}.${prefixNote}`);
+    }
+    if (config.defaultRoot) {
+      lines.push(`When \`root\` is omitted, unmatched relative paths default to \`${config.defaultRoot}\`.`);
+    }
+    const prefixFallbackRoots = config.roots.filter((root) => (root.defaultPrefixes?.length ?? 0) > 0);
+    if (prefixFallbackRoots.length > 0) {
+      lines.push(`When \`root\` is omitted, matching prefixes are resolved first: ${prefixFallbackRoots.map((root) => `\`${root.name}\``).join(", ")}.`);
+    }
+    lines.push("Prefer passing `root` explicitly when accessing project files or custom configured roots.");
+    return lines;
+  }
+
   // src/tools/eval-js.ts
   function createEvalJsTool() {
     return {
@@ -13555,486 +16575,6 @@ ${e?.stack ?? ""}` }],
     };
   }
 
-  // src/tools/manage-todo-list.ts
-  var TodoItemSchema = Type.Object({
-    id: Type.Number({ description: "Unique identifier for the todo. Use sequential numbers starting from 1." }),
-    title: Type.String({ description: "Concise action-oriented todo label (3-7 words)." }),
-    description: Type.String({ description: "Detailed context or implementation notes." }),
-    status: Type.String({
-      description: "Progress state. Preferred values: not-started, in-progress, completed. Also accepts common aliases like pending, todo, doing, done."
-    })
-  });
-  var ManageTodoListParams = Type.Object({
-    operation: Type.Union([Type.Literal("write"), Type.Literal("read")], {
-      description: "write: Replace the entire todo list. read: Return the current todo list."
-    }),
-    todoList: Type.Optional(
-      Type.Array(TodoItemSchema, {
-        description: "Required for write. Must include the full todo list with sequential ids starting from 1."
-      })
-    )
-  });
-  var TOOL_DESCRIPTION = `Manage a structured todo list for multi-step work.
-
-Use this tool when a task benefits from planning, progress tracking, or step-by-step execution.
-Always write the full list when updating it.
-
-Preferred status values:
-- not-started
-- in-progress
-- completed`;
-  function cloneTodos(todos) {
-    return todos.map((todo) => ({ ...todo }));
-  }
-  function normalizeStatus(status) {
-    const value = String(status || "").trim().toLowerCase();
-    if (!value) return null;
-    if (value === "not-started" || value === "not_started" || value === "pending" || value === "todo" || value === "not started") {
-      return "not-started";
-    }
-    if (value === "in-progress" || value === "in_progress" || value === "in progress" || value === "doing" || value === "active" || value === "working") {
-      return "in-progress";
-    }
-    if (value === "completed" || value === "complete" || value === "done" || value === "finished") {
-      return "completed";
-    }
-    return null;
-  }
-  function normalizeTodos(todos) {
-    return todos.map((todo) => ({
-      ...todo,
-      status: normalizeStatus(todo.status) ?? todo.status
-    }));
-  }
-  function validateTodos(todos) {
-    const errors = [];
-    const validStatuses = /* @__PURE__ */ new Set(["not-started", "in-progress", "completed"]);
-    for (let index = 0; index < todos.length; index++) {
-      const item = todos[index];
-      const prefix = `Item ${index + 1}`;
-      if (typeof item?.id !== "number" || !Number.isInteger(item.id) || item.id < 1) {
-        errors.push(`${prefix}: 'id' must be a positive integer`);
-      }
-      if (item?.id !== index + 1) {
-        errors.push(`${prefix}: ids must be sequential starting from 1`);
-      }
-      if (typeof item?.title !== "string" || item.title.trim().length === 0) {
-        errors.push(`${prefix}: 'title' is required`);
-      }
-      if (typeof item?.description !== "string") {
-        errors.push(`${prefix}: 'description' must be a string`);
-      }
-      if (!validStatuses.has(item?.status)) {
-        errors.push(`${prefix}: 'status' must be one of: not-started, in-progress, completed`);
-      }
-    }
-    return errors;
-  }
-  function createManageTodoListTool() {
-    let todos = [];
-    const tool = {
-      name: "manage_todo_list",
-      label: "manage_todo_list",
-      description: TOOL_DESCRIPTION,
-      parameters: ManageTodoListParams,
-      execute: async (_toolCallId, args) => {
-        if (args.operation === "read") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: todos.length ? JSON.stringify(todos, null, 2) : "No todos. Use write operation to create a todo list."
-              }
-            ],
-            details: { operation: "read", todos: cloneTodos(todos) }
-          };
-        }
-        if (!Array.isArray(args.todoList)) {
-          return {
-            content: [{ type: "text", text: "Error: todoList is required for write operation." }],
-            details: { operation: "write", todos: cloneTodos(todos), error: "todoList required" },
-            isError: true
-          };
-        }
-        const nextTodos = normalizeTodos(cloneTodos(args.todoList));
-        const errors = validateTodos(nextTodos);
-        if (errors.length > 0) {
-          return {
-            content: [{ type: "text", text: `Validation failed:
-${errors.map((error) => `  - ${error}`).join("\n")}` }],
-            details: { operation: "write", todos: cloneTodos(todos), error: errors.join("; ") },
-            isError: true
-          };
-        }
-        todos = nextTodos;
-        const completed = todos.filter((todo) => todo.status === "completed").length;
-        return {
-          content: [{
-            type: "text",
-            text: `Todos updated successfully. ${completed}/${todos.length} completed.`
-          }],
-          details: { operation: "write", todos: cloneTodos(todos) }
-        };
-      }
-    };
-    return {
-      tool,
-      getState() {
-        return cloneTodos(todos);
-      },
-      restore(state) {
-        if (!Array.isArray(state)) {
-          todos = [];
-          return;
-        }
-        const normalized = normalizeTodos(cloneTodos(state));
-        const errors = validateTodos(normalized);
-        todos = errors.length === 0 ? normalized : [];
-      },
-      reset() {
-        todos = [];
-      }
-    };
-  }
-
-  // src/tools/native-find.ts
-  var findSchema2 = Type.Object({
-    pattern: Type.Optional(Type.String({
-      description: "The file pattern only, not a shell command. Good inputs: '*.cs', '**/*.json', 'DemoScript.cs', or 'DemoScript'. Do not pass 'find *.cs' as the pattern."
-    })),
-    query: Type.Optional(Type.String({ description: "Alias for pattern. You can pass a filename fragment like 'DemoScript'." })),
-    name: Type.Optional(Type.String({ description: "Alias for pattern. You can pass a file name like 'DemoScript.cs'." })),
-    file_name: Type.Optional(Type.String({ description: "Alias for pattern. You can pass a file name or fragment." })),
-    path: Type.Optional(Type.String({ description: "Directory to search in (default: workspace root). Example: 'Scripts' or 'Data'." })),
-    limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" }))
-  });
-  var DEFAULT_LIMIT2 = 1e3;
-  function awaitTask(task) {
-    if (!puer?.$promise) {
-      throw new Error("puer.$promise is not available");
-    }
-    return puer.$promise(task);
-  }
-  function stripOuterQuotes(value) {
-    const trimmed = (value || "").trim();
-    if (trimmed.length < 2) {
-      return trimmed;
-    }
-    const first = trimmed[0];
-    const last = trimmed[trimmed.length - 1];
-    if (first === '"' && last === '"' || first === "'" && last === "'") {
-      return trimmed.substring(1, trimmed.length - 1).trim();
-    }
-    return trimmed;
-  }
-  function normalizeFindPattern(rawPattern) {
-    let pattern = stripOuterQuotes(rawPattern);
-    if (pattern.startsWith("find ")) {
-      pattern = pattern.substring(5).trim();
-    }
-    if (pattern.startsWith("-name ")) {
-      pattern = pattern.substring(6).trim();
-    }
-    const nameMatch = pattern.match(/^-name\s+(.+)$/);
-    if (nameMatch) {
-      pattern = nameMatch[1].trim();
-    }
-    pattern = stripOuterQuotes(pattern);
-    if (pattern.startsWith("./")) {
-      pattern = pattern.substring(2);
-    }
-    return pattern;
-  }
-  function createNativeFindTool(cwd, options) {
-    return {
-      name: "find",
-      label: "find",
-      description: `Search for files by filename fragment or glob pattern. Best practice: use a simple filename fragment like 'PlayerController' or a direct filename like 'PlayerController.cs'. Glob examples: '*.cs', '*.json', '**/*.prefab'. Pass only the pattern string, not a shell command. Returns matching paths relative to the search directory. Output is truncated to ${DEFAULT_LIMIT2} results or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
-      parameters: findSchema2,
-      execute: async (_toolCallId, { pattern, query, name, file_name, path: searchDir, limit }) => {
-        const resolvedPattern = pattern || query || name || file_name || "";
-        const normalizedPattern = normalizeFindPattern(resolvedPattern);
-        if (!normalizedPattern) {
-          return {
-            content: [{ type: "text", text: "search_files requires a pattern, query, name, or file_name argument." }],
-            details: { rawPattern: resolvedPattern, effectivePattern: normalizedPattern },
-            isError: true
-          };
-        }
-        const searchPath = resolveToCwd(searchDir || ".", cwd, options);
-        const effectiveLimit = limit ?? DEFAULT_LIMIT2;
-        if (globalThis.__pieVerboseLogs) {
-          globalThis.pieBridge?.log?.("info", `[native find] path=${searchPath} pattern=${normalizedPattern} raw=${resolvedPattern} limit=${effectiveLimit}`);
-        }
-        const json = await awaitTask(CS.Pie.PieFileBridge.FindAsync(searchPath, normalizedPattern, effectiveLimit));
-        const nativeResult = json ? JSON.parse(json) : {};
-        const results = nativeResult.Results ?? [];
-        if (globalThis.__pieVerboseLogs) {
-          globalThis.pieBridge?.log?.(
-            "info",
-            `[native find] done path=${searchPath} pattern=${normalizedPattern} matches=${results.length} dirs=${nativeResult.ScannedDirectories ?? 0} files=${nativeResult.ScannedFiles ?? 0}`
-          );
-        }
-        if (results.length === 0) {
-          return {
-            content: [{ type: "text", text: "No files found matching pattern" }],
-            details: {
-              scannedDirectories: nativeResult.ScannedDirectories ?? 0,
-              scannedFiles: nativeResult.ScannedFiles ?? 0,
-              effectivePattern: nativeResult.Pattern ?? normalizedPattern,
-              searchPath: nativeResult.RootPath ?? searchPath,
-              rawPattern: resolvedPattern
-            },
-            isError: true
-          };
-        }
-        const rawOutput = results.join("\n");
-        const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
-        let resultOutput = truncation.content;
-        const details = {
-          scannedDirectories: nativeResult.ScannedDirectories,
-          scannedFiles: nativeResult.ScannedFiles,
-          effectivePattern: nativeResult.Pattern ?? normalizedPattern,
-          searchPath: nativeResult.RootPath ?? searchPath,
-          rawPattern: resolvedPattern
-        };
-        const notices = [];
-        if (nativeResult.LimitReached) {
-          notices.push(`${effectiveLimit} results limit reached`);
-          details.resultLimitReached = effectiveLimit;
-        }
-        if (truncation.truncated) {
-          notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
-          details.truncation = truncation;
-        }
-        if (notices.length > 0) {
-          resultOutput += `
-
-[${notices.join(". ")}]`;
-        }
-        return {
-          content: [{ type: "text", text: resultOutput }],
-          details
-        };
-      }
-    };
-  }
-
-  // src/tools/native-grep.ts
-  var grepSchema2 = Type.Object({
-    pattern: Type.String({ description: "The text or regex pattern to search for inside files. Example literal patterns: 'MonoBehaviour', 'Hello from Pie'. Example regex: 'class\\s+DemoScript'." }),
-    path: Type.Optional(Type.String({ description: "Directory or file to search (default: workspace root). Example: 'Scripts' or 'Data/dialogue'." })),
-    glob: Type.Optional(Type.String({ description: "Optional file filter, e.g. '*.cs', '*.json', or '**/*.txt'. Use this to narrow which files are searched." })),
-    ignoreCase: Type.Optional(Type.Boolean({ description: "Case-insensitive search (default: false)" })),
-    literal: Type.Optional(Type.Boolean({ description: "Treat pattern as plain text instead of regex (default: false). Use literal=true for normal substring searches like 'MonoBehaviour'." })),
-    context: Type.Optional(Type.Number({ description: "Number of lines to show before and after each match (default: 0)" })),
-    limit: Type.Optional(Type.Number({ description: "Maximum number of matches to return (default: 100)" }))
-  });
-  var DEFAULT_LIMIT3 = 100;
-  function awaitTask2(task) {
-    if (!puer?.$promise) {
-      throw new Error("puer.$promise is not available");
-    }
-    return puer.$promise(task);
-  }
-  function createNativeGrepTool(cwd, options) {
-    return {
-      name: "grep",
-      label: "grep",
-      description: `Search inside file contents. Use this when you know some text that should appear in the file. Common usage: pattern='MonoBehaviour', glob='*.cs', literal=true. Prefer targeted folders like 'Scripts' or 'Data' over scanning the whole project. Returns matching lines with file paths and line numbers. Output is truncated to ${DEFAULT_LIMIT3} matches or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Long lines are truncated to ${GREP_MAX_LINE_LENGTH} chars.`,
-      parameters: grepSchema2,
-      execute: async (_toolCallId, { pattern, path: searchDir, glob, ignoreCase, literal, context, limit }) => {
-        const searchPath = resolveToCwd(searchDir || ".", cwd, options);
-        const effectiveLimit = Math.max(1, limit ?? DEFAULT_LIMIT3);
-        const ctx = context && context > 0 ? context : 0;
-        if (globalThis.__pieVerboseLogs) {
-          globalThis.pieBridge?.log?.(
-            "info",
-            `[native grep] path=${searchPath} pattern=${pattern} glob=${glob ?? ""} limit=${effectiveLimit}`
-          );
-        }
-        const json = await awaitTask2(
-          CS.Pie.PieFileBridge.GrepAsync(
-            searchPath,
-            pattern,
-            glob ?? "",
-            !!ignoreCase,
-            !!literal,
-            ctx,
-            effectiveLimit
-          )
-        );
-        const nativeResult = json ? JSON.parse(json) : {};
-        const outputLines = nativeResult.Lines ?? [];
-        const matchCount = nativeResult.MatchCount ?? 0;
-        if (globalThis.__pieVerboseLogs) {
-          globalThis.pieBridge?.log?.(
-            "info",
-            `[native grep] done path=${searchPath} pattern=${pattern} matches=${matchCount} files=${nativeResult.FilesScanned ?? 0}`
-          );
-        }
-        if (matchCount === 0) {
-          return {
-            content: [{ type: "text", text: "No matches found" }],
-            details: {
-              filesScanned: nativeResult.FilesScanned ?? 0,
-              effectivePattern: nativeResult.Pattern ?? pattern,
-              searchPath: nativeResult.SearchPath ?? searchPath,
-              glob: nativeResult.Glob ?? glob,
-              literal: nativeResult.Literal ?? !!literal,
-              ignoreCase: nativeResult.IgnoreCase ?? !!ignoreCase
-            },
-            isError: true
-          };
-        }
-        const rawOutput = outputLines.join("\n");
-        const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
-        let output = truncation.content;
-        const details = {
-          filesScanned: nativeResult.FilesScanned,
-          effectivePattern: nativeResult.Pattern ?? pattern,
-          searchPath: nativeResult.SearchPath ?? searchPath,
-          glob: nativeResult.Glob ?? glob,
-          literal: nativeResult.Literal ?? !!literal,
-          ignoreCase: nativeResult.IgnoreCase ?? !!ignoreCase
-        };
-        const notices = [];
-        if (nativeResult.MatchLimitReached) {
-          notices.push(`${effectiveLimit} matches limit reached`);
-          details.matchLimitReached = effectiveLimit;
-        }
-        if (truncation.truncated) {
-          notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
-          details.truncation = truncation;
-        }
-        if (nativeResult.LinesTruncated) {
-          notices.push(`lines longer than ${GREP_MAX_LINE_LENGTH} chars were truncated`);
-          details.linesTruncated = true;
-        }
-        if (notices.length > 0) {
-          output += `
-
-[${notices.join(". ")}]`;
-        }
-        return {
-          content: [{ type: "text", text: output }],
-          details
-        };
-      }
-    };
-  }
-
-  // src/skills.ts
-  var BUILTIN_SKILLS = [];
-  function normalizePath(path) {
-    return String(path ?? "").replace(/\\/g, "/");
-  }
-  function parseBridgePathArray(methodName) {
-    const raw = globalThis.pieBridge?.[methodName]?.();
-    if (typeof raw !== "string" || raw.trim().length === 0) {
-      return [];
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.map((entry) => normalizePath(String(entry ?? ""))).filter((entry) => entry.length > 0) : [];
-    } catch {
-      return [];
-    }
-  }
-  function getSkillSearchPaths(_projectRoot) {
-    return parseBridgePathArray("getSkillSearchPathsJson");
-  }
-  function getExtensionSearchPaths(_projectRoot) {
-    return parseBridgePathArray("getExtensionSearchPathsJson");
-  }
-  function parseSkillDescription(content) {
-    const frontmatterMatch = content.match(/^---\n[\s\S]*?description:\s*["']?(.+?)["']?(?:\n|$)/m);
-    if (frontmatterMatch) return frontmatterMatch[1].trim();
-    const headingMatch = content.match(/^#\s+(.+)$/m);
-    if (headingMatch) return headingMatch[1].trim();
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith("---")) {
-        return trimmed.slice(0, 100);
-      }
-    }
-    return "No description";
-  }
-  function loadProjectSkills(projectRoot2) {
-    const loaded = /* @__PURE__ */ new Map();
-    const skillDirs = getSkillSearchPaths(projectRoot2);
-    for (const skillsDir of skillDirs) {
-      if (!CS.System.IO.Directory.Exists(skillsDir)) continue;
-      const directories = CS.System.IO.Directory.GetDirectories(skillsDir);
-      for (let i = 0; i < directories.Length; i++) {
-        const dir = directories[i];
-        const name = String(CS.System.IO.Path.GetFileName(dir) ?? "");
-        const skillPath = CS.System.IO.Path.Combine(dir, "SKILL.md");
-        if (!name || !CS.System.IO.File.Exists(skillPath)) continue;
-        const content = String(CS.System.IO.File.ReadAllText(skillPath) ?? "");
-        loaded.delete(name);
-        loaded.set(name, {
-          name,
-          description: parseSkillDescription(content),
-          source: "project",
-          path: normalizePath(String(skillPath))
-        });
-      }
-      const files = CS.System.IO.Directory.GetFiles(skillsDir, "*.md");
-      for (let i = 0; i < files.Length; i++) {
-        const filePath = files[i];
-        const fileName = String(CS.System.IO.Path.GetFileNameWithoutExtension(filePath) ?? "");
-        if (!fileName) continue;
-        const content = String(CS.System.IO.File.ReadAllText(filePath) ?? "");
-        loaded.delete(fileName);
-        loaded.set(fileName, {
-          name: fileName,
-          description: parseSkillDescription(content),
-          source: "project",
-          path: normalizePath(String(filePath))
-        });
-      }
-    }
-    return Array.from(loaded.values());
-  }
-  function getAvailableSkills(projectRoot2) {
-    const skillMap = /* @__PURE__ */ new Map();
-    for (const skill of BUILTIN_SKILLS) {
-      skillMap.set(skill.name, skill);
-    }
-    for (const skill of loadProjectSkills(projectRoot2)) {
-      skillMap.set(skill.name, skill);
-    }
-    return Array.from(skillMap.values());
-  }
-  function formatSkillsForPrompt(skills) {
-    if (!skills || skills.length === 0) {
-      return "";
-    }
-    const lines = skills.slice().sort((a, b) => a.name.localeCompare(b.name)).map((skill) => `- ${skill.name} [${skill.source}] - ${skill.description}`);
-    return [
-      "Project skills are available via the read_skill tool.",
-      "Read a skill before relying on project-specific workflows or conventions.",
-      "[Available Skills]",
-      ...lines
-    ].join("\n");
-  }
-  function readSkillContent(projectRoot2, name) {
-    const skills = getAvailableSkills(projectRoot2);
-    const match = skills.find((skill) => skill.name === name);
-    if (!match) return null;
-    if (match.source === "builtin") {
-      return match;
-    }
-    if (!match.path || !CS.System.IO.File.Exists(match.path)) {
-      return null;
-    }
-    return {
-      ...match,
-      content: CS.System.IO.File.ReadAllText(match.path)
-    };
-  }
-
   // src/tools/inspect-unity-context.ts
   function getRenderPipelineInfo() {
     const graphicsSettings = CS.UnityEngine.Rendering.GraphicsSettings;
@@ -14098,6 +16638,254 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
       rootObjects: rootObjects.slice(0, 12)
     };
   }
+  function createInspectUnityContextTool(projectRoot2, isEditor2) {
+    return {
+      name: "inspect_unity_context",
+      label: "inspect_unity_context",
+      description: "Inspect the current Unity environment, including render pipeline, scene, selection, and project memory status.",
+      parameters: Type.Object({}),
+      execute: async () => {
+        const payload = getUnityContextSnapshot(projectRoot2, isEditor2);
+        return {
+          content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+          details: payload
+        };
+      }
+    };
+  }
+
+  // src/tools/native-find.ts
+  var DEFAULT_LIMIT2 = 1e3;
+  function awaitTask(task) {
+    if (!puer?.$promise) {
+      throw new Error("puer.$promise is not available");
+    }
+    return puer.$promise(task);
+  }
+  function stripOuterQuotes(value) {
+    const trimmed = (value || "").trim();
+    if (trimmed.length < 2) {
+      return trimmed;
+    }
+    const first = trimmed[0];
+    const last = trimmed[trimmed.length - 1];
+    if (first === '"' && last === '"' || first === "'" && last === "'") {
+      return trimmed.substring(1, trimmed.length - 1).trim();
+    }
+    return trimmed;
+  }
+  function normalizeFindPattern(rawPattern) {
+    let pattern = stripOuterQuotes(rawPattern);
+    if (pattern.startsWith("find ")) {
+      pattern = pattern.substring(5).trim();
+    }
+    if (pattern.startsWith("-name ")) {
+      pattern = pattern.substring(6).trim();
+    }
+    const nameMatch = pattern.match(/^-name\s+(.+)$/);
+    if (nameMatch) {
+      pattern = nameMatch[1].trim();
+    }
+    pattern = stripOuterQuotes(pattern);
+    if (pattern.startsWith("./")) {
+      pattern = pattern.substring(2);
+    }
+    return pattern;
+  }
+  function createNativeFindTool(cwd, options) {
+    const rootSchema = buildRootParameterSchema(cwd, options);
+    const findSchema = Type.Object({
+      pattern: Type.Optional(Type.String({
+        description: "The file pattern only, not a shell command. Good inputs: '*.cs', '**/*.json', 'DemoScript.cs', or 'DemoScript'. Do not pass 'find *.cs' as the pattern."
+      })),
+      query: Type.Optional(Type.String({ description: "Alias for pattern. You can pass a filename fragment like 'DemoScript'." })),
+      name: Type.Optional(Type.String({ description: "Alias for pattern. You can pass a file name like 'DemoScript.cs'." })),
+      file_name: Type.Optional(Type.String({ description: "Alias for pattern. You can pass a file name or fragment." })),
+      path: Type.Optional(Type.String({ description: "Directory to search in (default: workspace root). Example: 'Scripts' or 'Data'." })),
+      ...rootSchema ? { root: rootSchema } : {},
+      limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" }))
+    });
+    const pathResolutionDescription = buildPathResolutionDescription(cwd, options);
+    return {
+      name: "find",
+      label: "find",
+      description: `Search for files by filename fragment or glob pattern. Best practice: use a simple filename fragment like 'PlayerController' or a direct filename like 'PlayerController.cs'. Glob examples: '*.cs', '*.json', '**/*.prefab'. Pass only the pattern string, not a shell command. ${pathResolutionDescription} Returns matching paths relative to the search directory. Output is truncated to ${DEFAULT_LIMIT2} results or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
+      parameters: findSchema,
+      execute: async (_toolCallId, { pattern, query, name, file_name, path: searchDir, root, limit }) => {
+        const resolvedPattern = pattern || query || name || file_name || "";
+        const normalizedPattern = normalizeFindPattern(resolvedPattern);
+        if (!normalizedPattern) {
+          return {
+            content: [{ type: "text", text: "search_files requires a pattern, query, name, or file_name argument." }],
+            details: { rawPattern: resolvedPattern, effectivePattern: normalizedPattern },
+            isError: true
+          };
+        }
+        const searchPath = resolveToCwd(searchDir || ".", cwd, options, root);
+        const effectiveLimit = limit ?? DEFAULT_LIMIT2;
+        if (globalThis.__pieVerboseLogs) {
+          globalThis.pieBridge?.log?.("info", `[native find] path=${searchPath} pattern=${normalizedPattern} raw=${resolvedPattern} limit=${effectiveLimit}`);
+        }
+        const json = await awaitTask(CS.Pie.PieFileBridge.FindAsync(searchPath, normalizedPattern, effectiveLimit));
+        const nativeResult = json ? JSON.parse(json) : {};
+        const results = nativeResult.Results ?? [];
+        if (globalThis.__pieVerboseLogs) {
+          globalThis.pieBridge?.log?.(
+            "info",
+            `[native find] done path=${searchPath} pattern=${normalizedPattern} matches=${results.length} dirs=${nativeResult.ScannedDirectories ?? 0} files=${nativeResult.ScannedFiles ?? 0}`
+          );
+        }
+        if (results.length === 0) {
+          return {
+            content: [{ type: "text", text: "No files found matching pattern" }],
+            details: {
+              noMatches: true,
+              scannedDirectories: nativeResult.ScannedDirectories ?? 0,
+              scannedFiles: nativeResult.ScannedFiles ?? 0,
+              effectivePattern: nativeResult.Pattern ?? normalizedPattern,
+              searchPath: nativeResult.RootPath ?? searchPath,
+              rawPattern: resolvedPattern
+            }
+          };
+        }
+        const rawOutput = results.join("\n");
+        const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
+        let resultOutput = truncation.content;
+        const details = {
+          scannedDirectories: nativeResult.ScannedDirectories,
+          scannedFiles: nativeResult.ScannedFiles,
+          effectivePattern: nativeResult.Pattern ?? normalizedPattern,
+          searchPath: nativeResult.RootPath ?? searchPath,
+          rawPattern: resolvedPattern
+        };
+        const notices = [];
+        if (nativeResult.LimitReached) {
+          notices.push(`${effectiveLimit} results limit reached`);
+          details.resultLimitReached = effectiveLimit;
+        }
+        if (truncation.truncated) {
+          notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+          details.truncation = truncation;
+        }
+        if (notices.length > 0) {
+          resultOutput += `
+
+[${notices.join(". ")}]`;
+        }
+        return {
+          content: [{ type: "text", text: resultOutput }],
+          details
+        };
+      }
+    };
+  }
+
+  // src/tools/native-grep.ts
+  var DEFAULT_LIMIT3 = 100;
+  function awaitTask2(task) {
+    if (!puer?.$promise) {
+      throw new Error("puer.$promise is not available");
+    }
+    return puer.$promise(task);
+  }
+  function createNativeGrepTool(cwd, options) {
+    const rootSchema = buildRootParameterSchema(cwd, options);
+    const grepSchema = Type.Object({
+      pattern: Type.String({ description: "The text or regex pattern to search for inside files. Example literal patterns: 'MonoBehaviour', 'Hello from Pie'. Example regex: 'class\\s+DemoScript'." }),
+      path: Type.Optional(Type.String({ description: "Directory or file to search (default: workspace root). Example: 'Scripts' or 'Data/dialogue'." })),
+      ...rootSchema ? { root: rootSchema } : {},
+      glob: Type.Optional(Type.String({ description: "Optional file filter, e.g. '*.cs', '*.json', or '**/*.txt'. Use this to narrow which files are searched." })),
+      ignoreCase: Type.Optional(Type.Boolean({ description: "Case-insensitive search (default: false)" })),
+      literal: Type.Optional(Type.Boolean({ description: "Treat pattern as plain text instead of regex (default: false). Use literal=true for normal substring searches like 'MonoBehaviour'." })),
+      context: Type.Optional(Type.Number({ description: "Number of lines to show before and after each match (default: 0)" })),
+      limit: Type.Optional(Type.Number({ description: "Maximum number of matches to return (default: 100)" }))
+    });
+    const pathResolutionDescription = buildPathResolutionDescription(cwd, options);
+    return {
+      name: "grep",
+      label: "grep",
+      description: `Search inside file contents. Use this when you know some text that should appear in the file. Common usage: pattern='MonoBehaviour', glob='*.cs', literal=true. Prefer targeted folders like 'Scripts' or 'Data' over scanning the whole project. ${pathResolutionDescription} Returns matching lines with file paths and line numbers. Output is truncated to ${DEFAULT_LIMIT3} matches or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Long lines are truncated to ${GREP_MAX_LINE_LENGTH} chars.`,
+      parameters: grepSchema,
+      execute: async (_toolCallId, { pattern, path: searchDir, root, glob, ignoreCase, literal, context, limit }) => {
+        const searchPath = resolveToCwd(searchDir || ".", cwd, options, root);
+        const effectiveLimit = Math.max(1, limit ?? DEFAULT_LIMIT3);
+        const ctx = context && context > 0 ? context : 0;
+        if (globalThis.__pieVerboseLogs) {
+          globalThis.pieBridge?.log?.(
+            "info",
+            `[native grep] path=${searchPath} pattern=${pattern} glob=${glob ?? ""} limit=${effectiveLimit}`
+          );
+        }
+        const json = await awaitTask2(
+          CS.Pie.PieFileBridge.GrepAsync(
+            searchPath,
+            pattern,
+            glob ?? "",
+            !!ignoreCase,
+            !!literal,
+            ctx,
+            effectiveLimit
+          )
+        );
+        const nativeResult = json ? JSON.parse(json) : {};
+        const outputLines = nativeResult.Lines ?? [];
+        const matchCount = nativeResult.MatchCount ?? 0;
+        if (globalThis.__pieVerboseLogs) {
+          globalThis.pieBridge?.log?.(
+            "info",
+            `[native grep] done path=${searchPath} pattern=${pattern} matches=${matchCount} files=${nativeResult.FilesScanned ?? 0}`
+          );
+        }
+        if (matchCount === 0) {
+          return {
+            content: [{ type: "text", text: "No matches found" }],
+            details: {
+              noMatches: true,
+              filesScanned: nativeResult.FilesScanned ?? 0,
+              effectivePattern: nativeResult.Pattern ?? pattern,
+              searchPath: nativeResult.SearchPath ?? searchPath,
+              glob: nativeResult.Glob ?? glob,
+              literal: nativeResult.Literal ?? !!literal,
+              ignoreCase: nativeResult.IgnoreCase ?? !!ignoreCase
+            }
+          };
+        }
+        const rawOutput = outputLines.join("\n");
+        const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
+        let output = truncation.content;
+        const details = {
+          filesScanned: nativeResult.FilesScanned,
+          effectivePattern: nativeResult.Pattern ?? pattern,
+          searchPath: nativeResult.SearchPath ?? searchPath,
+          glob: nativeResult.Glob ?? glob,
+          literal: nativeResult.Literal ?? !!literal,
+          ignoreCase: nativeResult.IgnoreCase ?? !!ignoreCase
+        };
+        const notices = [];
+        if (nativeResult.MatchLimitReached) {
+          notices.push(`${effectiveLimit} matches limit reached`);
+          details.matchLimitReached = effectiveLimit;
+        }
+        if (truncation.truncated) {
+          notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+          details.truncation = truncation;
+        }
+        if (nativeResult.LinesTruncated) {
+          notices.push(`lines longer than ${GREP_MAX_LINE_LENGTH} chars were truncated`);
+          details.linesTruncated = true;
+        }
+        if (notices.length > 0) {
+          output += `
+
+[${notices.join(". ")}]`;
+        }
+        return {
+          content: [{ type: "text", text: output }],
+          details
+        };
+      }
+    };
+  }
 
   // src/tools/project-memory.ts
   function getAgentsPath(projectRoot2) {
@@ -14114,6 +16902,16 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
       CS.System.IO.Directory.CreateDirectory(dir);
     }
   }
+  function createUnityProjectMemoryAdapter(projectRoot2) {
+    return defineProjectMemoryAdapter({
+      getPath: () => getAgentsPath(projectRoot2),
+      read: () => readProjectMemory(projectRoot2),
+      write: (content) => {
+        ensureProjectMemoryDir(projectRoot2);
+        CS.System.IO.File.WriteAllText(getAgentsPath(projectRoot2), content || "");
+      }
+    });
+  }
   function readProjectMemory(projectRoot2) {
     const agentsPath = getAgentsPath(projectRoot2);
     if (!CS.System.IO.File.Exists(agentsPath)) return "";
@@ -14124,7 +16922,27 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
     if (!content) return "";
     return content.length > maxChars ? content.slice(0, maxChars) + "\n\n... (truncated)" : content;
   }
-  function createWriteProjectMemoryTool(projectRoot2) {
+  function createReadProjectMemoryTool(projectRoot2) {
+    const adapter = createUnityProjectMemoryAdapter(projectRoot2);
+    return {
+      name: "read_project_memory",
+      label: "read_project_memory",
+      description: "Read the project's persistent AGENTS.md memory file from Assets/Pie/AGENTS.md.",
+      parameters: Type.Object({}),
+      execute: async () => {
+        const content = await adapter.read();
+        return {
+          content: [{
+            type: "text",
+            text: content || "No project memory found. Initialize it before relying on persistent project facts."
+          }],
+          details: { hasContent: !!content, path: adapter.getPath(), classification: PROJECT_MEMORY_CLASSIFICATION.disposition }
+        };
+      }
+    };
+  }
+  function createWriteProjectMemoryTool2(projectRoot2) {
+    const adapter = createUnityProjectMemoryAdapter(projectRoot2);
     return {
       name: "write_project_memory",
       label: "write_project_memory",
@@ -14133,15 +16951,13 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
         content: Type.String({ description: "Full markdown contents for Assets/Pie/AGENTS.md." })
       }),
       execute: async (_toolCallId, params) => {
-        ensureProjectMemoryDir(projectRoot2);
-        const agentsPath = getAgentsPath(projectRoot2);
-        CS.System.IO.File.WriteAllText(agentsPath, params.content || "");
+        await adapter.write(params.content || "");
         return {
           content: [{
             type: "text",
-            text: `Project memory written to ${agentsPath}`
+            text: `Project memory written to ${adapter.getPath()}`
           }],
-          details: { path: agentsPath, length: (params.content || "").length }
+          details: { path: adapter.getPath(), length: (params.content || "").length, classification: PROJECT_MEMORY_CLASSIFICATION.disposition }
         };
       }
     };
@@ -14182,29 +16998,174 @@ ${rootObjectLines}
 `;
   }
 
-  // src/session-store.ts
-  function isSessionEmpty(record) {
-    if (!record) return true;
-    const messageCount = Array.isArray(record.messages) ? record.messages.length : 0;
-    const todoCount = Array.isArray(record.todoState) ? record.todoState.length : 0;
-    return messageCount === 0 && todoCount === 0;
+  // src/capabilities/index.ts
+  function createUnityHostCapabilities(projectRoot2, isEditor2, options) {
+    const evalJsTool = createEvalJsTool();
+    const inspectUnityContextTool = createInspectUnityContextTool(projectRoot2, isEditor2);
+    const readProjectMemoryTool = createReadProjectMemoryTool(projectRoot2);
+    const writeProjectMemoryTool = createWriteProjectMemoryTool2(projectRoot2);
+    const nativeFindTool = createNativeFindTool(options.filesystemSearchRoot, options.filesystemPathOptions);
+    const nativeGrepTool = createNativeGrepTool(options.filesystemSearchRoot, options.filesystemPathOptions);
+    const capabilities = [
+      {
+        id: "eval-js",
+        description: "Unity host capability for executing JavaScript inside the PuerTS/V8 runtime.",
+        tools: [evalJsTool]
+      },
+      {
+        id: "inspect-unity-context",
+        description: "Unity host capability for inspecting the live editor/runtime context.",
+        tools: [inspectUnityContextTool]
+      },
+      {
+        id: "project-memory-adapter",
+        description: "Unity host adapter for the shared project-memory contract. Current disposition: future shared capability with host-specific executor.",
+        tools: [readProjectMemoryTool, writeProjectMemoryTool]
+      },
+      {
+        id: "filesystem-search-executor",
+        description: "Unity host executor for shared filesystem search semantics (`find` / `grep`) backed by native file bridge calls.",
+        tools: [nativeFindTool, nativeGrepTool]
+      }
+    ];
+    return {
+      capabilities,
+      tools: capabilities.flatMap((capability) => capability.tools)
+    };
   }
+
+  // src/skills.ts
+  var hasLoggedEmptySkillScan = false;
+  function normalizePath2(path) {
+    return String(path ?? "").replace(/\\/g, "/");
+  }
+  function parseBridgePathArray(methodName) {
+    const raw = globalThis.pieBridge?.[methodName]?.();
+    if (typeof raw !== "string" || raw.trim().length === 0) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map((entry) => normalizePath2(String(entry ?? ""))).filter((entry) => entry.length > 0) : [];
+    } catch {
+      return [];
+    }
+  }
+  function getSkillSearchPaths(_projectRoot) {
+    return parseBridgePathArray("getSkillSearchPathsJson");
+  }
+  function getExtensionSearchPaths(_projectRoot) {
+    return parseBridgePathArray("getExtensionSearchPathsJson");
+  }
+  function logEmptySkillScan(projectRoot2, skillDirs) {
+    if (hasLoggedEmptySkillScan) return;
+    hasLoggedEmptySkillScan = true;
+    try {
+      const diagnostics = skillDirs.length === 0 ? ["(no skill search paths configured)"] : skillDirs.map((skillsDir) => {
+        const exists = CS.System.IO.Directory.Exists(skillsDir);
+        if (!exists) {
+          return `${normalizePath2(String(skillsDir))} [missing]`;
+        }
+        const directories = CS.System.IO.Directory.GetDirectories(skillsDir);
+        const files = CS.System.IO.Directory.GetFiles(skillsDir, "*.md");
+        return `${normalizePath2(String(skillsDir))} [dirs=${directories.Length}, md=${files.Length}]`;
+      });
+      CS.Pie.PieDiagnostics.Verbose(
+        `[pie/skills] No project skills found. projectRoot=${normalizePath2(projectRoot2)} searchPaths=${diagnostics.join("; ")}`
+      );
+    } catch {
+    }
+  }
+  function registerSkillFile(loader, skillPath, fileName, baseDir) {
+    if (!CS.System.IO.File.Exists(skillPath)) {
+      return;
+    }
+    try {
+      const content = String(CS.System.IO.File.ReadAllText(skillPath) ?? "");
+      const parsed = parseSkill(content, fileName, normalizePath2(skillPath));
+      loader.registerSkill({
+        ...parsed,
+        source: "project",
+        baseDir: normalizePath2(baseDir)
+      });
+    } catch {
+    }
+  }
+  function createUnitySkillLoader(projectRoot2) {
+    const loader = createSkillLoader({ skillsDir: "" });
+    const skillDirs = getSkillSearchPaths(projectRoot2);
+    for (const skillsDir of skillDirs) {
+      if (!CS.System.IO.Directory.Exists(skillsDir)) continue;
+      const directories = CS.System.IO.Directory.GetDirectories(skillsDir);
+      for (let i = 0; i < directories.Length; i++) {
+        const dir = typeof directories.get_Item === "function" ? directories.get_Item(i) : directories[i];
+        const name = String(CS.System.IO.Path.GetFileName(dir) ?? "");
+        if (!name) continue;
+        const skillPath = CS.System.IO.Path.Combine(dir, "SKILL.md");
+        registerSkillFile(loader, skillPath, "SKILL.md", String(dir));
+      }
+      const files = CS.System.IO.Directory.GetFiles(skillsDir, "*.md");
+      for (let i = 0; i < files.Length; i++) {
+        const filePath = typeof files.get_Item === "function" ? files.get_Item(i) : files[i];
+        const fileName = String(CS.System.IO.Path.GetFileName(filePath) ?? "");
+        if (!fileName) continue;
+        registerSkillFile(loader, String(filePath), fileName, skillsDir);
+      }
+    }
+    if (loader.getAllSkills().length === 0) {
+      logEmptySkillScan(projectRoot2, skillDirs);
+    }
+    return loader;
+  }
+  function toLoadedSkill(skill) {
+    return {
+      name: skill.name,
+      description: skill.description,
+      source: "project",
+      content: skill.prompt,
+      path: skill.filePath ? normalizePath2(skill.filePath) : void 0
+    };
+  }
+  function getAvailableSkills(projectRoot2) {
+    return createUnitySkillLoader(projectRoot2).getAllSkills().map(toLoadedSkill);
+  }
+  function formatSkillsForPrompt2(skills) {
+    return formatSkillsForPrompt(
+      skills.map((skill) => ({
+        name: skill.name,
+        displayName: skill.name,
+        description: skill.description,
+        prompt: skill.content || "",
+        filePath: skill.path
+      }))
+    );
+  }
+
+  // src/session-store.ts
   function getSessionsDir(projectRoot2) {
     const fromBridge = globalThis.pieBridge?.getSessionsDirectory?.();
     if (typeof fromBridge === "string" && fromBridge.length > 0) {
       return fromBridge;
     }
-    throw new Error("Pie session storage path is unavailable. pieBridge.getSessionsDirectory() must be provided by the host.");
+    return getPlatformConfig().sessionsPath;
+  }
+  function getSessionGateway(projectRoot2) {
+    const sessionsDir = getSessionsDir(projectRoot2);
+    return new FileSystemGateway({
+      allowedRoots: [sessionsDir, getPlatformConfig().dataPath]
+    });
   }
   function ensureSessionsDir(projectRoot2) {
     const dir = getSessionsDir(projectRoot2);
-    if (!CS.System.IO.Directory.Exists(dir)) {
-      CS.System.IO.Directory.CreateDirectory(dir);
+    const gateway = getSessionGateway(projectRoot2);
+    if (!gateway.exists(dir)) {
+      gateway.mkdir(dir, { recursive: true });
     }
     return dir;
   }
   function getSessionPath(projectRoot2, sessionId) {
-    return CS.System.IO.Path.Combine(getSessionsDir(projectRoot2), `${sessionId}.json`);
+    const safeId = sessionId.replace(/[^a-zA-Z0-9_-]/g, "_");
+    return getSessionGateway(projectRoot2).join(getSessionsDir(projectRoot2), `${safeId}.json`);
   }
   function isoNow() {
     return (/* @__PURE__ */ new Date()).toISOString();
@@ -14219,14 +17180,92 @@ ${rootObjectLines}
     const compact = String(content || "New Session").replace(/\s+/g, " ").trim();
     return compact.slice(0, 48) || "New Session";
   }
-  function listSessionFiles(projectRoot2) {
-    const dir = ensureSessionsDir(projectRoot2);
-    const files = CS.System.IO.Directory.GetFiles(dir, "*.json");
-    const result = [];
-    for (let i = 0; i < files.Length; i++) {
-      result.push(files[i]);
+  function toIsoString(value) {
+    if (typeof value === "string" && value.length > 0) {
+      return value;
     }
-    return result;
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return new Date(value).toISOString();
+    }
+    return isoNow();
+  }
+  function toTimestamp(value, fallback) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      const parsed = Date.parse(value);
+      if (!Number.isNaN(parsed)) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
+  function normalizeTodoState(value) {
+    return Array.isArray(value) ? value : [];
+  }
+  function isFrameworkSessionData(value) {
+    return !!value && typeof value === "object" && "metadata" in value && "entries" in value && Array.isArray(value.entries);
+  }
+  function isLegacySessionRecord(value) {
+    return !!value && typeof value === "object" && typeof value.id === "string" && Array.isArray(value.messages);
+  }
+  function normalizeLegacySessionRecord(record) {
+    const messages = Array.isArray(record.messages) ? record.messages : [];
+    const todoState = normalizeTodoState(record.todoState);
+    const title = deriveTitle(messages);
+    return {
+      id: record.id,
+      title,
+      createdAt: toIsoString(record.createdAt),
+      updatedAt: toIsoString(record.updatedAt),
+      parentSessionId: record.parentSessionId,
+      provider: record.provider || "openai",
+      modelId: record.modelId || "unknown",
+      messageCount: messages.length,
+      messages,
+      todoState
+    };
+  }
+  function toSessionRecordFromFramework(data) {
+    const metadata = data.metadata || {};
+    const messages = data.messages || flattenTreeToMessages(data.entries || [], data.metadata.activeEntryId ?? null);
+    const title = typeof metadata.name === "string" && metadata.name.length > 0 ? metadata.name : deriveTitle(messages);
+    return {
+      id: data.metadata.id,
+      title,
+      createdAt: toIsoString(data.metadata.createdAt),
+      updatedAt: toIsoString(data.metadata.updatedAt),
+      parentSessionId: typeof metadata.parentSessionId === "string" ? metadata.parentSessionId : void 0,
+      provider: typeof metadata.provider === "string" ? metadata.provider : "openai",
+      modelId: typeof metadata.modelId === "string" ? metadata.modelId : "unknown",
+      messageCount: messages.length,
+      messages,
+      todoState: normalizeTodoState(metadata.todoState)
+    };
+  }
+  function readRawStoredSession(projectRoot2, sessionId) {
+    const gateway = getSessionGateway(projectRoot2);
+    const path = getSessionPath(projectRoot2, sessionId);
+    if (!gateway.exists(path)) {
+      return null;
+    }
+    try {
+      return JSON.parse(gateway.readFile(path, "utf-8"));
+    } catch {
+      return null;
+    }
+  }
+  function listSessionIds(projectRoot2) {
+    const gateway = getSessionGateway(projectRoot2);
+    const dir = ensureSessionsDir(projectRoot2);
+    return gateway.readdir(dir).filter((file) => file.endsWith(".json")).filter((file) => !file.endsWith("-files.json")).map((file) => file.replace(/\.json$/i, ""));
+  }
+  function createManager(projectRoot2) {
+    return createSessionManager({
+      sessionsDir: getSessionsDir(projectRoot2),
+      autoSaveInterval: 0
+    });
   }
   function createSessionRecord(params) {
     const now = isoNow();
@@ -14240,70 +17279,110 @@ ${rootObjectLines}
       modelId: params.modelId,
       messageCount: params.messages.length,
       messages: params.messages,
-      todoState: params.todoState
+      todoState: normalizeTodoState(params.todoState)
     };
   }
-  function saveSession(projectRoot2, record) {
+  function isSessionEmpty(record) {
+    if (!record) return true;
+    const messageCount = Array.isArray(record.messages) ? record.messages.length : 0;
+    const todoCount = Array.isArray(record.todoState) ? record.todoState.length : 0;
+    return messageCount === 0 && todoCount === 0;
+  }
+  async function saveSession(projectRoot2, record) {
     ensureSessionsDir(projectRoot2);
-    let createdAt = record.createdAt;
-    const existing = loadSession(projectRoot2, record.id);
-    if (existing?.createdAt) {
-      createdAt = existing.createdAt;
-    }
+    const existing = await loadSession(projectRoot2, record.id);
     const normalized = {
       ...record,
-      createdAt,
+      createdAt: existing?.createdAt || toIsoString(record.createdAt),
       updatedAt: isoNow(),
-      title: deriveTitle(record.messages),
-      messageCount: record.messages.length
+      title: deriveTitle(record.messages || []),
+      messageCount: Array.isArray(record.messages) ? record.messages.length : 0,
+      todoState: normalizeTodoState(record.todoState)
     };
-    CS.System.IO.File.WriteAllText(
-      getSessionPath(projectRoot2, normalized.id),
-      JSON.stringify(normalized, null, 2)
-    );
+    if (isSessionEmpty(normalized)) {
+      await deleteSession(projectRoot2, normalized.id);
+      return normalized;
+    }
+    const manager = createManager(projectRoot2);
+    try {
+      await manager.createSession(normalized.title, void 0, normalized.id);
+      manager.updateMessages(normalized.messages);
+      const active = manager.getActiveSession();
+      if (active) {
+        const metadata = active.metadata;
+        metadata.name = normalized.title;
+        metadata.createdAt = toTimestamp(normalized.createdAt, Date.now());
+        metadata.updatedAt = toTimestamp(normalized.updatedAt, Date.now());
+        metadata.parentSessionId = normalized.parentSessionId;
+        metadata.provider = normalized.provider;
+        metadata.modelId = normalized.modelId;
+        metadata.todoState = normalizeTodoState(normalized.todoState);
+      }
+      await manager.save();
+    } finally {
+      manager.dispose();
+    }
     return normalized;
   }
-  function deleteSession(projectRoot2, sessionId) {
-    const path = getSessionPath(projectRoot2, sessionId);
-    if (CS.System.IO.File.Exists(path)) {
-      CS.System.IO.File.Delete(path);
+  async function deleteSession(projectRoot2, sessionId) {
+    const manager = createManager(projectRoot2);
+    try {
+      await manager.deleteSession(sessionId);
+    } finally {
+      manager.dispose();
     }
   }
-  function loadSession(projectRoot2, sessionId) {
-    const path = getSessionPath(projectRoot2, sessionId);
-    if (!CS.System.IO.File.Exists(path)) return null;
-    try {
-      return JSON.parse(CS.System.IO.File.ReadAllText(path));
-    } catch {
+  async function loadSession(projectRoot2, sessionId) {
+    const raw = readRawStoredSession(projectRoot2, sessionId);
+    if (!raw) {
       return null;
     }
-  }
-  function listSessions(projectRoot2) {
-    const sessions = [];
-    for (const path of listSessionFiles(projectRoot2)) {
-      try {
-        const session = JSON.parse(CS.System.IO.File.ReadAllText(path));
-        if (isSessionEmpty(session)) {
-          continue;
-        }
-        sessions.push({
-          id: session.id,
-          title: session.title,
-          createdAt: session.createdAt,
-          updatedAt: session.updatedAt,
-          parentSessionId: session.parentSessionId,
-          provider: session.provider,
-          modelId: session.modelId,
-          messageCount: session.messageCount
-        });
-      } catch {
+    if (isLegacySessionRecord(raw) && !isFrameworkSessionData(raw)) {
+      return normalizeLegacySessionRecord(raw);
+    }
+    const manager = createManager(projectRoot2);
+    try {
+      const loaded = await manager.loadSession(sessionId);
+      if (!loaded) {
+        return null;
       }
+      const active = manager.getActiveSession();
+      if (!active) {
+        return null;
+      }
+      return toSessionRecordFromFramework({
+        version: 2,
+        metadata: active.metadata,
+        entries: active.entries,
+        messages: manager.getMessages()
+      });
+    } finally {
+      manager.dispose();
+    }
+  }
+  async function listSessions(projectRoot2) {
+    const sessions = [];
+    for (const sessionId of listSessionIds(projectRoot2)) {
+      const session = await loadSession(projectRoot2, sessionId);
+      if (!session || isSessionEmpty(session)) {
+        continue;
+      }
+      sessions.push({
+        id: session.id,
+        title: session.title,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        parentSessionId: session.parentSessionId,
+        provider: session.provider,
+        modelId: session.modelId,
+        messageCount: session.messageCount
+      });
     }
     sessions.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
     return sessions;
   }
-  function formatSessionTree(projectRoot2) {
-    const sessions = listSessions(projectRoot2);
+  async function formatSessionTree(projectRoot2) {
+    const sessions = await listSessions(projectRoot2);
     if (sessions.length === 0) return "No saved sessions.";
     const children = /* @__PURE__ */ new Map();
     const roots = [];
@@ -14330,152 +17409,45 @@ ${rootObjectLines}
   }
 
   // src/extensions/registry.ts
-  var extensionTools = [];
-  var beforeToolCallHooks = [];
-  var afterToolCallHooks = [];
-  var onErrorHooks = [];
-  var systemPromptPatches = [];
-  var loadedExtensions = [];
-  var typeBoxKind = Symbol.for("TypeBox.Kind");
-  function isTypeBoxSchema(value) {
-    return !!value && typeof value === "object" && typeBoxKind in value;
-  }
-  function convertJsonSchemaToTypeBox(schema) {
-    if (!schema || typeof schema !== "object") {
-      throw new Error("Tool parameters must be a TypeBox schema or a JSON schema object.");
-    }
-    if (isTypeBoxSchema(schema)) {
-      return schema;
-    }
-    const description = typeof schema.description === "string" ? schema.description : void 0;
-    const options = description ? { description } : void 0;
-    switch (schema.type) {
-      case "string":
-        return Type.String(options);
-      case "number":
-        return Type.Number(options);
-      case "integer":
-        return Type.Integer(options);
-      case "boolean":
-        return Type.Boolean(options);
-      case "null":
-        return Type.Null(options);
-      case "array":
-        return Type.Array(convertJsonSchemaToTypeBox(schema.items ?? { type: "string" }), options);
-      case "object": {
-        const properties = schema.properties ?? {};
-        const required = new Set(Array.isArray(schema.required) ? schema.required : []);
-        const converted = {};
-        for (const [key, value] of Object.entries(properties)) {
-          const child = convertJsonSchemaToTypeBox(value);
-          converted[key] = required.has(key) ? child : Type.Optional(child);
-        }
-        return Type.Object(converted, options);
-      }
-      default:
-        throw new Error(`Unsupported JSON schema type for extension tool: ${String(schema.type ?? "unknown")}`);
-    }
-  }
-  function extensionLog(context, message) {
-    context.log(`[extension] ${message}`);
-  }
-  function tryParseHostResult(raw) {
-    if (typeof raw !== "string") {
-      return raw;
-    }
-    const trimmed = raw.trim();
-    if (!trimmed) return "";
-    const looksLikeJson = trimmed.startsWith("{") && trimmed.endsWith("}") || trimmed.startsWith("[") && trimmed.endsWith("]") || trimmed === "null" || trimmed === "true" || trimmed === "false" || /^-?\d+(\.\d+)?$/.test(trimmed);
-    if (!looksLikeJson) {
-      return raw;
-    }
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      return raw;
-    }
-  }
+  var registry = createRuntimeExtensionRegistry();
   function resetExtensionRegistry() {
-    extensionTools.length = 0;
-    beforeToolCallHooks.length = 0;
-    afterToolCallHooks.length = 0;
-    onErrorHooks.length = 0;
-    systemPromptPatches.length = 0;
-    loadedExtensions.length = 0;
+    registry.reset();
   }
   function getExtensionTools() {
-    return extensionTools.slice();
+    return registry.getTools();
   }
   function getLoadedExtensions() {
-    return loadedExtensions.slice();
+    return registry.getLoadedExtensions();
   }
   function getSystemPromptPatches() {
-    return systemPromptPatches.slice();
+    return registry.getSystemPromptPatches();
   }
   function buildRegisteredHooks() {
-    if (beforeToolCallHooks.length === 0 && afterToolCallHooks.length === 0 && onErrorHooks.length === 0) {
-      return void 0;
-    }
-    return {
-      beforeToolCall: beforeToolCallHooks.length === 0 ? void 0 : async (toolName, args) => {
-        for (const hook of beforeToolCallHooks) {
-          const result = await hook(toolName, args);
-          if (result?.block) {
-            return result;
-          }
-        }
-        return void 0;
-      },
-      afterToolCall: afterToolCallHooks.length === 0 ? void 0 : async (toolName, args, result, isError) => {
-        for (const hook of afterToolCallHooks) {
-          await hook(toolName, args, result, isError);
-        }
-      },
-      onError: onErrorHooks.length === 0 ? void 0 : (error, ctx) => {
-        for (const hook of onErrorHooks) {
-          hook(error, ctx);
-        }
-      }
-    };
+    return registry.buildHooks();
   }
-  function createExtensionApi(context) {
-    return {
+  function createExtensionApi(context, filePath) {
+    const normalizedPath = String(filePath ?? "").replace(/\\/g, "/");
+    const fileName = normalizedPath.split("/").pop() || "extension.js";
+    const name = fileName.replace(/\.js$/i, "");
+    const dir = normalizedPath.slice(0, Math.max(0, normalizedPath.length - fileName.length)).replace(/\/$/, "") || ".";
+    return registry.createContext({
+      manifest: {
+        name,
+        version: "0.0.0",
+        main: fileName
+      },
+      dir,
+      config: {}
+    }, {
       ...context,
-      registerTool(tool) {
-        const normalizedTool = {
-          ...tool,
-          parameters: convertJsonSchemaToTypeBox(tool.parameters)
-        };
-        extensionTools.push(normalizedTool);
-        extensionLog(context, `registered tool: ${tool.name}`);
-      },
-      registerBeforeToolCall(hook) {
-        beforeToolCallHooks.push(hook);
-        extensionLog(context, "registered beforeToolCall hook");
-      },
-      registerAfterToolCall(hook) {
-        afterToolCallHooks.push(hook);
-        extensionLog(context, "registered afterToolCall hook");
-      },
-      registerOnError(hook) {
-        onErrorHooks.push(hook);
-        extensionLog(context, "registered onError hook");
-      },
-      appendSystemPrompt(text) {
-        const trimmed = (text ?? "").trim();
-        if (!trimmed) return;
-        systemPromptPatches.push(trimmed);
-        extensionLog(context, "appended system prompt patch");
-      },
-      async callHost(name, args) {
+      callHost: async (name2, args) => {
         const json = JSON.stringify(args ?? {});
-        const raw = globalThis.pieBridge?.callHost?.(name, json);
-        return tryParseHostResult(raw);
+        return globalThis.pieBridge?.callHost?.(name2, json);
       }
-    };
+    });
   }
   function registerLoadedExtension(path) {
-    loadedExtensions.push(path);
+    registry.registerLoadedExtension(path);
   }
 
   // src/extensions/load-project-extensions.ts
@@ -14485,25 +17457,26 @@ ${rootObjectLines}
     }
     return CS.System.IO;
   }
-  function normalizePath2(path) {
+  function normalizePath3(path) {
     return path.replace(/\\/g, "/");
   }
-  function readExtensionFiles(extensionRoots) {
-    const IO = getSystemIO2();
-    const byName = /* @__PURE__ */ new Map();
-    for (const extensionsRoot of extensionRoots) {
-      if (!IO.Directory.Exists(extensionsRoot)) {
-        continue;
-      }
-      const files = IO.Directory.GetFiles(extensionsRoot, "*.js", IO.SearchOption.AllDirectories);
-      for (let i = 0; i < files.Length; i++) {
-        const filePath = normalizePath2(String(files.get_Item(i)));
-        const fileName = String(CS.System.IO.Path.GetFileNameWithoutExtension(filePath) ?? filePath).toLowerCase();
-        byName.delete(fileName);
-        byName.set(fileName, filePath);
-      }
+  function compileExtensionModule(code, sourceUrl) {
+    const transformed = code.includes("export default") ? code.replace(/export\s+default\s+/, "module.exports = ") : code;
+    const evaluator = new Function(
+      "module",
+      "exports",
+      `"use strict";
+${transformed}
+//# sourceURL=${sourceUrl}
+return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
+    );
+    const module = { exports: {} };
+    const exports = module.exports;
+    const factory = evaluator(module, exports);
+    if (typeof factory !== "function") {
+      throw new Error("Extension must export a default function (or assign module.exports = function(api) { ... }).");
     }
-    return Array.from(byName.values());
+    return factory;
   }
   function loadProjectExtensions(context) {
     resetExtensionRegistry();
@@ -14514,34 +17487,18 @@ ${rootObjectLines}
         context.log(`[extension] search path not found: ${root}`);
       }
     }
-    const files = readExtensionFiles(extensionRoots);
+    const files = discoverRuntimeScriptExtensions(extensionRoots);
     const loaded = [];
     const errors = [];
     for (const filePath of files) {
       try {
         const code = String(IO.File.ReadAllText(filePath) ?? "");
-        const api = createExtensionApi(context);
-        const sourceUrl = normalizePath2(filePath);
-        const factory = new Function(
-          "pieExtension",
-          `"use strict";
-${code}
-//# sourceURL=${sourceUrl}`
-        );
-        let activated = false;
-        const pieExtension = (activate) => {
-          if (typeof activate !== "function") {
-            throw new Error("Extension must call pieExtension((api) => { ... })");
-          }
-          activated = true;
-          const result = activate(api);
-          if (result && typeof result.then === "function") {
-            throw new Error("Async extension activation is not supported in the initial loader.");
-          }
-        };
-        factory(pieExtension);
-        if (!activated) {
-          throw new Error("Extension did not call pieExtension((api) => { ... })");
+        const sourceUrl = normalizePath3(filePath);
+        const api = createExtensionApi(context, sourceUrl);
+        const factory = compileExtensionModule(code, sourceUrl);
+        const result = factory(api);
+        if (result && typeof result.then === "function") {
+          throw new Error("Async extension activation is not supported in the initial loader.");
         }
         registerLoadedExtension(sourceUrl);
         loaded.push(sourceUrl);
@@ -14557,78 +17514,32 @@ ${code}
 
   // src/tools/read-skill.ts
   function createReadSkillTool(projectRoot2) {
-    return {
-      name: "read_skill",
-      label: "read_skill",
-      description: "Load the full contents of a builtin or project skill by name.",
-      parameters: Type.Object({
-        name: Type.String({ description: "Exact skill name from the available_skills list." })
-      }),
-      execute: async (_toolCallId, params) => {
-        const skill = readSkillContent(projectRoot2, params.name);
-        if (!skill?.content) {
-          return {
-            content: [{ type: "text", text: `Skill not found: ${params.name}` }],
-            details: { found: false, name: params.name },
-            isError: true
-          };
-        }
-        return {
-          content: [{
-            type: "text",
-            text: `# ${skill.name}
-source: ${skill.source}
-
-${skill.content}`
-          }],
-          details: { found: true, name: skill.name, source: skill.source }
-        };
-      }
-    };
+    const loader = createUnitySkillLoader(projectRoot2);
+    const capability = createReadSkillCapability({
+      skillLoader: loader
+    });
+    return capability.tool;
   }
 
   // src/index.ts
   var bridge = globalThis.pieBridge;
   if (!bridge) throw new Error("[pie] globalThis.pieBridge not found \u2014 was PieBridge.cs initialized?");
+  bridge.devRpc = {
+    call(method, args = {}) {
+      const raw = bridge.callHost?.("pie.dev_rpc", {
+        method,
+        argsJson: JSON.stringify(args ?? {})
+      });
+      const response = typeof raw === "string" ? JSON.parse(raw || "null") : raw;
+      if (!response?.ok) {
+        throw new Error(String(response?.error || `pie.dev_rpc failed: ${method}`));
+      }
+      return response.resultJson ? JSON.parse(response.resultJson) : null;
+    }
+  };
   var projectRoot = bridge.getProjectRoot();
   var isEditor = bridge.isEditor === true;
   var persistentDataPath = typeof bridge.getPersistentDataPath === "function" ? String(bridge.getPersistentDataPath() || "").replace(/\\/g, "/") : "";
-  function parseJsonStringArray(raw) {
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(String(raw));
-      return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
-    } catch {
-      return [];
-    }
-  }
-  function uniquePaths(paths) {
-    const seen = /* @__PURE__ */ new Set();
-    const results = [];
-    for (const value of paths) {
-      if (!value || typeof value !== "string") continue;
-      const normalized = String(value).replace(/\\/g, "/");
-      if (seen.has(normalized)) continue;
-      seen.add(normalized);
-      results.push(normalized);
-    }
-    return results;
-  }
-  function buildFileToolPathOptions() {
-    const runtimeStateRoot = typeof bridge.getRuntimeStateRoot === "function" ? String(bridge.getRuntimeStateRoot() || "") : "";
-    const sessionsDirectory = typeof bridge.getSessionsDirectory === "function" ? String(bridge.getSessionsDirectory() || "") : "";
-    const extensionPaths = typeof bridge.getExtensionSearchPathsJson === "function" ? parseJsonStringArray(String(bridge.getExtensionSearchPathsJson() || "[]")) : [];
-    const skillPaths = typeof bridge.getSkillSearchPathsJson === "function" ? parseJsonStringArray(String(bridge.getSkillSearchPathsJson() || "[]")) : [];
-    const editorOnlyPaths = isEditor ? [projectRoot, ...extensionPaths, ...skillPaths] : [];
-    return {
-      allowlistedDirs: uniquePaths([
-        persistentDataPath,
-        runtimeStateRoot,
-        sessionsDirectory,
-        ...editorOnlyPaths
-      ])
-    };
-  }
   var httpClient = new UnityHttpClient();
   setHttpClient(httpClient);
   var PROVIDER_PRESETS = {
@@ -14657,9 +17568,13 @@ ${skill.content}`
     return { baseUrl: `https://api.${provider}.com/v1`, api: "openai-completions" };
   }
   function buildSystemPrompt(root, editorMode) {
-    const skillsSection = formatSkillsForPrompt(getAvailableSkills(root));
+    const capabilityPromptAdditions = getSharedCapabilityPromptAdditionsForToolNames(
+      createBuiltinTools().map((tool) => tool.name)
+    );
+    const skillsSection = formatSkillsForPrompt2(getAvailableSkills(root));
     const projectMemory = getProjectMemoryExcerpt(root);
     const extensionSection = getSystemPromptPatches();
+    const fileToolPromptLines = buildFileToolPromptLines();
     const memorySection = projectMemory ? `
 
 [Project Memory]
@@ -14676,10 +17591,12 @@ ${extensionSection.join("\n\n---\n\n")}
         `The Unity project is located at: ${root}`,
         `Default filesystem root is Application.persistentDataPath: ${persistentDataPath || "(unavailable)"}`,
         "You can work with files using these structured tools: read_file, write_file, edit_file, list_directory, search_file_content, search_files.",
-        "In Editor, both Application.persistentDataPath and project paths such as Assets/... are accessible.",
+        "When the user explicitly names one of these tools, call that exact tool instead of answering from memory, inference, or prior context.",
+        ...fileToolPromptLines,
         "You can execute JavaScript in Unity via the eval_js tool and the global CS object.",
         "Prefer making small, targeted edits. Always read a file before writing it.",
         "Be concise and helpful.",
+        ...capabilityPromptAdditions,
         skillsSection,
         memorySection,
         extensionsPromptSection
@@ -14689,10 +17606,12 @@ ${extensionSection.join("\n\n---\n\n")}
       "You are Pie, an AI agent running inside a Unity runtime application.",
       `Your primary working directory is Application.persistentDataPath: ${persistentDataPath || root}`,
       "You can work with files using these structured tools: read_file, write_file, edit_file, list_directory, search_file_content, search_files.",
-      "At runtime, treat Application.persistentDataPath as the default filesystem root. Do not assume Assets/... paths are accessible.",
+      "When the user explicitly names one of these tools, call that exact tool instead of answering from memory, inference, or prior context.",
+      ...fileToolPromptLines,
       "You can execute JavaScript in Unity via the eval_js tool and the global CS object.",
       "You are intended for runtime automation, NPC behaviors, and voice-to-action control.",
       "Be concise and helpful.",
+      ...capabilityPromptAdditions,
       skillsSection,
       memorySection,
       extensionsPromptSection
@@ -14734,20 +17653,20 @@ ${extensionSection.join("\n\n---\n\n")}
     todoState: []
   });
   var todoTool = createManageTodoListTool();
+  var askUserCapability = createAskUserCapability();
   var fileToolPathOptions = buildFileToolPathOptions();
-  var fileToolRoot = persistentDataPath || projectRoot;
+  var activeFileToolRoots = getActiveFileToolRootsConfig();
+  var fileToolRoot = activeFileToolRoots.roots.find((root) => root.name === activeFileToolRoots.defaultRoot)?.path || persistentDataPath || projectRoot;
   var builtinFileTools = [
     aliasTool(
       createReadTool(fileToolRoot, fileToolPathOptions),
       "read_file",
-      "read_file",
-      "Read a file by relative path. Default root is Application.persistentDataPath. In Editor, project paths such as Assets/... are also allowed."
+      "read_file"
     ),
     aliasTool(
       createWriteTool(fileToolRoot, fileToolPathOptions),
       "write_file",
-      "write_file",
-      "Write a file by relative path. Default root is Application.persistentDataPath. In Editor, project paths are also allowed."
+      "write_file"
     ),
     aliasTool(
       createEditTool(fileToolRoot, fileToolPathOptions),
@@ -14758,26 +17677,26 @@ ${extensionSection.join("\n\n---\n\n")}
     aliasTool(
       createLsTool(fileToolRoot, fileToolPathOptions),
       "list_directory",
-      "list_directory",
-      "List a directory by relative path. Default root is Application.persistentDataPath. In Editor, project paths are also allowed."
-    ),
-    aliasTool(
-      createNativeGrepTool(fileToolRoot, fileToolPathOptions),
-      "search_file_content",
-      "search_file_content",
-      "Search inside files for text or regex. Best practice: pattern='MonoBehaviour', glob='*.cs', literal=true."
-    ),
-    aliasTool(
-      createNativeFindTool(fileToolRoot, fileToolPathOptions),
-      "search_files",
-      "search_files",
-      "Search for files by filename fragment or glob pattern. Best practice: use a simple filename like 'DemoScript' or 'DemoScript.cs'. Do not pass a shell command."
+      "list_directory"
     )
   ];
+  var unityHostCapabilities = createUnityHostCapabilities(projectRoot, isEditor, {
+    filesystemSearchRoot: fileToolRoot,
+    filesystemPathOptions: fileToolPathOptions
+  });
+  var unityFilesystemSearchCapability = unityHostCapabilities.capabilities.find((capability) => capability.id === "filesystem-search-executor");
+  var unitySearchFileContentTool = unityFilesystemSearchCapability?.tools.find((tool) => tool.name === "grep");
+  var unitySearchFilesTool = unityFilesystemSearchCapability?.tools.find((tool) => tool.name === "find");
   function createBuiltinTools() {
+    const unityNonSearchHostTools = unityHostCapabilities.tools.filter(
+      (tool) => tool.name !== "find" && tool.name !== "grep"
+    );
     return [
       ...builtinFileTools,
-      createEvalJsTool(),
+      ...unitySearchFileContentTool ? [aliasTool(unitySearchFileContentTool, "search_file_content", "search_file_content")] : [],
+      ...unitySearchFilesTool ? [aliasTool(unitySearchFilesTool, "search_files", "search_files")] : [],
+      ...unityNonSearchHostTools,
+      ...askUserCapability.tools,
       todoTool.tool,
       createReadSkillTool(projectRoot)
     ];
@@ -14806,6 +17725,35 @@ ${extensionSection.join("\n\n---\n\n")}
     sessionId: _currentSession.id,
     getApiKey: () => _apiKey || void 0
   });
+  registerInteractionHandler(async (request) => {
+    if (isEditor && bridge.devRpc?.call) {
+      bridge.devRpc.call("interaction.begin", request);
+      while (true) {
+        const state = bridge.devRpc.call("interaction.get_state", { id: request.id });
+        if (state?.completed) {
+          const response2 = state.responseJson ? JSON.parse(state.responseJson) : null;
+          bridge.devRpc.call("interaction.consume_completed", { id: request.id });
+          if (response2?.unavailable) {
+            throw new InteractionUnavailableError(
+              String(response2.message || `Host does not support interaction request: ${request.type}`),
+              request
+            );
+          }
+          return response2;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
+    const raw = bridge.callHost?.("pie.interaction", request);
+    const response = typeof raw === "string" ? JSON.parse(raw || "null") : raw;
+    if (response?.unavailable) {
+      throw new InteractionUnavailableError(
+        String(response.message || `Host does not support interaction request: ${request.type}`),
+        request
+      );
+    }
+    return response;
+  });
   function syncSessionInfo() {
     agent.sessionId = _currentSession.id;
   }
@@ -14823,7 +17771,62 @@ ${extensionSection.join("\n\n---\n\n")}
     rebuildAgentSurface();
     return result;
   }
-  function persistCurrentSession() {
+  async function runUnitySelfCheck() {
+    const lines = [];
+    lines.push("Pie Unity self-check");
+    lines.push(`Project root: ${projectRoot}`);
+    lines.push(`Mode: ${isEditor ? "Editor" : "Runtime"}`);
+    lines.push(`Model: ${_provider}/${_modelId}`);
+    const probeMessages = agent.state.messages.length > 0 ? agent.state.messages.slice() : [
+      {
+        role: "user",
+        content: [{ type: "text", text: "self-check probe" }]
+      }
+    ];
+    const probe = createSessionRecord({
+      sessionId: `probe_${Date.now().toString(36)}`,
+      provider: _provider,
+      modelId: _modelId,
+      messages: probeMessages,
+      todoState: todoTool.getState()
+    });
+    const saved = await saveSession(projectRoot, probe);
+    const loaded = await loadSession(projectRoot, saved.id);
+    const sessionOk = !!loaded && loaded.id === saved.id && loaded.provider === saved.provider && loaded.modelId === saved.modelId && (loaded.messages?.length || 0) === saved.messages.length && (loaded.todoState?.length || 0) === saved.todoState.length;
+    lines.push(`Session store: ${sessionOk ? "OK" : "FAIL"}`);
+    const skills = getAvailableSkills(projectRoot);
+    lines.push(`Skills: ${skills.length}`);
+    if (skills.length > 0) {
+      lines.push(`- First skill: ${skills[0].name}`);
+    }
+    const extensionResult = reloadProjectExtensions();
+    const loadedExtensions = getLoadedExtensions();
+    lines.push(`Extensions: ${loadedExtensions.length} loaded`);
+    if (extensionResult.errors.length > 0) {
+      lines.push(`- Extension errors: ${extensionResult.errors.length}`);
+      for (const error of extensionResult.errors.slice(0, 3)) {
+        lines.push(`  ${error}`);
+      }
+    }
+    const activeTools = agent.state.tools.map((tool) => tool.name);
+    const requiredTools = [
+      "ask_user_multi",
+      "manage_todo_list",
+      "read_skill",
+      "read_file",
+      "write_file",
+      "edit_file",
+      "list_directory",
+      "search_file_content",
+      "search_files"
+    ];
+    const missingTools = requiredTools.filter((name) => !activeTools.includes(name));
+    lines.push(`Shared capability wiring: ${missingTools.length === 0 ? "OK" : `MISSING ${missingTools.join(", ")}`}`);
+    const memory = readProjectMemory(projectRoot);
+    lines.push(`Project memory: ${memory ? "present" : "missing"}`);
+    return lines.join("\n");
+  }
+  async function persistCurrentSession() {
     const nextRecord = {
       ..._currentSession,
       provider: _provider,
@@ -14832,7 +17835,7 @@ ${extensionSection.join("\n\n---\n\n")}
       todoState: todoTool.getState()
     };
     if (isSessionEmpty(nextRecord)) {
-      deleteSession(projectRoot, nextRecord.id);
+      await deleteSession(projectRoot, nextRecord.id);
       _currentSession = {
         ...nextRecord,
         title: "New Session",
@@ -14841,7 +17844,7 @@ ${extensionSection.join("\n\n---\n\n")}
       syncSessionInfo();
       return;
     }
-    _currentSession = saveSession(projectRoot, nextRecord);
+    _currentSession = await saveSession(projectRoot, nextRecord);
     syncSessionInfo();
   }
   function cancelActivePromptForSessionSwitch() {
@@ -14876,7 +17879,7 @@ ${extensionSection.join("\n\n---\n\n")}
     syncSessionInfo();
     emitSessionSync();
   }
-  function forkFromRecord(record) {
+  async function forkFromRecord(record) {
     const forked = createSessionRecord({
       parentSessionId: record.id,
       provider: record.provider || _provider,
@@ -14885,7 +17888,7 @@ ${extensionSection.join("\n\n---\n\n")}
       todoState: (record.todoState || []).slice()
     });
     restoreSessionRecord(forked);
-    persistCurrentSession();
+    await persistCurrentSession();
   }
   function emitLocalAssistantMessage(text) {
     bridge.sendToUnity("message_update", { type: "text_full", text });
@@ -14968,7 +17971,8 @@ ${extensionSection.join("\n\n---\n\n")}
       id: _currentSession.id,
       title: _currentSession.title,
       messageCount: messages.length,
-      messages
+      messages,
+      todoState: todoTool.getState()
     });
   }
   function emitSkillsList() {
@@ -14980,12 +17984,17 @@ ${extensionSection.join("\n\n---\n\n")}
     }));
     bridge.sendToUnity("skills_list", { skills });
   }
-  function applyModelSelection(provider, modelId) {
+  function persistCurrentSessionSafely() {
+    persistCurrentSession().catch((err) => {
+      bridge.log("error", `[pie/index] Failed to persist session: ${err?.message || err}`);
+    });
+  }
+  async function applyModelSelection(provider, modelId) {
     _provider = provider;
     _modelId = modelId;
     agent.setModel(buildModel(_provider, _modelId, _baseUrl));
     rebuildAgentSurface();
-    persistCurrentSession();
+    await persistCurrentSession();
   }
   function extractToolText(result) {
     if (!result) return "";
@@ -15028,13 +18037,30 @@ ${extensionSection.join("\n\n---\n\n")}
       return null;
     }
     try {
-      const registry = JSON.parse(String(CS.System.IO.File.ReadAllText(registryPath) || "{}"));
-      const entries = Object.values(registry || {});
+      const registry2 = JSON.parse(String(CS.System.IO.File.ReadAllText(registryPath) || "{}"));
+      const entries = Object.values(registry2 || {});
       const matched = entries.find((entry) => String(entry?.id || "") === trimmed);
       if (!matched) {
         return null;
       }
-      const availableSessions = listSessions(projectRoot).slice(0, 8).map((session) => `- ${session.id} | ${session.title} | ${session.updatedAt}`);
+      const sessionsDir = bridge.getSessionsDirectory?.();
+      const availableSessions = [];
+      if (typeof sessionsDir === "string" && sessionsDir.length > 0 && CS.System.IO.Directory.Exists(sessionsDir)) {
+        const files = CS.System.IO.Directory.GetFiles(sessionsDir, "*.json");
+        for (let index = 0; index < Math.min(files.Length, 8); index += 1) {
+          try {
+            const parsed = JSON.parse(String(CS.System.IO.File.ReadAllText(files[index]) || "{}"));
+            const metadata = parsed?.metadata || parsed;
+            const id = String(metadata?.id || "").trim();
+            if (!id) continue;
+            const title = String(metadata?.name || metadata?.title || "Untitled Session");
+            const updatedAtRaw = metadata?.updatedAt ?? "";
+            const updatedAt = typeof updatedAtRaw === "number" ? new Date(updatedAtRaw).toISOString() : String(updatedAtRaw || "");
+            availableSessions.push(`- ${id} | ${title} | ${updatedAt}`);
+          } catch {
+          }
+        }
+      }
       const availableText = availableSessions.length > 0 ? `
 
 Available Pie sessions:
@@ -15049,12 +18075,12 @@ ${availableSessions.join("\n")}` : "\n\nNo Pie chat sessions have been saved yet
       return null;
     }
   }
-  function handleLocalCommand(content) {
+  async function handleLocalCommand(content) {
     const trimmed = content.trim();
     if (!trimmed.startsWith("/")) return false;
     const [command, ...rest] = trimmed.split(/\s+/);
     if (command === "/new") {
-      persistCurrentSession();
+      await persistCurrentSession();
       startFreshSession();
       emitLocalAssistantMessage(`Started new session: ${_currentSession.id}`);
       return true;
@@ -15062,12 +18088,12 @@ ${availableSessions.join("\n")}` : "\n\nNo Pie chat sessions have been saved yet
     if (command === "/resume") {
       const sessionId = rest[0];
       if (!sessionId) {
-        const sessions = listSessions(projectRoot);
+        const sessions = await listSessions(projectRoot);
         const text = sessions.length === 0 ? "No saved sessions." : sessions.map((session) => `${session.id} | ${session.title} | ${session.modelId} | ${session.updatedAt}`).join("\n");
         emitLocalAssistantMessage(text);
         return true;
       }
-      const loaded = loadSession(projectRoot, sessionId);
+      const loaded = await loadSession(projectRoot, sessionId);
       if (!loaded) {
         const explanation = tryExplainExternalSessionId(sessionId);
         emitLocalAssistantMessage(explanation || `Session not found: ${sessionId}`);
@@ -15080,19 +18106,25 @@ Messages: ${loaded.messageCount}`);
       return true;
     }
     if (command === "/tree") {
-      emitLocalAssistantMessage(formatSessionTree(projectRoot));
+      emitLocalAssistantMessage(await formatSessionTree(projectRoot));
       return true;
     }
     if (command === "/session-check") {
+      const probeMessages = agent.state.messages.length > 0 ? agent.state.messages.slice() : [
+        {
+          role: "user",
+          content: [{ type: "text", text: "session-check probe" }]
+        }
+      ];
       const probe = createSessionRecord({
         sessionId: `probe_${Date.now().toString(36)}`,
         provider: _provider,
         modelId: _modelId,
-        messages: agent.state.messages.slice(),
+        messages: probeMessages,
         todoState: todoTool.getState()
       });
-      const saved = saveSession(projectRoot, probe);
-      const loaded = loadSession(projectRoot, saved.id);
+      const saved = await saveSession(projectRoot, probe);
+      const loaded = await loadSession(projectRoot, saved.id);
       const ok = !!loaded && loaded.id === saved.id && loaded.provider === saved.provider && loaded.modelId === saved.modelId && (loaded.messages?.length || 0) === saved.messages.length && (loaded.todoState?.length || 0) === saved.todoState.length;
       emitLocalAssistantMessage(
         ok ? `Session self-check passed.
@@ -15104,22 +18136,26 @@ Loaded: ${loaded ? loaded.id : "(missing)"}`
       );
       return true;
     }
+    if (command === "/self-check") {
+      emitLocalAssistantMessage(await runUnitySelfCheck());
+      return true;
+    }
     if (command === "/fork") {
       const sessionId = rest[0];
       if (sessionId) {
-        const source2 = loadSession(projectRoot, sessionId);
+        const source2 = await loadSession(projectRoot, sessionId);
         if (!source2) {
           const explanation = tryExplainExternalSessionId(sessionId);
           emitLocalAssistantMessage(explanation || `Session not found: ${sessionId}`);
           return true;
         }
-        forkFromRecord(source2);
+        await forkFromRecord(source2);
         emitLocalAssistantMessage(`Forked new session ${_currentSession.id} from ${source2.id}`);
         return true;
       }
-      persistCurrentSession();
-      const source = loadSession(projectRoot, _currentSession.id) || _currentSession;
-      forkFromRecord(source);
+      await persistCurrentSession();
+      const source = await loadSession(projectRoot, _currentSession.id) || _currentSession;
+      await forkFromRecord(source);
       emitLocalAssistantMessage(`Forked new session ${_currentSession.id} from ${source.id}`);
       return true;
     }
@@ -15147,13 +18183,13 @@ ${presets}`);
           emitLocalAssistantMessage(`Unknown model preset: ${rest[0]}`);
           return true;
         }
-        applyModelSelection(preset.provider, preset.modelId);
+        await applyModelSelection(preset.provider, preset.modelId);
         emitLocalAssistantMessage(`Switched model to ${preset.provider}/${preset.modelId}`);
         return true;
       }
       const provider = rest[0];
       const modelId = rest.slice(1).join(" ");
-      applyModelSelection(provider, modelId);
+      await applyModelSelection(provider, modelId);
       emitLocalAssistantMessage(`Switched model to ${provider}/${modelId}`);
       return true;
     }
@@ -15305,21 +18341,6 @@ ${initialMemory}`);
             });
           }
           break;
-        case "turn_end":
-          persistCurrentSession();
-          bridge.sendToUnity(
-            "turn_end",
-            { role: event.message.role, stopReason: event.message?.stopReason ?? "stop" }
-          );
-          bridge.sendToUnity("state_event", {
-            name: "turn_end",
-            detail: `stopReason=${event.message?.stopReason ?? "stop"}`
-          });
-          if (event.message?.stopReason === "error" || event.message?.stopReason === "aborted") {
-            const errMsg = event.message?.errorMessage ?? "Request failed";
-            bridge.sendToUnity("error", { message: errMsg });
-          }
-          break;
         case "agent_end":
           bridge.sendToUnity("state_event", { name: "agent_end", detail: "agent loop finished" });
           bridge.sendToUnity("agent_end", {});
@@ -15327,6 +18348,50 @@ ${initialMemory}`);
       }
     } catch (err) {
       bridge.log("error", `[pie/index] Event forwarding error: ${err?.message || err}`);
+    }
+  });
+  agent.subscribeSemantic((event) => {
+    try {
+      switch (event.type) {
+        case "status_snapshot_changed":
+          bridge.sendToUnity("status_snapshot", event.snapshot);
+          break;
+        case "turn_continues":
+          persistCurrentSessionSafely();
+          bridge.sendToUnity("state_event", {
+            name: "turn_continues",
+            detail: `stopReason=${event.message?.stopReason ?? "toolUse"}`
+          });
+          break;
+        case "turn_completed":
+          persistCurrentSessionSafely();
+          bridge.sendToUnity("turn_end", {
+            role: event.message.role,
+            stopReason: event.message?.stopReason ?? "stop"
+          });
+          bridge.sendToUnity("state_event", {
+            name: "turn_completed",
+            detail: `stopReason=${event.message?.stopReason ?? "stop"}`
+          });
+          break;
+        case "turn_failed": {
+          const stopReason = event.message?.stopReason ?? "error";
+          const errMsg = event.message?.errorMessage ?? "Request failed";
+          persistCurrentSessionSafely();
+          bridge.sendToUnity("turn_end", {
+            role: event.message.role,
+            stopReason
+          });
+          bridge.sendToUnity("state_event", {
+            name: "turn_failed",
+            detail: `stopReason=${stopReason}`
+          });
+          bridge.sendToUnity("error", { message: errMsg });
+          break;
+        }
+      }
+    } catch (err) {
+      bridge.log("error", `[pie/index] Semantic event forwarding error: ${err?.message || err}`);
     }
   });
   globalThis.pie = {
@@ -15339,7 +18404,7 @@ ${initialMemory}`);
         switch (action) {
           case "send_message": {
             const content = data && typeof data.content === "string" ? data.content : String(data);
-            if (handleLocalCommand(content)) {
+            if (await handleLocalCommand(content)) {
               break;
             }
             agent.prompt(content).catch((err) => {
@@ -15356,11 +18421,11 @@ ${initialMemory}`);
             if (data?.baseUrl !== void 0) _baseUrl = data.baseUrl;
             if (data?.verboseLogs !== void 0) _verboseLogs = data.verboseLogs === true;
             globalThis.__pieVerboseLogs = _verboseLogs;
-            applyModelSelection(_provider, _modelId);
+            await applyModelSelection(_provider, _modelId);
             break;
           }
           case "new_session": {
-            persistCurrentSession();
+            await persistCurrentSession();
             startFreshSession();
             break;
           }

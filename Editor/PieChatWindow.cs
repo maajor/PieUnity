@@ -11,6 +11,9 @@ namespace Pie.Editor
 {
     public class PieChatWindow : EditorWindow
     {
+        private static PieChatWindow _currentWindow;
+        private static readonly Queue<InteractionAutomationResponse> _queuedInteractionResponses = new Queue<InteractionAutomationResponse>();
+
         // ─── State ────────────────────────────────────────────────────────────
         private PieBridge _bridge;
         private string _inputText = "";
@@ -28,6 +31,7 @@ namespace Pie.Editor
         private Vector2 _sessionsScrollPos;
         private readonly List<SkillInfo> _skills = new List<SkillInfo>();
         private readonly List<SessionInfo> _sessions = new List<SessionInfo>();
+        private readonly List<TodoStateItem> _todoItems = new List<TodoStateItem>();
         private string _selectedSkillPath = "";
         private string _selectedSkillName = "";
         private string _skillEditorContent = "";
@@ -36,6 +40,7 @@ namespace Pie.Editor
         private string _activeSessionId = "";
         private string _pendingRecoveryNotice = "";
         private bool _recoveryRestoreScheduled = false;
+        private PendingInteraction _pendingInteraction;
 
         // Settings
         private const string PREF_API_KEY      = "Pie_APIKey";
@@ -64,6 +69,78 @@ namespace Pie.Editor
         private const string SESSION_RECOVERY_BASE_URL = SESSION_RECOVERY_PREFIX + "BaseUrl";
         private const string SESSION_RECOVERY_SAVED_AT = SESSION_RECOVERY_PREFIX + "SavedAtTicksUtc";
 
+        [Serializable]
+        private class DevTextPayload
+        {
+            public string text;
+            public int limit = 20;
+        }
+
+        [Serializable]
+        private class DevChatStatePayload
+        {
+            public bool isOpen;
+            public bool isInitialized;
+            public bool isStreaming;
+            public bool isBusy;
+            public string statusText;
+            public string inputText;
+            public int messageCount;
+            public int todoCount;
+            public string activeSessionId;
+        }
+
+        [Serializable]
+        private class DevChatMessagePayload
+        {
+            public string role;
+            public string title;
+            public string content;
+            public string summary;
+            public bool isRunning;
+            public bool isError;
+        }
+
+        [Serializable]
+        private class DevChatMessagesPayload
+        {
+            public DevChatMessagePayload[] messages;
+        }
+
+        [Serializable]
+        private class InteractionAutomationResponse
+        {
+            public string type;
+            public string selection;
+            public int selectedIndex = -1;
+            public string value;
+            public bool cancel;
+            public bool skip;
+            public bool confirmed;
+        }
+
+        [Serializable]
+        private class InteractionAutomationEnvelope
+        {
+            public InteractionAutomationResponse response;
+        }
+
+        [Serializable]
+        private class InteractionStatePayload
+        {
+            public bool isOpen;
+            public bool completed;
+            public string id;
+            public string type;
+            public string prompt;
+            public string detail;
+            public string[] options;
+            public string value;
+            public string responseJson;
+            public int timeoutMs;
+            public int remainingMs;
+        }
+
         // ─── Menu ─────────────────────────────────────────────────────────────
         [MenuItem("Tools/Pie/Pie Chat #&p")]   // Alt+Shift+P
         public static void ShowWindow()
@@ -73,9 +150,145 @@ namespace Pie.Editor
             window.Show();
         }
 
+        internal static string DevRpcOpen()
+        {
+            ShowWindow();
+            return BuildDevChatStateJson(_currentWindow);
+        }
+
+        internal static string DevRpcGetState()
+        {
+            return BuildDevChatStateJson(_currentWindow);
+        }
+
+        internal static string DevRpcSetInput(string argsJson)
+        {
+            var window = EnsureWindow();
+            var payload = JsonUtility.FromJson<DevTextPayload>(argsJson ?? "{}") ?? new DevTextPayload();
+            window._inputText = payload.text ?? "";
+            window.Repaint();
+            return BuildDevChatStateJson(window);
+        }
+
+        internal static string DevRpcSend(string argsJson)
+        {
+            var window = EnsureWindow();
+            var payload = JsonUtility.FromJson<DevTextPayload>(argsJson ?? "{}") ?? new DevTextPayload();
+            if (!string.IsNullOrEmpty(payload.text))
+                window._inputText = payload.text;
+            window.SendMessage();
+            window.Repaint();
+            return BuildDevChatStateJson(window);
+        }
+
+        internal static string DevRpcGetMessages(string argsJson)
+        {
+            var window = EnsureWindow();
+            var payload = JsonUtility.FromJson<DevTextPayload>(argsJson ?? "{}") ?? new DevTextPayload();
+            return window.GetRecentMessagesJson(Math.Max(1, payload.limit));
+        }
+
+        internal static string DevRpcReconnect()
+        {
+            var window = EnsureWindow();
+            window.ConnectBridge();
+            window.Repaint();
+            return BuildDevChatStateJson(window);
+        }
+
+        internal static string DevRpcBeginInteraction(string argsJson)
+        {
+            var window = EnsureWindow();
+            var request = JsonUtility.FromJson<PieInteractionRequest>(argsJson ?? "{}") ?? new PieInteractionRequest();
+            window.BeginInteraction(request);
+            return window.GetInteractionStateJson();
+        }
+
+        internal static string DevRpcGetInteractionState(string _argsJson)
+        {
+            var window = EnsureWindow();
+            return window.GetInteractionStateJson();
+        }
+
+        internal static string DevRpcRespondInteraction(string argsJson)
+        {
+            var window = EnsureWindow();
+            var response = ParseInteractionAutomationResponse(argsJson);
+            window.ApplyInteractionAutomationResponse(response);
+            return window.GetInteractionStateJson();
+        }
+
+        internal static string DevRpcEnqueueInteractionResponse(string argsJson)
+        {
+            var response = ParseInteractionAutomationResponse(argsJson);
+            _queuedInteractionResponses.Enqueue(response);
+            if (_currentWindow != null)
+            {
+                _currentWindow.TryApplyQueuedInteractionResponse();
+                _currentWindow.Repaint();
+            }
+            return _currentWindow != null ? _currentWindow.GetInteractionStateJson() : JsonUtility.ToJson(new InteractionStatePayload());
+        }
+
+        private static InteractionAutomationResponse ParseInteractionAutomationResponse(string argsJson)
+        {
+            var raw = string.IsNullOrWhiteSpace(argsJson) ? "{}" : argsJson;
+            var envelope = JsonUtility.FromJson<InteractionAutomationEnvelope>(raw);
+            if (envelope?.response != null)
+                return envelope.response;
+            return JsonUtility.FromJson<InteractionAutomationResponse>(raw) ?? new InteractionAutomationResponse();
+        }
+
+        internal static string DevRpcClearInteractionResponses()
+        {
+            _queuedInteractionResponses.Clear();
+            if (_currentWindow != null)
+            {
+                return _currentWindow.GetInteractionStateJson();
+            }
+            return JsonUtility.ToJson(new InteractionStatePayload());
+        }
+
+        internal static string DevRpcConsumeCompletedInteraction(string _argsJson)
+        {
+            if (_currentWindow != null && _currentWindow._pendingInteraction != null && _currentWindow._pendingInteraction.completed)
+            {
+                _currentWindow.ClearInteraction();
+                return _currentWindow.GetInteractionStateJson();
+            }
+            return _currentWindow != null ? _currentWindow.GetInteractionStateJson() : JsonUtility.ToJson(new InteractionStatePayload());
+        }
+
+        private static PieChatWindow EnsureWindow()
+        {
+            if (_currentWindow != null)
+                return _currentWindow;
+            ShowWindow();
+            return _currentWindow ?? GetWindow<PieChatWindow>("Pie");
+        }
+
+        internal static void EnsureDevRpcReady()
+        {
+            PieDevRpcServer.Start();
+            PieDevRpc.Register("pie_chat.open", _ => DevRpcOpen());
+            PieDevRpc.Register("pie_chat.get_state", _ => DevRpcGetState());
+            PieDevRpc.Register("pie_chat.set_input", argsJson => DevRpcSetInput(argsJson));
+            PieDevRpc.Register("pie_chat.send", argsJson => DevRpcSend(argsJson));
+            PieDevRpc.Register("pie_chat.get_messages", argsJson => DevRpcGetMessages(argsJson));
+            PieDevRpc.Register("pie_chat.reconnect", _ => DevRpcReconnect());
+            PieDevRpc.Register("interaction.begin", argsJson => DevRpcBeginInteraction(argsJson));
+            PieDevRpc.Register("interaction.get_state", argsJson => DevRpcGetInteractionState(argsJson));
+            PieDevRpc.Register("interaction.respond", argsJson => DevRpcRespondInteraction(argsJson));
+            PieDevRpc.Register("interaction.enqueue_response", argsJson => DevRpcEnqueueInteractionResponse(argsJson));
+            PieDevRpc.Register("interaction.clear_responses", _ => DevRpcClearInteractionResponses());
+            PieDevRpc.Register("interaction.consume_completed", argsJson => DevRpcConsumeCompletedInteraction(argsJson));
+        }
+
         // ─── Lifecycle ────────────────────────────────────────────────────────
         private void OnEnable()
         {
+            _currentWindow = this;
+            EnsureDevRpcReady();
             _apiKey   = EditorPrefs.GetString(PREF_API_KEY, "");
             _provider = EditorPrefs.GetString(PREF_PROVIDER, "openai");
             _model    = EditorPrefs.GetString(PREF_MODEL, "gpt-4.1-mini");
@@ -84,6 +297,7 @@ namespace Pie.Editor
             _verboseLogs = EditorPrefs.GetBool(PREF_VERBOSE_LOGS, false);
             PieDiagnostics.CurrentLevel = _verboseLogs ? PieLogLevel.Verbose : PieLogLevel.Info;
             AssemblyReloadEvents.beforeAssemblyReload += HandleBeforeAssemblyReload;
+            PieHostBridge.Register("pie.interaction", HandleInteractionHostCall);
 
             ConnectBridge();
             ScheduleRecoveryRestore();
@@ -92,12 +306,337 @@ namespace Pie.Editor
         private void OnDisable()
         {
             AssemblyReloadEvents.beforeAssemblyReload -= HandleBeforeAssemblyReload;
+            PieHostBridge.Unregister("pie.interaction");
+            if (_currentWindow == this)
+                _currentWindow = null;
             DisposeBridge();
+        }
+
+        private static string BuildDevChatStateJson(PieChatWindow window)
+        {
+            return JsonUtility.ToJson(new DevChatStatePayload
+            {
+                isOpen = window != null,
+                isInitialized = window?._bridge?.IsInitialized == true,
+                isStreaming = window?._isStreaming == true,
+                isBusy = window?.IsBusy() == true,
+                statusText = window?._statusText ?? "",
+                inputText = window?._inputText ?? "",
+                messageCount = window?._messages.Count ?? 0,
+                todoCount = window?._todoItems.Count ?? 0,
+                activeSessionId = window?._activeSessionId ?? "",
+            });
+        }
+
+        private bool IsBusy()
+        {
+            if (_isStreaming)
+                return true;
+            if (_pendingInteraction != null)
+                return true;
+            for (var i = 0; i < _messages.Count; i++)
+            {
+                if (_messages[i].IsRunning)
+                    return true;
+            }
+            return false;
+        }
+
+        private string GetRecentMessagesJson(int limit)
+        {
+            var count = Math.Min(limit, _messages.Count);
+            var items = new DevChatMessagePayload[count];
+            var start = Math.Max(0, _messages.Count - count);
+            for (var i = 0; i < count; i++)
+            {
+                var msg = _messages[start + i];
+                items[i] = new DevChatMessagePayload
+                {
+                    role = msg.Role ?? "",
+                    title = msg.Title ?? "",
+                    content = msg.Content ?? "",
+                    summary = msg.Summary ?? "",
+                    isRunning = msg.IsRunning,
+                    isError = msg.IsError,
+                };
+            }
+
+            return JsonUtility.ToJson(new DevChatMessagesPayload
+            {
+                messages = items,
+            });
+        }
+
+        private string HandleInteractionHostCall(string argsJson)
+        {
+            var request = JsonUtility.FromJson<PieInteractionRequest>(argsJson ?? "{}") ?? new PieInteractionRequest();
+
+            switch (request.type)
+            {
+                case "notify":
+                    AddSystemMessage(request.message ?? "");
+                    Repaint();
+                    return PieInteractionResponse.ToJson(new PieInteractionResponse
+                    {
+                        type = "notify",
+                        acknowledged = true,
+                    });
+
+                case "confirm":
+                {
+                    var confirmed = EditorUtility.DisplayDialog(
+                        "Pie",
+                        string.IsNullOrWhiteSpace(request.detail) ? request.prompt : $"{request.prompt}\n\n{request.detail}",
+                        "Yes",
+                        "No");
+                    return PieInteractionResponse.ToJson(new PieInteractionResponse
+                    {
+                        type = "confirm",
+                        id = request.id,
+                        confirmed = confirmed,
+                    });
+                }
+
+                case "select_one":
+                {
+                    var selection = PieInteractionDialogWindow.ShowSelectOne(request.prompt, request.options ?? new string[0]);
+                    return PieInteractionResponse.ToJson(new PieInteractionResponse
+                    {
+                        type = "select_one",
+                        id = request.id,
+                        selection = selection,
+                    });
+                }
+
+                case "text_input":
+                {
+                    var value = PieInteractionDialogWindow.ShowTextInput(request.prompt, request.placeholder, false);
+                    return PieInteractionResponse.ToJson(new PieInteractionResponse
+                    {
+                        type = "text_input",
+                        id = request.id,
+                        value = value,
+                    });
+                }
+
+                case "multiline_input":
+                {
+                    var value = PieInteractionDialogWindow.ShowTextInput(request.prompt, request.prefill, true);
+                    return PieInteractionResponse.ToJson(new PieInteractionResponse
+                    {
+                        type = "multiline_input",
+                        id = request.id,
+                        value = value,
+                    });
+                }
+            }
+
+            return PieInteractionResponse.Unavailable(
+                request.type,
+                request.id,
+                $"Editor host does not support interaction request: {request.type}");
+        }
+
+        private void BeginInteraction(PieInteractionRequest request)
+        {
+            _pendingInteraction = new PendingInteraction
+            {
+                request = request ?? new PieInteractionRequest(),
+                openedAt = EditorApplication.timeSinceStartup,
+                value = request?.prefill ?? request?.placeholder ?? "",
+                selectedIndex = -1,
+            };
+            _statusText = $"Waiting for user input: {_pendingInteraction.request.type}";
+            TryApplyQueuedInteractionResponse();
+            Repaint();
+        }
+
+        private string GetInteractionStateJson()
+        {
+            CheckInteractionTimeout();
+            var payload = new InteractionStatePayload();
+            if (_pendingInteraction != null)
+            {
+                payload.isOpen = true;
+                payload.completed = _pendingInteraction.completed;
+                payload.id = _pendingInteraction.request?.id ?? "";
+                payload.type = _pendingInteraction.request?.type ?? "";
+                payload.prompt = _pendingInteraction.request?.prompt ?? "";
+                payload.detail = _pendingInteraction.request?.detail ?? "";
+                payload.options = _pendingInteraction.request?.options ?? new string[0];
+                payload.value = _pendingInteraction.value ?? "";
+                payload.responseJson = _pendingInteraction.responseJson ?? "";
+                payload.timeoutMs = Math.Max(0, _pendingInteraction.request?.timeoutMs ?? 0);
+                if (payload.timeoutMs > 0)
+                {
+                    var elapsedMs = (int)((EditorApplication.timeSinceStartup - _pendingInteraction.openedAt) * 1000.0);
+                    payload.remainingMs = Math.Max(0, payload.timeoutMs - elapsedMs);
+                }
+            }
+            return JsonUtility.ToJson(payload);
+        }
+
+        private void ApplyInteractionAutomationResponse(InteractionAutomationResponse response)
+        {
+            if (_pendingInteraction == null)
+            {
+                _queuedInteractionResponses.Enqueue(response);
+                return;
+            }
+
+            CompleteInteractionFromAutomation(response ?? new InteractionAutomationResponse());
+        }
+
+        private void CompleteInteractionFromAutomation(InteractionAutomationResponse response)
+        {
+            if (_pendingInteraction == null)
+                return;
+
+            if (response.cancel)
+            {
+                CompleteInteraction(BuildCancelledInteractionResponse());
+                return;
+            }
+
+            if (response.skip)
+            {
+                CompleteInteraction(BuildSkippedInteractionResponse(false));
+                return;
+            }
+
+            switch (_pendingInteraction.request.type)
+            {
+                case "select_one":
+                    var selection = response.selection;
+                    if ((selection == null || selection.Length == 0)
+                        && response.selectedIndex >= 0
+                        && _pendingInteraction.request.options != null
+                        && response.selectedIndex < _pendingInteraction.request.options.Length)
+                    {
+                        selection = _pendingInteraction.request.options[response.selectedIndex];
+                    }
+                    CompleteInteraction(new PieInteractionResponse
+                    {
+                        type = "select_one",
+                        id = _pendingInteraction.request.id,
+                        selection = selection,
+                    });
+                    break;
+                case "confirm":
+                    CompleteInteraction(new PieInteractionResponse
+                    {
+                        type = "confirm",
+                        id = _pendingInteraction.request.id,
+                        confirmed = response.confirmed,
+                    });
+                    break;
+                case "text_input":
+                case "multiline_input":
+                    _pendingInteraction.value = response.value ?? "";
+                    CompleteInteraction(new PieInteractionResponse
+                    {
+                        type = _pendingInteraction.request.type,
+                        id = _pendingInteraction.request.id,
+                        value = _pendingInteraction.value,
+                    });
+                    break;
+            }
+        }
+
+        private void TryApplyQueuedInteractionResponse()
+        {
+            if (_pendingInteraction == null || _queuedInteractionResponses.Count == 0)
+                return;
+
+            var response = _queuedInteractionResponses.Peek();
+            var type = _pendingInteraction.request?.type ?? "";
+            if (!string.IsNullOrEmpty(response.type) && !string.Equals(response.type, type, StringComparison.Ordinal))
+                return;
+
+            _queuedInteractionResponses.Dequeue();
+            CompleteInteractionFromAutomation(response);
+        }
+
+        private void CheckInteractionTimeout()
+        {
+            if (_pendingInteraction == null || _pendingInteraction.completed)
+                return;
+
+            var timeoutMs = _pendingInteraction.request?.timeoutMs ?? 0;
+            if (timeoutMs <= 0)
+                return;
+
+            var elapsedMs = (EditorApplication.timeSinceStartup - _pendingInteraction.openedAt) * 1000.0;
+            if (elapsedMs >= timeoutMs)
+            {
+                CompleteInteraction(BuildSkippedInteractionResponse(true));
+            }
+        }
+
+        private void ClearInteraction()
+        {
+            _pendingInteraction = null;
+            if (!_isStreaming)
+                _statusText = "Idle";
+            Repaint();
+        }
+
+        private PieInteractionResponse BuildCancelledInteractionResponse()
+        {
+            var type = _pendingInteraction?.request?.type ?? "notify";
+            var id = _pendingInteraction?.request?.id ?? "";
+            if (type == "confirm")
+            {
+                return new PieInteractionResponse { type = "confirm", id = id, confirmed = false };
+            }
+            return new PieInteractionResponse { type = type, id = id };
+        }
+
+        private PieInteractionResponse BuildSkippedInteractionResponse(bool timedOut)
+        {
+            var type = _pendingInteraction?.request?.type ?? "notify";
+            var id = _pendingInteraction?.request?.id ?? "";
+            if (type == "confirm")
+            {
+                return new PieInteractionResponse
+                {
+                    type = "confirm",
+                    id = id,
+                    confirmed = false,
+                    skipped = true,
+                    timedOut = timedOut,
+                };
+            }
+            return new PieInteractionResponse
+            {
+                type = type,
+                id = id,
+                skipped = true,
+                timedOut = timedOut,
+            };
+        }
+
+        private void CompleteInteraction(PieInteractionResponse response)
+        {
+            if (_pendingInteraction == null)
+                return;
+
+            _pendingInteraction.completed = true;
+            _pendingInteraction.responseJson = PieInteractionResponse.ToJson(response);
+            _statusText = response.timedOut
+                ? "Input timed out; skipped"
+                : response.skipped
+                    ? "Input skipped"
+                    : "Interaction completed";
+            Repaint();
         }
 
         private void OnInspectorUpdate()
         {
+            CheckInteractionTimeout();
             if (_isStreaming) Repaint();
+            if (_pendingInteraction != null && !_pendingInteraction.completed)
+                Repaint();
         }
 
         private void ConnectBridge()
@@ -166,6 +705,7 @@ namespace Pie.Editor
             else
             {
                 DrawMessages();
+                DrawTodoPanel();
                 DrawTokenSummaryBar();
                 DrawInput();
             }
@@ -365,26 +905,8 @@ namespace Pie.Editor
                 _newSkillName = "";
                 _skillEditorContent = CreateSkillTemplate("new-skill");
             }
-            if (GUILayout.Button("From Chat", GUILayout.Width(75)))
-            {
-                _isCreatingSkill = true;
-                _selectedSkillPath = "";
-                _selectedSkillName = "";
-                _newSkillName = SuggestSkillNameFromChat();
-                _skillEditorContent = CreateSkillDraftFromChat();
-            }
-            if (GUILayout.Button("From Memory", GUILayout.Width(90)))
-            {
-                _isCreatingSkill = true;
-                _selectedSkillPath = "";
-                _selectedSkillName = "";
-                _newSkillName = "project-memory-skill";
-                _skillEditorContent = CreateSkillDraftFromMemory();
-            }
             if (GUILayout.Button("Reload", GUILayout.Width(60)))
                 _bridge?.SendToJs("reload_skills", "{}");
-            if (GUILayout.Button("Refresh", GUILayout.Width(60)))
-                _bridge?.SendToJs("list_skills", "{}");
             EditorGUILayout.EndHorizontal();
 
             _skillsScrollPos = EditorGUILayout.BeginScrollView(_skillsScrollPos, GUILayout.Height(120));
@@ -471,6 +993,47 @@ namespace Pie.Editor
             EditorGUILayout.EndScrollView();
         }
 
+        private void DrawTodoPanel()
+        {
+            if (_todoItems.Count == 0)
+                return;
+
+            var completedCount = CountCompletedTodos();
+            var inProgressCount = CountTodosByStatus("in-progress");
+            var pendingCount = _todoItems.Count - completedCount - inProgressCount;
+            var currentTodo = FindFirstTodoByStatus("in-progress") ?? FindFirstTodoByStatus("not-started");
+
+            EditorGUILayout.BeginVertical("box");
+            EditorGUILayout.LabelField($"Todo List ({completedCount}/{_todoItems.Count})", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                $"Tracking progress. Active: {inProgressCount}  Pending: {System.Math.Max(0, pendingCount)}",
+                EditorStyles.miniLabel);
+            if (currentTodo != null)
+            {
+                var currentStatus = string.Equals(currentTodo.status, "in-progress", StringComparison.OrdinalIgnoreCase)
+                    ? "Current"
+                    : "Next";
+                EditorGUILayout.LabelField(
+                    $"{currentStatus}: {currentTodo.id}. {currentTodo.title}",
+                    EditorStyles.miniBoldLabel);
+                if (!string.IsNullOrWhiteSpace(currentTodo.description))
+                    EditorGUILayout.LabelField(currentTodo.description, EditorStyles.wordWrappedMiniLabel);
+            }
+            GUILayout.Space(2f);
+            foreach (var todo in _todoItems)
+            {
+                var status = string.IsNullOrEmpty(todo.status) ? "not-started" : todo.status;
+                var marker = status == "completed" ? "✓" : status == "in-progress" ? "→" : "•";
+                EditorGUILayout.LabelField($"{marker} {todo.id}. {todo.title}", EditorStyles.miniBoldLabel);
+                if (!string.IsNullOrWhiteSpace(todo.description)
+                    && !ReferenceEquals(todo, currentTodo)
+                    && string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase))
+                    EditorGUILayout.LabelField(todo.description, EditorStyles.wordWrappedMiniLabel);
+            }
+            EditorGUILayout.EndVertical();
+            GUILayout.Space(4f);
+        }
+
         private void DrawMessage(ChatMessage msg)
         {
             Color roleColor;
@@ -548,6 +1111,8 @@ namespace Pie.Editor
 
         private void DrawInput()
         {
+            CheckInteractionTimeout();
+
             if (_bridge?.IsInitialized != true)
             {
                 EditorGUILayout.HelpBox(
@@ -556,12 +1121,15 @@ namespace Pie.Editor
             }
 
             DrawInlineStatusBar();
+            DrawPendingInteractionPanel();
 
             EditorGUILayout.BeginHorizontal();
             GUI.SetNextControlName("PieInput");
+            GUI.enabled = _pendingInteraction == null || _pendingInteraction.completed;
             _inputText = EditorGUILayout.TextArea(_inputText, GUILayout.Height(60), GUILayout.ExpandWidth(true));
 
-            var canSend = !_isStreaming
+            var canSend = (_pendingInteraction == null || _pendingInteraction.completed)
+                && !_isStreaming
                 && !string.IsNullOrWhiteSpace(_inputText)
                 && _bridge?.IsInitialized == true;
             var estimatedInputTokens = EstimateTextTokens(_inputText);
@@ -580,6 +1148,7 @@ namespace Pie.Editor
                     AbortCurrentTurn();
             }
             EditorGUILayout.EndVertical();
+            GUI.enabled = true;
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.BeginHorizontal();
@@ -621,6 +1190,158 @@ namespace Pie.Editor
 
             EditorGUILayout.EndHorizontal();
             GUILayout.Space(2f);
+        }
+
+        private void DrawPendingInteractionPanel()
+        {
+            if (_pendingInteraction == null || _pendingInteraction.completed)
+                return;
+
+            var request = _pendingInteraction.request;
+            if (request == null)
+                return;
+
+            EditorGUILayout.BeginVertical("box");
+            EditorGUILayout.LabelField("Waiting for input", EditorStyles.boldLabel);
+            if (!string.IsNullOrWhiteSpace(request.prompt))
+                EditorGUILayout.LabelField(request.prompt, EditorStyles.wordWrappedLabel);
+            if (!string.IsNullOrWhiteSpace(request.detail))
+                EditorGUILayout.LabelField(request.detail, EditorStyles.wordWrappedMiniLabel);
+
+            if (request.timeoutMs > 0)
+            {
+                var elapsedMs = (int)((EditorApplication.timeSinceStartup - _pendingInteraction.openedAt) * 1000.0);
+                var remainingMs = Math.Max(0, request.timeoutMs - elapsedMs);
+                EditorGUILayout.LabelField($"Auto-skip in {Mathf.CeilToInt(remainingMs / 1000f)}s", EditorStyles.miniLabel);
+            }
+
+            switch (request.type)
+            {
+                case "select_one":
+                    DrawInlineSelectOne(request);
+                    break;
+                case "confirm":
+                    DrawInlineConfirm(request);
+                    break;
+                case "text_input":
+                    _pendingInteraction.value = EditorGUILayout.TextField(_pendingInteraction.value ?? "");
+                    break;
+                case "multiline_input":
+                    _pendingInteraction.value = EditorGUILayout.TextArea(_pendingInteraction.value ?? "", GUILayout.MinHeight(100));
+                    break;
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Cancel", GUILayout.Width(70)))
+                    CompleteInteraction(BuildCancelledInteractionResponse());
+                if (GUILayout.Button("Skip", GUILayout.Width(70)))
+                    CompleteInteraction(BuildSkippedInteractionResponse(false));
+
+                GUILayout.FlexibleSpace();
+
+                GUI.enabled = CanSubmitPendingInteraction();
+                if (GUILayout.Button(GetPendingInteractionSubmitLabel(), GUILayout.Width(100)))
+                    SubmitPendingInteraction();
+                GUI.enabled = true;
+            }
+
+            EditorGUILayout.EndVertical();
+            GUILayout.Space(4f);
+        }
+
+        private void DrawInlineSelectOne(PieInteractionRequest request)
+        {
+            var options = request.options ?? Array.Empty<string>();
+            for (var i = 0; i < options.Length; i++)
+            {
+                var isSelected = _pendingInteraction.selectedIndex == i;
+                if (GUILayout.Toggle(isSelected, options[i], "Button"))
+                {
+                    _pendingInteraction.selectedIndex = i;
+                    CompleteInteraction(new PieInteractionResponse
+                    {
+                        type = "select_one",
+                        id = request.id,
+                        selection = options[i],
+                    });
+                    GUIUtility.ExitGUI();
+                    return;
+                }
+            }
+        }
+
+        private void DrawInlineConfirm(PieInteractionRequest request)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Yes"))
+                    CompleteInteraction(new PieInteractionResponse
+                    {
+                        type = "confirm",
+                        id = request.id,
+                        confirmed = true,
+                    });
+                if (GUILayout.Button("No"))
+                    CompleteInteraction(new PieInteractionResponse
+                    {
+                        type = "confirm",
+                        id = request.id,
+                        confirmed = false,
+                    });
+            }
+        }
+
+        private bool CanSubmitPendingInteraction()
+        {
+            if (_pendingInteraction?.request == null)
+                return false;
+
+            switch (_pendingInteraction.request.type)
+            {
+                case "select_one":
+                    return false;
+                case "confirm":
+                    return false;
+                default:
+                    return true;
+            }
+        }
+
+        private string GetPendingInteractionSubmitLabel()
+        {
+            return "Submit";
+        }
+
+        private void SubmitPendingInteraction()
+        {
+            if (_pendingInteraction?.request == null)
+                return;
+
+            switch (_pendingInteraction.request.type)
+            {
+                case "select_one":
+                    if (_pendingInteraction.request.options == null
+                        || _pendingInteraction.selectedIndex < 0
+                        || _pendingInteraction.selectedIndex >= _pendingInteraction.request.options.Length)
+                        return;
+                    CompleteInteraction(new PieInteractionResponse
+                    {
+                        type = "select_one",
+                        id = _pendingInteraction.request.id,
+                        selection = _pendingInteraction.request.options[_pendingInteraction.selectedIndex],
+                    });
+                    break;
+                case "text_input":
+                case "multiline_input":
+                    CompleteInteraction(new PieInteractionResponse
+                    {
+                        type = _pendingInteraction.request.type,
+                        id = _pendingInteraction.request.id,
+                        value = _pendingInteraction.value ?? "",
+                    });
+                    break;
+            }
         }
 
         private void DrawTokenSummaryBar()
@@ -899,11 +1620,9 @@ namespace Pie.Editor
 
         private void HandleToolStart(string json)
         {
-            PieDiagnostics.Verbose($"[PieChatWindow] tool_start raw: {json}");
             var toolName = ExtractJsonString(json, "name") ?? "tool";
             var callId = ExtractJsonString(json, "callId");
             var argsJson = ExtractJsonString(json, "argsJson");
-            PieDiagnostics.Verbose($"[PieChatWindow] tool_start parsed name={toolName} callId={callId} argsJson={argsJson}");
             _statusText = $"Using {toolName}...";
             _messages.Add(new ChatMessage("tool", "running...")
             {
@@ -921,7 +1640,6 @@ namespace Pie.Editor
 
         private void HandleToolEnd(string json)
         {
-            PieDiagnostics.Verbose($"[PieChatWindow] tool_end raw: {json}");
             var toolName = ExtractJsonString(json, "name") ?? "tool";
             var callId = ExtractJsonString(json, "callId");
             var isError = ExtractJsonBool(json, "isError");
@@ -931,7 +1649,6 @@ namespace Pie.Editor
             var resultText = ExtractJsonString(json, "resultText");
             var resultJson = ExtractJsonString(json, "resultJson");
             var detailsJson = ExtractJsonString(json, "detailsJson");
-            PieDiagnostics.Verbose($"[PieChatWindow] tool_end parsed name={toolName} callId={callId} argsJson={argsJson} effectiveArgsJson={effectiveArgsJson}");
             var toolMessage = FindLatestToolMessage(toolName, callId);
             if (toolMessage == null)
             {
@@ -982,6 +1699,8 @@ namespace Pie.Editor
                 toolMessage.Content = BuildToolDetail(toolName, toolMessage.ArgsText, resultText, detailsJson, null);
                 _statusText = $"Completed {toolName}";
             }
+            if (toolName == "manage_todo_list")
+                ApplyTodoStateFromToolDetails(detailsJson);
             ScrollToBottomSoon();
         }
 
@@ -1004,6 +1723,7 @@ namespace Pie.Editor
                 var payload = JsonUtility.FromJson<SessionSyncPayload>(json);
                 _activeSessionId = payload?.id ?? "";
                 _messages.Clear();
+                _todoItems.Clear();
 
                 if (payload?.messages != null)
                 {
@@ -1027,6 +1747,9 @@ namespace Pie.Editor
                     }
                 }
 
+                if (payload?.todoState != null)
+                    _todoItems.AddRange(payload.todoState);
+
                 _isStreaming = false;
                 _statusText = payload == null
                     ? "Session synced"
@@ -1043,6 +1766,58 @@ namespace Pie.Editor
             {
                 PieDiagnostics.Warning($"[PieChatWindow] HandleSessionSync: {ex.Message}");
             }
+        }
+
+        private void ApplyTodoStateFromToolDetails(string detailsJson)
+        {
+            if (string.IsNullOrEmpty(detailsJson))
+                return;
+
+            try
+            {
+                var details = JsonUtility.FromJson<TodoToolDetailsPayload>(detailsJson);
+                _todoItems.Clear();
+                if (details?.todos != null)
+                    _todoItems.AddRange(details.todos);
+            }
+            catch (Exception ex)
+            {
+                PieDiagnostics.Warning($"[PieChatWindow] ApplyTodoStateFromToolDetails: {ex.Message}");
+            }
+        }
+
+        private int CountCompletedTodos()
+        {
+            var completed = 0;
+            foreach (var todo in _todoItems)
+            {
+                if (string.Equals(todo.status, "completed", StringComparison.OrdinalIgnoreCase))
+                    completed++;
+            }
+            return completed;
+        }
+
+        private int CountTodosByStatus(string status)
+        {
+            var count = 0;
+            foreach (var todo in _todoItems)
+            {
+                var normalizedStatus = string.IsNullOrEmpty(todo.status) ? "not-started" : todo.status;
+                if (string.Equals(normalizedStatus, status, StringComparison.OrdinalIgnoreCase))
+                    count++;
+            }
+            return count;
+        }
+
+        private TodoStateItem FindFirstTodoByStatus(string status)
+        {
+            foreach (var todo in _todoItems)
+            {
+                var normalizedStatus = string.IsNullOrEmpty(todo.status) ? "not-started" : todo.status;
+                if (string.Equals(normalizedStatus, status, StringComparison.OrdinalIgnoreCase))
+                    return todo;
+            }
+            return null;
         }
 
         private void HandleError(string json)
@@ -1186,63 +1961,6 @@ namespace Pie.Editor
         private string CreateSkillTemplate(string skillName)
         {
             return $"---\nname: {skillName}\ndescription: Describe what this skill is for.\n---\n\n# {skillName}\n\nDescribe when to use this skill.\n";
-        }
-
-        private string SuggestSkillNameFromChat()
-        {
-            var latestUser = "";
-            for (var i = _messages.Count - 1; i >= 0; i--)
-            {
-                if (_messages[i].Role == "user")
-                {
-                    latestUser = _messages[i].Content;
-                    break;
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(latestUser))
-                return "chat-derived-skill";
-
-            var lower = latestUser.Trim().ToLowerInvariant();
-            if (lower.Length > 24) lower = lower.Substring(0, 24);
-            return SanitizeSkillName(lower.Replace(" ", "-"));
-        }
-
-        private string CreateSkillDraftFromChat()
-        {
-            var latestUser = "";
-            var latestAssistant = "";
-            for (var i = _messages.Count - 1; i >= 0; i--)
-            {
-                if (string.IsNullOrEmpty(latestAssistant) && _messages[i].Role == "assistant")
-                    latestAssistant = _messages[i].Content;
-                if (string.IsNullOrEmpty(latestUser) && _messages[i].Role == "user")
-                    latestUser = _messages[i].Content;
-                if (!string.IsNullOrEmpty(latestUser) && !string.IsNullOrEmpty(latestAssistant))
-                    break;
-            }
-
-            var skillName = SuggestSkillNameFromChat();
-            return $"---\nname: {skillName}\ndescription: Derived from recent chat workflow.\n---\n\n# {skillName}\n\nUse this skill when the task resembles the recent workflow below.\n\n## User Intent\n\n{latestUser}\n\n## Observed Assistant Workflow\n\n{latestAssistant}\n\n## Notes\n\n- Refine this draft into stable instructions.\n- Replace chat-specific details with reusable guidance.\n";
-        }
-
-        private string CreateSkillDraftFromMemory()
-        {
-            try
-            {
-                var projectRoot = System.IO.Directory.GetParent(Application.dataPath).FullName;
-                var agentsPath = Pie.PieProjectPaths.GetProjectMemoryPath(projectRoot);
-                var memory = System.IO.File.Exists(agentsPath)
-                    ? System.IO.File.ReadAllText(agentsPath)
-                    : "No AGENTS.md found yet.";
-                var excerpt = memory.Length > 2000 ? memory.Substring(0, 2000) + "\n..." : memory;
-
-                return $"---\nname: project-memory-skill\ndescription: Draft skill based on current AGENTS.md project memory.\n---\n\n# project-memory-skill\n\nUse this skill when work should follow the project's persistent conventions.\n\n## Memory Excerpt\n\n{excerpt}\n\n## Notes\n\n- Convert this excerpt into concise reusable rules.\n- Keep the final skill narrower than AGENTS.md.\n";
-            }
-            catch (Exception ex)
-            {
-                return $"---\nname: project-memory-skill\ndescription: Draft skill based on current AGENTS.md project memory.\n---\n\n# project-memory-skill\n\nFailed to read AGENTS.md: {ex.Message}\n";
-            }
         }
 
         // ─── Settings push ────────────────────────────────────────────────────
@@ -1887,6 +2605,26 @@ namespace Pie.Editor
             public string title;
             public int messageCount;
             public SessionSyncMessage[] messages;
+            public TodoStateItem[] todoState;
+        }
+
+        [Serializable]
+        private class TodoStateItem
+        {
+            public int id;
+            public string title;
+            public string description;
+            public string status;
+        }
+
+        [Serializable]
+        private class TodoToolDetailsPayload
+        {
+            public string operation;
+            public TodoStateItem[] todos;
+            public TodoStateItem[] completedTodos;
+            public bool autoCleared;
+            public string error;
         }
 
         [Serializable]
@@ -1935,6 +2673,16 @@ namespace Pie.Editor
             public string model;
             public string baseUrl;
             public long savedAtTicksUtc;
+        }
+
+        private class PendingInteraction
+        {
+            public PieInteractionRequest request;
+            public double openedAt;
+            public int selectedIndex;
+            public string value;
+            public bool completed;
+            public string responseJson;
         }
     }
 }
