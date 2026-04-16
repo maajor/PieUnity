@@ -275,7 +275,7 @@ namespace Pie
             if (PieBridge.Instance == null)
                 return "PieBridge instance is not available. Open Tools > Pie > Pie Chat or add a PieRunner, then retry.";
 
-            return "PieBridge exists but is not initialized. Check PuerTS Core/V8 packages, Resources/pie/core.js, and the Unity Editor log.";
+            return "PieBridge exists but is not initialized. Check PuerTS 2.2.2 V8 runtime, Resources/pie/core.js, and the Unity Editor log.";
         }
 
         private static int CountActive(System.Collections.Generic.IEnumerable<int> ids)

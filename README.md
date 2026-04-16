@@ -89,19 +89,34 @@ PieChat reload recovery is intentionally interrupt-and-resume, not transparent n
 
 ## Requirements
 
-`com.pie.agent` depends on the PuerTS Unity v3 runtime packages:
+`com.pie.agent` depends on PuerTS Unity 2.2.2 with the V8 backend:
 
-- Download `PuerTS_Core_3.0.2.tar.gz` and `PuerTS_V8_3.0.2.tar.gz` from the PuerTS `Unity_v3.0.2` release.
-- Extract both archives locally and point Unity Package Manager at the extracted package directories.
-- Do not install or depend on `PuerTS_Agent_3.0.2`, `Puerts.AI`, or `com.tencent.puerts.agent`; pie-unity owns the agent host layer.
-- Do not use remote `https://*.tar.gz` dependencies or git tag/path dependencies for PuerTS in this setup.
+- Install `com.tencent.puerts.core` version `2.2.2`.
+- Use the PuerTS V8 backend/native plugin for your target platform.
+- Do not install or depend on `PuerTS_Agent`, `Puerts.AI`, or `com.tencent.puerts.agent`; pie-unity owns the agent host layer.
+- Do not use remote `https://*.tar.gz` dependencies or git tag/path dependencies for PuerTS in release validation.
 
-Recommended `manifest.json` dependency values after extraction:
+Recommended `manifest.json` dependency shape:
 
-- `file:/absolute/path/to/extracted/PuerTS_Core_3.0.2/core`
-- `file:/absolute/path/to/extracted/PuerTS_V8_3.0.2/v8`
+```json
+{
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": ["com.tencent.puerts.core"]
+    }
+  ],
+  "dependencies": {
+    "com.tencent.puerts.core": "2.2.2"
+  }
+}
+```
 
-If PuerTS Core or V8 is missing, `PieBridge` will not initialize and neither `Pie Chat` nor `PieRunner` will work.
+The exported `com.pie.agent` package manifest also declares `com.tencent.puerts.core`
+`2.2.2` as a Unity Package Manager dependency.
+
+If PuerTS 2.2.2 or its V8 runtime is missing, `PieBridge` will not initialize and neither `Pie Chat` nor `PieRunner` will work.
 
 ## First Run Validation
 
@@ -130,7 +145,7 @@ Install through Unity Package Manager:
 - Git release repository:
   `Add package from git URL...`
 - Current public Git URL:
-  `https://github.com/Cydream-Tech/PieUnity.git#0.1.7`
+  `https://github.com/Cydream-Tech/PieUnity.git`
 
 After installation, you can import the `Extension Demo` sample from the Package Manager Samples section.
 

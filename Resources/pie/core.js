@@ -21722,7 +21722,7 @@ ${rootObjectLines}
       protection: {
         model: "cooperative-yield",
         hardStepTermination,
-        note: "The task is frame-scheduled and guarded by a script-level step deadline on common loop shapes. Native PuerTS termination is disabled by default because it can crash PuerTS 3.0.2 while unwinding terminated execution."
+        note: "The task is frame-scheduled and guarded by a script-level step deadline on common loop shapes. pie-unity uses PuerTS 2.2.2 JsEnv + BackendType.V8 and does not rely on native V8 termination."
       }
     };
   }

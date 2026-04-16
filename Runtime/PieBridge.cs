@@ -1,12 +1,12 @@
 // Runtime/PieBridge.cs
-// Manages the PuerTS V8 ScriptEnv lifecycle and the C#<->JS message channel.
+// Manages the PuerTS V8 JsEnv lifecycle and the C#<->JS message channel.
 //
 // Lifecycle:
-//   1. Initialize() — load core.js, create ScriptEnv (BackendV8), inject pieBridge, execute JS
-//   2. EditorApplication.update drives ScriptEnv.Tick() for Promise resolution
+//   1. Initialize() — load core.js, create JsEnv (BackendType.V8), inject pieBridge, execute JS
+//   2. EditorApplication.update drives JsEnv.Tick() for Promise resolution
 //   3. SendToJs(action, json) — call JS pie.handleCSharpMessage(action, data)
 //   4. ReceiveFromJs(event, json) — called by JS via pieBridge.sendToUnity(...)
-//   5. Dispose() — cleanup ScriptEnv
+//   5. Dispose() — cleanup JsEnv
 
 using System;
 using System.IO;
@@ -21,24 +21,19 @@ namespace Pie
 {
     public class PieBridge : IDisposable
     {
-        private ScriptEnv _scriptEnv;
+        private JsEnv _jsEnv;
         private bool _isInitialized = false;
         private bool _isDisposed = false;
         private string _lastError = null;
-        private string _projectRoot;
-        private PieSettings _settings;
-        private string _coreJsContent;
 
         /// <summary>Fired when JS calls pieBridge.sendToUnity(event, jsonData).</summary>
         public event Action<string, string> OnJsEvent;
 
-        public bool IsInitialized => _isInitialized && !_isDisposed && _scriptEnv != null;
+        public bool IsInitialized => _isInitialized && !_isDisposed && _jsEnv != null;
         public string LastError => _lastError;
-        // PuerTS 3.0.2 exposes BackendV8.TerminateExecution(), but the Unity
-        // Editor smoke test showed a native crash in PapiV8.bundle while
-        // ScriptEnv.Eval formatted the terminated exception. Keep the V8
-        // runtime baseline, but do not expose native termination as the
-        // default safety mechanism until PuerTS can unwind it safely.
+        // PuerTS 2.2.2 uses the stable JsEnv + BackendType.V8 path here.
+        // pie-unity relies on cooperative script step guards instead of native
+        // V8 termination, which is not a product-level safety boundary.
         public bool IsScriptStepTerminationAvailable => false;
 
         // Singleton so JS can call back via CS.Pie.PieBridge.Instance
@@ -62,10 +57,7 @@ namespace Pie
                 if (string.IsNullOrEmpty(jsContent))
                     throw new Exception("Failed to load core.js");
 
-                _projectRoot = projectRoot;
-                _settings = settings;
-                _coreJsContent = jsContent;
-                CreateScriptEnvironment(jsContent, projectRoot, settings);
+                CreateJsEnvironment(jsContent, projectRoot, settings);
 
 #if UNITY_EDITOR
                 EditorApplication.update += Tick;
@@ -83,7 +75,7 @@ namespace Pie
                 LastInitializationError = ex.Message;
                 PieDiagnostics.Error($"PieBridge init failed: {ex.Message}\n{ex.StackTrace}");
 
-                DestroyScriptEnvironment();
+                DestroyJsEnvironment();
                 return false;
             }
         }
@@ -91,7 +83,7 @@ namespace Pie
         /// <summary>Send a message to the JS Agent. action = "send_message", jsonData = "{\"content\":\"...\"}"</summary>
         public bool SendToJs(string action, string jsonData)
         {
-            if (_scriptEnv == null || _isDisposed)
+            if (_jsEnv == null || _isDisposed)
             {
                 PieDiagnostics.Warning("[PieBridge.SendToJs] Not initialized");
                 return false;
@@ -99,7 +91,7 @@ namespace Pie
 
             try
             {
-                _scriptEnv.Eval($"pie.handleCSharpMessage('{action}', {jsonData});");
+                _jsEnv.Eval($"pie.handleCSharpMessage('{action}', {jsonData});");
                 return true;
             }
             catch (Exception ex)
@@ -117,11 +109,11 @@ namespace Pie
 
         public string InvokeUnityScriptHost(string method, string argsJson)
         {
-            if (_scriptEnv == null || _isDisposed)
+            if (_jsEnv == null || _isDisposed)
                 throw new InvalidOperationException("PieBridge is not initialized.");
 
             var script = $"(function(){{var host=globalThis.__pieUnityScriptHost;if(!host||typeof host.invoke!=='function') throw new Error('Unity script host is not ready.'); return host.invoke({JsonString(method ?? "")},{JsonString(argsJson ?? "{}")});}})()";
-            return _scriptEnv.Eval<string>(script);
+            return _jsEnv.Eval<string>(script);
         }
 
         public void Dispose()
@@ -134,12 +126,12 @@ namespace Pie
 #endif
 
             // Domain reload can happen while a streaming request is still in flight.
-            // Cancel all background bridge work before tearing down ScriptEnv so old-domain
+            // Cancel all background bridge work before tearing down JsEnv so old-domain
             // tasks do not block assembly reload.
             PieHttpBridge.CancelAllRequests();
             PieFileBridge.CancelAllRequests();
 
-            DestroyScriptEnvironment();
+            DestroyJsEnvironment();
 
             if (Instance == this) Instance = null;
             PieDiagnostics.Info("[PieBridge] Disposed");
@@ -148,7 +140,7 @@ namespace Pie
         /// <summary>Drive JS microtasks and SSE delivery from a host update loop.</summary>
         public void Tick()
         {
-            if (_isDisposed || _scriptEnv == null) return;
+            if (_isDisposed || _jsEnv == null) return;
 
             try
             {
@@ -157,8 +149,8 @@ namespace Pie
                 PieHttpBridge.PumpActiveRequests();
                 PushSSEData();
                 PushFileData();
-                _scriptEnv.Eval("(function(){var host=globalThis.__pieUnityScriptHost;if(host&&typeof host.tick==='function') host.tick();})()");
-                _scriptEnv.Tick();
+                _jsEnv.Eval("(function(){var host=globalThis.__pieUnityScriptHost;if(host&&typeof host.tick==='function') host.tick();})()");
+                _jsEnv.Tick();
             }
             catch (Exception ex)
             {
@@ -170,32 +162,32 @@ namespace Pie
         // Internal
         // ─────────────────────────────────────────────────────────────────────
 
-        private void CreateScriptEnvironment(string jsContent, string projectRoot, PieSettings settings)
+        private void CreateJsEnvironment(string jsContent, string projectRoot, PieSettings settings)
         {
-            PieDiagnostics.Verbose("Creating ScriptEnv (PuerTS BackendV8)...");
-            _scriptEnv = new ScriptEnv(new BackendV8(new DefaultLoader()), -1);
+            PieDiagnostics.Verbose("Creating JsEnv (PuerTS 2.2.2 BackendType.V8)...");
+            _jsEnv = new JsEnv(new DefaultLoader(), -1, BackendType.V8, IntPtr.Zero, IntPtr.Zero);
 
             PieDiagnostics.Verbose("Injecting pieBridge...");
             InjectPieBridge(projectRoot, settings);
 
             PieDiagnostics.Verbose("Executing core.js...");
-            _scriptEnv.Eval(jsContent);
+            _jsEnv.Eval(jsContent);
 
             if (!VerifyPieObject())
                 throw new Exception("pie.handleCSharpMessage not found after core.js execution");
         }
 
-        private void DestroyScriptEnvironment()
+        private void DestroyJsEnvironment()
         {
             try
             {
-                _scriptEnv?.Dispose();
+                _jsEnv?.Dispose();
             }
             catch (Exception ex)
             {
-                PieDiagnostics.Warning($"[PieBridge] ScriptEnv dispose failed: {ex.Message}");
+                PieDiagnostics.Warning($"[PieBridge] JsEnv dispose failed: {ex.Message}");
             }
-            _scriptEnv = null;
+            _jsEnv = null;
         }
 
         private string LoadCoreJs()
@@ -357,25 +349,25 @@ namespace Pie
     return true;
 }})()";
 
-            var ok = _scriptEnv.Eval<bool>(initCode);
+            var ok = _jsEnv.Eval<bool>(initCode);
             if (!ok) throw new Exception("pieBridge injection returned false");
         }
 
         private bool VerifyPieObject()
         {
-            var pieExists = _scriptEnv.Eval<bool>("typeof globalThis.pie !== 'undefined'");
+            var pieExists = _jsEnv.Eval<bool>("typeof globalThis.pie !== 'undefined'");
             if (!pieExists)
             {
-                var keys = _scriptEnv.Eval<string>("Object.keys(globalThis).slice(0, 30).join(', ')");
+                var keys = _jsEnv.Eval<string>("Object.keys(globalThis).slice(0, 30).join(', ')");
                 PieDiagnostics.Warning($"pie not found. globals: {keys}");
                 return false;
             }
 
-            var handlerExists = _scriptEnv.Eval<bool>(
+            var handlerExists = _jsEnv.Eval<bool>(
                 "typeof globalThis.pie.handleCSharpMessage === 'function'");
             if (!handlerExists)
             {
-                var pieKeys = _scriptEnv.Eval<string>("Object.keys(globalThis.pie).join(', ')");
+                var pieKeys = _jsEnv.Eval<string>("Object.keys(globalThis.pie).join(', ')");
                 PieDiagnostics.Warning($"handleCSharpMessage not found. pie keys: {pieKeys}");
                 return false;
             }
@@ -395,7 +387,7 @@ namespace Pie
                     PieHttpBridge.MarkStatusPushed(reqId);
                     var error = PieHttpBridge.GetError(reqId);
                     var errorArg = error != null ? JsonString(error) : "null";
-                    _scriptEnv.Eval($"globalThis._pieSSEStatus({reqId},{status},{errorArg})");
+                    _jsEnv.Eval($"globalThis._pieSSEStatus({reqId},{status},{errorArg})");
                     return;
                 }
 
@@ -407,11 +399,11 @@ namespace Pie
 
                     if (line == null)
                     {
-                        _scriptEnv.Eval($"globalThis._pieSSEPush({reqId},null)");
+                        _jsEnv.Eval($"globalThis._pieSSEPush({reqId},null)");
                         break;
                     }
 
-                    _scriptEnv.Eval($"globalThis._pieSSEPush({reqId},{JsonString(line)})");
+                    _jsEnv.Eval($"globalThis._pieSSEPush({reqId},{JsonString(line)})");
                     pushed++;
                 }
             }
@@ -429,7 +421,7 @@ namespace Pie
                 var resultJson = PieFileBridge.GetRequestResultJson(reqId);
                 var errorArg = error != null ? JsonString(error) : "null";
                 var resultArg = resultJson != null ? JsonString(resultJson) : "null";
-                _scriptEnv.Eval($"globalThis._pieFileComplete({reqId},{resultArg},{errorArg})");
+                _jsEnv.Eval($"globalThis._pieFileComplete({reqId},{resultArg},{errorArg})");
             }
         }
 
