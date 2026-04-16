@@ -522,7 +522,7 @@ namespace Pie
             request.Append("Accept: text/event-stream\r\n");
             request.Append("Accept-Encoding: identity\r\n");
             request.Append("Connection: close\r\n");
-            request.Append("User-Agent: pie-unity-native-stream/0.1.6\r\n");
+            request.Append("User-Agent: pie-unity-native-stream/").Append(PieUnityCapabilitiesConstants.Version).Append("\r\n");
 
             if (!string.IsNullOrEmpty(bearerToken))
             {
