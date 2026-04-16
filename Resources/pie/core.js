@@ -20852,9 +20852,10 @@ Perform a web search for the query: ${params.input.query}`
       };
     }
     /**
-     * Legacy buffered provider fallback only. Ordinary GET/HEAD fetches, including
-     * shared web_fetch, must use FetchTextAsync through requestViaManagedTextFetch
-     * so they do not depend on UnityWebRequest polling or line-oriented SSE paths.
+     * Buffered fallback for provider compatibility and Unity-managed TLS edge cases.
+     * Ordinary GET/HEAD fetches still prefer FetchTextAsync, but Unity's managed
+     * HttpClient can fail certificate negotiation for public sites that
+     * UnityWebRequest handles correctly.
      */
     requestViaUnityWebRequestBufferedFallback(url, options = {}, mode = "plain") {
       if (typeof CS === "undefined" || !CS?.UnityEngine?.Networking) {
@@ -20937,13 +20938,21 @@ Perform a web search for the query: ${params.input.query}`
         extraHeaders[key] = value;
       }
       const headersJson = Object.keys(extraHeaders).length > 0 ? JSON.stringify(extraHeaders) : null;
-      const raw = await puer.$promise(CS.Pie.PieHttpBridge.FetchTextAsync(
-        method,
-        url,
-        options.body || "",
-        bearer,
-        headersJson
-      ));
+      let raw;
+      try {
+        raw = await puer.$promise(CS.Pie.PieHttpBridge.FetchTextAsync(
+          method,
+          url,
+          options.body || "",
+          bearer,
+          headersJson
+        ));
+      } catch (error) {
+        if (this.shouldFallbackToUnityWebRequestForManagedFetch(error, method)) {
+          return this.requestViaUnityWebRequestBufferedFallback(url, options, "plain");
+        }
+        throw error;
+      }
       const parsed = JSON.parse(String(raw || "{}"));
       const responseText = String(parsed.body || "");
       const status = Number(parsed.status || 0);
@@ -20967,6 +20976,12 @@ Perform a web search for the query: ${params.input.query}`
           }
         }
       };
+    }
+    shouldFallbackToUnityWebRequestForManagedFetch(error, method) {
+      const normalizedMethod = method.toUpperCase();
+      if (normalizedMethod !== "GET" && normalizedMethod !== "HEAD") return false;
+      const message = error instanceof Error ? error.message : String(error);
+      return /SSL connection could not be established|certificate|authentication failed/i.test(message);
     }
   };
   function shouldEndOnOpenAIStreamDone(url, options) {
