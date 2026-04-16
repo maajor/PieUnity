@@ -87,6 +87,22 @@ namespace Pie
             if (string.IsNullOrWhiteSpace(method))
                 return PieDevRpcResponse.Failure(method, "RPC method is required.");
 
+            var toolFound = PieUnityCapabilityRegistry.HasTool(method);
+            if (toolFound)
+            {
+                if (PieUnityCapabilityRegistry.TryInvokeTool(method, argsJson, out var capabilityResultJson, out var capabilityToolError))
+                    return PieDevRpcResponse.Success(method, capabilityResultJson);
+                return PieDevRpcResponse.Failure(method, capabilityToolError);
+            }
+
+            var rpcFound = PieUnityCapabilityRegistry.HasRpc(method);
+            if (rpcFound)
+            {
+                if (PieUnityCapabilityRegistry.TryInvokeRpc(method, argsJson, out var capabilityRpcResultJson, out var capabilityRpcError))
+                    return PieDevRpcResponse.Success(method, capabilityRpcResultJson);
+                return PieDevRpcResponse.Failure(method, capabilityRpcError);
+            }
+
             if (string.Equals(method, "rpc.list", StringComparison.Ordinal))
             {
                 var methods = new List<string>(Methods.Keys);
@@ -98,7 +114,10 @@ namespace Pie
             }
 
             if (!Methods.TryGetValue(method, out var handler))
+            {
+                PieDiagnostics.Warning($"[PieDevRpc] RPC method not found: {method}");
                 return PieDevRpcResponse.Failure(method, $"RPC method not found: {method}");
+            }
 
             try
             {

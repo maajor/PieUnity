@@ -5,6 +5,10 @@ if(typeof fetch==="undefined"){
   globalThis.Request=function Request(input,init){this.url=input;this.method=(init&&init.method)||"GET";};
   globalThis.Headers=function Headers(init){var h={};this.append=function(k,v){h[k.toLowerCase()]=v;};this.get=function(k){return h[k.toLowerCase()]||null;};this.set=function(k,v){h[k.toLowerCase()]=v;};this.has=function(k){return k.toLowerCase() in h;};this.delete=function(k){delete h[k.toLowerCase()];};this.forEach=function(fn){Object.keys(h).forEach(function(k){fn(h[k],k);});};};
 }
+if(typeof URL==="undefined"){
+  globalThis.URL=function URL(input,base){var value=String(input||"");if(base&&!/^https?:\/\//i.test(value)){value=String(base).replace(/\/+$/,"")+"/"+value.replace(/^\/+/, "");}this.href=value;var m=value.match(/^([a-z]+:)\/\/([^\/\?#]*)([^\?#]*)(\?[^#]*)?/i);this.protocol=m?m[1]:"";this.hostname=m?m[2].split("@").pop().split(":")[0]:"";this.pathname=m?m[3]||"/":value;this.search=m&&m[4]?m[4]:"";};
+  globalThis.URL.prototype.toString=function(){return this.href;};
+}
 if(typeof Buffer==="undefined"){
   globalThis.Buffer={
     from:function(str,enc){if(typeof str==="string"){var s=enc==="utf-8"||enc==="utf8"||!enc?str:str;var n=0;for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);if(c<0x80)n++;else if(c<0x800)n+=2;else if(c>=0xD800&&c<=0xDBFF&&i+1<s.length){n+=4;i++;}else n+=3;}return{length:n,toString:function(){return str;}};}return{length:str.length||0,toString:function(){return String(str);}};},
@@ -89,7 +93,7 @@ var _PieAgent = (() => {
   var require_dist = __commonJS({
     "../../node_modules/partial-json/dist/index.js"(exports) {
       "use strict";
-      var __createBinding = exports && exports.__createBinding || (Object.create ? function(o, m, k, k2) {
+      var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
         if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -98,10 +102,10 @@ var _PieAgent = (() => {
           } };
         }
         Object.defineProperty(o, k2, desc);
-      } : function(o, m, k, k2) {
+      }) : (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         o[k2] = m[k];
-      });
+      }));
       var __exportStar = exports && exports.__exportStar || function(m, exports2) {
         for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports2, p)) __createBinding(exports2, m, p);
       };
@@ -548,11 +552,11 @@ var _PieAgent = (() => {
   };
 
   // ../../node_modules/@sinclair/typebox/build/esm/type/symbols/symbols.mjs
-  var TransformKind = Symbol.for("TypeBox.Transform");
-  var ReadonlyKind = Symbol.for("TypeBox.Readonly");
-  var OptionalKind = Symbol.for("TypeBox.Optional");
-  var Hint = Symbol.for("TypeBox.Hint");
-  var Kind = Symbol.for("TypeBox.Kind");
+  var TransformKind = /* @__PURE__ */ Symbol.for("TypeBox.Transform");
+  var ReadonlyKind = /* @__PURE__ */ Symbol.for("TypeBox.Readonly");
+  var OptionalKind = /* @__PURE__ */ Symbol.for("TypeBox.Optional");
+  var Hint = /* @__PURE__ */ Symbol.for("TypeBox.Hint");
+  var Kind = /* @__PURE__ */ Symbol.for("TypeBox.Kind");
 
   // ../../node_modules/@sinclair/typebox/build/esm/type/guard/kind.mjs
   function IsReadonly(value) {
@@ -3058,124 +3062,16 @@ var _PieAgent = (() => {
   }
 
   // ../../packages/ai/src/env-api-keys.ts
-  var PROVIDER_ENV_MAP = {
-    "kimi-cn": "KIMI_API_KEY",
-    "bigmodel": "BIGMODEL_API_KEY",
-    "openai": "OPENAI_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-    "openrouter": "OPENROUTER_API_KEY",
-    google: "GOOGLE_API_KEY",
-    gemini: "GOOGLE_API_KEY",
-    "cy-gpt": "CY_GPT_API_KEY",
-    "cy-gpt2": "CY_GPT2_API_KEY",
-    "kimi-api": "KIMI_API_KEY",
-    "kimi-coding": "KIMI_API_KEY"
-  };
-  function getProviderEnvVar(provider) {
-    return PROVIDER_ENV_MAP[provider] || `${provider.toUpperCase().replace(/-/g, "_")}_API_KEY`;
-  }
-  function getEnvApiKey(provider) {
+  function getEnvApiKey(provider, explicitEnvVar) {
+    void provider;
     const env = typeof process !== "undefined" ? process.env : {};
-    const explicitEnv = getProviderEnvVar(provider);
+    const explicitEnv = explicitEnvVar;
     if (explicitEnv) {
       const value = env[explicitEnv];
       if (value) return value;
     }
     return void 0;
   }
-
-  // ../../packages/ai/src/models.builtins.ts
-  var BUILTIN_MODEL_DEFINITIONS = {
-    "kimi-cn": {
-      "kimi-k2.5": {
-        name: "Kimi K2.5",
-        api: "openai-completions",
-        provider: "kimi-cn",
-        baseUrl: "https://api.moonshot.cn/v1",
-        reasoning: true,
-        input: ["text", "image"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 262144,
-        maxTokens: 8192
-      },
-      "kimi-k2": {
-        name: "Kimi K2",
-        api: "openai-completions",
-        provider: "kimi-cn",
-        baseUrl: "https://api.moonshot.cn/v1",
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 131072,
-        maxTokens: 8192
-      },
-      "moonshot-v1-128k": {
-        name: "Moonshot V1 128K",
-        api: "openai-completions",
-        provider: "kimi-cn",
-        baseUrl: "https://api.moonshot.cn/v1",
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 131072,
-        maxTokens: 8192
-      },
-      "moonshot-v1-32k": {
-        name: "Moonshot V1 32K",
-        api: "openai-completions",
-        provider: "kimi-cn",
-        baseUrl: "https://api.moonshot.cn/v1",
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 32768,
-        maxTokens: 8192
-      }
-    },
-    bigmodel: {
-      "glm-5": {
-        name: "GLM-5",
-        api: "openai-completions",
-        provider: "bigmodel",
-        baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-        reasoning: true,
-        input: ["text"],
-        cost: { input: 1, output: 3.2, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 131072,
-        maxTokens: 8192,
-        compat: {
-          supportsDeveloperRole: false
-        }
-      },
-      "glm-5-flash": {
-        name: "GLM-5 Flash",
-        api: "openai-completions",
-        provider: "bigmodel",
-        baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0.5, output: 1.5, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 131072,
-        maxTokens: 8192,
-        compat: {
-          supportsDeveloperRole: false
-        }
-      },
-      "glm-4-plus": {
-        name: "GLM-4 Plus",
-        api: "openai-completions",
-        provider: "bigmodel",
-        baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-        reasoning: false,
-        input: ["text", "image"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 128e3,
-        maxTokens: 4096
-      }
-    }
-  };
-  var KIMI_MODEL_DEFINITIONS = BUILTIN_MODEL_DEFINITIONS["kimi-cn"];
-  var GLM_MODEL_DEFINITIONS = BUILTIN_MODEL_DEFINITIONS.bigmodel;
 
   // ../../packages/ai/src/models.ts
   function calculateCost(model, usage) {
@@ -3197,10 +3093,12 @@ var _PieAgent = (() => {
     constructor(isComplete, extractResult) {
       this.isComplete = isComplete;
       this.extractResult = extractResult;
-      this.finalResultPromise = new Promise((resolve) => {
-        this.resolveFinalResult = resolve;
+      this.finalResultPromise = new Promise((resolve2) => {
+        this.resolveFinalResult = resolve2;
       });
     }
+    isComplete;
+    extractResult;
     queue = [];
     waiting = [];
     done = false;
@@ -3241,7 +3139,7 @@ var _PieAgent = (() => {
         } else if (this.done) {
           return;
         } else {
-          const result = await new Promise((resolve) => this.waiting.push(resolve));
+          const result = await new Promise((resolve2) => this.waiting.push(resolve2));
           if (result.done) return;
           yield result.value;
         }
@@ -3290,6 +3188,97 @@ var _PieAgent = (() => {
       return "node";
     }
     return "unknown";
+  }
+
+  // ../../packages/platform/src/logger.ts
+  var LEVEL_ORDER = {
+    debug: 10,
+    info: 20,
+    warn: 30,
+    error: 40,
+    fatal: 50
+  };
+  var SinkLogger = class _SinkLogger {
+    constructor(mode, sinks, baseContext = {}, minLevel = "debug") {
+      this.mode = mode;
+      this.sinks = sinks;
+      this.baseContext = baseContext;
+      this.minLevel = minLevel;
+    }
+    mode;
+    sinks;
+    baseContext;
+    minLevel;
+    log(level, message, context = {}) {
+      if (LEVEL_ORDER[level] < LEVEL_ORDER[this.minLevel]) {
+        return;
+      }
+      const entry = {
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        level,
+        message,
+        mode: this.mode,
+        context: { ...this.baseContext, ...context }
+      };
+      for (const sink of this.sinks) {
+        try {
+          sink.log(entry);
+        } catch {
+        }
+      }
+    }
+    debug(message, context) {
+      this.log("debug", message, context);
+    }
+    info(message, context) {
+      this.log("info", message, context);
+    }
+    warn(message, context) {
+      this.log("warn", message, context);
+    }
+    error(message, context) {
+      this.log("error", message, context);
+    }
+    fatal(message, context) {
+      this.log("fatal", message, context);
+    }
+    child(context) {
+      return new _SinkLogger(this.mode, this.sinks, { ...this.baseContext, ...context }, this.minLevel);
+    }
+  };
+  var NullLogger = class _NullLogger {
+    constructor(mode = "test") {
+      this.mode = mode;
+    }
+    mode;
+    log() {
+    }
+    debug() {
+    }
+    info() {
+    }
+    warn() {
+    }
+    error() {
+    }
+    fatal() {
+    }
+    child(context) {
+      return new _NullLogger(this.mode);
+    }
+  };
+  function createLogger(options) {
+    if (!options.sinks || options.sinks.length === 0) {
+      return new NullLogger(options.mode);
+    }
+    return new SinkLogger(options.mode, options.sinks, options.context, options.minLevel);
+  }
+  var globalLogger = new NullLogger();
+  function setLogger(logger) {
+    globalLogger = logger;
+  }
+  function getLogger() {
+    return globalLogger;
   }
 
   // node-stub:node:module
@@ -3514,6 +3503,14 @@ var _PieAgent = (() => {
       if (!IO.File.Exists(normalizedPath)) {
         throw new Error(`ENOENT: no such file or directory, open '${path}'`);
       }
+      if (encoding === "base64") {
+        if (typeof bridge2.ReadAllBytesBase64Async === "function") {
+          const content3 = await taskToPromise(bridge2.ReadAllBytesBase64Async(normalizedPath));
+          return String(content3 ?? "");
+        }
+        const content2 = CS.System.Convert.ToBase64String(IO.File.ReadAllBytes(normalizedPath));
+        return String(content2 ?? "");
+      }
       const content = await taskToPromise(bridge2.ReadAllTextAsync(normalizedPath));
       return String(content ?? "");
     }
@@ -3522,6 +3519,9 @@ var _PieAgent = (() => {
       const normalizedPath = this.normalizePath(path);
       if (!IO.File.Exists(normalizedPath)) {
         throw new Error(`ENOENT: no such file or directory, open '${path}'`);
+      }
+      if (encoding === "base64") {
+        return String(CS.System.Convert.ToBase64String(IO.File.ReadAllBytes(normalizedPath)) ?? "");
       }
       return IO.File.ReadAllText(normalizedPath);
     }
@@ -3733,60 +3733,28 @@ var _PieAgent = (() => {
     }
   };
 
-  // node-stub:node:fs
-  var appendFileSync = () => {
-  };
-  var existsSync = () => false;
-  var mkdirSync = () => {
-  };
-
-  // node-stub:node:path
-  var join = (...p) => p.filter(Boolean).join("/").replace(/\/+/g, "/");
-
   // ../../packages/platform/src/http.ts
   var __filename2 = fileURLToPath("file:///pie/core.js");
   var require3 = createRequire(__filename2);
   var _procEnv = typeof process !== "undefined" ? process.env : {};
   var DEBUG = _procEnv.PIE_DEBUG_HTTP === "1" || _procEnv.PIE_DEBUG_HTTP === "true";
-  var LOG_TO_FILE = _procEnv.PIE_DEBUG_HTTP_FILE === "1" || _procEnv.PIE_DEBUG_HTTP_FILE === "true";
-  var logFilePath = null;
-  function isTuiSessionActive() {
-    return _procEnv.PIE_TUI_ACTIVE === "1" || _procEnv.PIE_TUI_ACTIVE === "true";
-  }
-  function initLogFile() {
-    if (!LOG_TO_FILE) return null;
-    try {
-      const homeDir = _procEnv.HOME || _procEnv.USERPROFILE || "/tmp";
-      const logDir = join(homeDir, ".pie", "logs");
-      if (!existsSync(logDir)) {
-        mkdirSync(logDir, { recursive: true });
-      }
-      logFilePath = join(logDir, `http-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.log`);
-      return logFilePath;
-    } catch {
-      return null;
-    }
-  }
   function logHttp(level, message, data) {
     const timestamp = (/* @__PURE__ */ new Date()).toISOString();
     const prefix = `[${timestamp}] [HTTP:${level}]`;
     const logLine = data ? `${prefix} ${message} ${JSON.stringify(data)}` : `${prefix} ${message}`;
-    if (level === "ERROR" && !isTuiSessionActive()) {
-      console.error(logLine);
+    const logger = getLogger().child({ module: "platform.http" });
+    const context = data ? { ...data, rawLine: logLine } : { rawLine: logLine };
+    if (level === "ERROR") {
+      logger.error(message, context);
+    } else if (level === "WARN") {
+      logger.warn(message, context);
     } else if (DEBUG) {
-      console.error(logLine);
-    }
-    if (LOG_TO_FILE && logFilePath) {
-      try {
-        appendFileSync(logFilePath, logLine + "\n");
-      } catch {
-      }
+      logger.debug(message, context);
     }
   }
   function isAbortErrorMessage(message) {
     return message === "Request was aborted" || message === "Operation aborted";
   }
-  initLogFile();
   var nodeHttps = null;
   var nodeHttp = null;
   var nodeUrl = null;
@@ -3861,7 +3829,7 @@ var _PieAgent = (() => {
         method: options.method || "GET",
         hasBody: !!options.body
       });
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve2, reject) => {
         const parsedUrl = new (getNodeUrl()).URL(url);
         const isHttps = parsedUrl.protocol === "https:";
         const lib = isHttps ? getNodeHttps() : getNodeHttp();
@@ -4043,7 +4011,7 @@ var _PieAgent = (() => {
               }
             }
           };
-          resolve(response);
+          resolve2(response);
         });
         req.on("error", (e) => {
           if (isAbortErrorMessage(e.message) && options.signal?.aborted) {
@@ -4087,9 +4055,9 @@ var _PieAgent = (() => {
         const body2 = options.body || "";
         const auth = options.headers?.Authorization || options.headers?.authorization || "";
         const authValue = auth.replace(/^Bearer\s+/i, "");
-        console.log(`[PuerTSHttpClient] Using async HttpClient for ${url}`);
+        logHttp("DEBUG", "PuerTS async HttpClient selected", { url: url.slice(0, 100) });
         const requestId = CS.AgentBridge.HttpPostAsyncStart(url, body2, authValue);
-        console.log(`[PuerTSHttpClient] Request started: ${requestId}`);
+        logHttp("DEBUG", "PuerTS async request started", { requestId });
         const maxWait = 12e4;
         const pollInterval = 50;
         const startTime = Date.now();
@@ -4099,10 +4067,18 @@ var _PieAgent = (() => {
             throw new Error("Request was aborted");
           }
           const pollResult = CS.AgentBridge.HttpPostAsyncPoll(requestId);
-          console.log(`[PuerTSHttpClient] Poll result type: ${typeof pollResult}, length: ${pollResult?.length || 0}`);
+          logHttp("DEBUG", "PuerTS async poll result", {
+            requestId,
+            pollResultType: typeof pollResult,
+            length: pollResult?.length || 0
+          });
           if (pollResult && pollResult.length > 0) {
             const parsed = JSON.parse(pollResult);
-            console.log(`[PuerTSHttpClient] Response status: ${parsed.statusCode}, body length: ${parsed.body?.length || 0}`);
+            logHttp("DEBUG", "PuerTS async response received", {
+              requestId,
+              statusCode: parsed.statusCode,
+              bodyLength: parsed.body?.length || 0
+            });
             return {
               status: parsed.statusCode || 200,
               statusText: parsed.status === "ok" ? "OK" : "Error",
@@ -4128,7 +4104,7 @@ var _PieAgent = (() => {
             CS.AgentBridge.HttpPostAsyncCancel(requestId);
             throw new Error("Request timed out");
           }
-          await new Promise((resolve) => setTimeout(resolve, pollInterval));
+          await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
         }
       }
       if (typeof CS === "undefined" || !CS?.UnityEngine?.Networking) {
@@ -4138,7 +4114,7 @@ var _PieAgent = (() => {
       const method = options.method || "GET";
       const headers = options.headers || {};
       const body = options.body;
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve2, reject) => {
         const request = new UnityEngine.Networking.UnityWebRequest(url, method);
         for (const [key, value] of Object.entries(headers)) {
           request.SetRequestHeader(key, value);
@@ -4171,8 +4147,12 @@ var _PieAgent = (() => {
               if (value) responseHeaders[key] = value;
             }
             const responseText = request.downloadHandler?.text || "";
-            console.log(`[PuerTSHttpClient] Request completed: status=${status}, ok=${ok}, textLength=${responseText.length}`);
-            resolve({
+            logHttp("DEBUG", "PuerTS UnityWebRequest completed", {
+              status,
+              ok,
+              textLength: responseText.length
+            });
+            resolve2({
               status,
               statusText: request.error || "",
               ok,
@@ -4187,7 +4167,10 @@ var _PieAgent = (() => {
               async *readSSELines(signal) {
                 const text = responseText;
                 const lines = text.split("\n");
-                console.log(`[PuerTSHttpClient] readSSELines: ${lines.length} lines, first 100 chars: ${text.substring(0, 100)}`);
+                logHttp("DEBUG", "PuerTS UnityWebRequest readSSELines", {
+                  lines: lines.length,
+                  preview: text.substring(0, 100)
+                });
                 for (const line of lines) {
                   if (signal?.aborted) {
                     throw new Error("Request was aborted");
@@ -4675,6 +4658,64 @@ var _PieAgent = (() => {
     return { maxTokens, thinkingBudget };
   }
 
+  // ../../packages/ai/src/cache-capabilities.ts
+  var NO_CACHE_CAPABILITY = {
+    mode: "none",
+    supported: false,
+    supportsUsageMetrics: false,
+    description: "This provider route does not expose a supported cache mechanism in Pie."
+  };
+  var ANTHROPIC_PROMPT_CACHE_CAPABILITY = {
+    mode: "prompt_cache",
+    supported: true,
+    supportsUsageMetrics: true,
+    description: "Prompt caching is available through Anthropic-compatible cache_control."
+  };
+  function getModelCacheCapability(model) {
+    if (model.cacheCapability) {
+      return model.cacheCapability;
+    }
+    if (model.api === "anthropic-messages") {
+      return ANTHROPIC_PROMPT_CACHE_CAPABILITY;
+    }
+    return NO_CACHE_CAPABILITY;
+  }
+  function isPromptCacheCapability(capability) {
+    return capability.mode === "prompt_cache";
+  }
+
+  // ../../packages/ai/src/providers/openai-compat-config.ts
+  function detectCompat(_model) {
+    return {
+      supportsStore: false,
+      supportsDeveloperRole: false,
+      supportsReasoningEffort: false,
+      supportsUsageInStreaming: true,
+      maxTokensField: "max_tokens",
+      requiresToolResultName: false,
+      requiresAssistantAfterToolResult: false,
+      requiresThinkingAsText: true,
+      supportsStrictMode: true,
+      cacheCapability: NO_CACHE_CAPABILITY
+    };
+  }
+  function getCompat(model) {
+    const detected = detectCompat(model);
+    if (!model.compat) return detected;
+    return {
+      supportsStore: model.compat.supportsStore ?? detected.supportsStore,
+      supportsDeveloperRole: model.compat.supportsDeveloperRole ?? detected.supportsDeveloperRole,
+      supportsReasoningEffort: model.compat.supportsReasoningEffort ?? detected.supportsReasoningEffort,
+      supportsUsageInStreaming: model.compat.supportsUsageInStreaming ?? detected.supportsUsageInStreaming,
+      maxTokensField: model.compat.maxTokensField ?? detected.maxTokensField,
+      requiresToolResultName: model.compat.requiresToolResultName ?? detected.requiresToolResultName,
+      requiresAssistantAfterToolResult: model.compat.requiresAssistantAfterToolResult ?? detected.requiresAssistantAfterToolResult,
+      requiresThinkingAsText: model.compat.requiresThinkingAsText ?? detected.requiresThinkingAsText,
+      supportsStrictMode: model.compat.supportsStrictMode ?? detected.supportsStrictMode,
+      cacheCapability: model.compat.cacheCapability ?? detected.cacheCapability
+    };
+  }
+
   // ../../packages/ai/src/providers/transform-messages.ts
   function transformMessages(messages, model, normalizeToolCallId2) {
     const toolCallIdMap = /* @__PURE__ */ new Map();
@@ -4797,6 +4838,172 @@ var _PieAgent = (() => {
     return result;
   }
 
+  // ../../packages/ai/src/providers/openai-compat-payload.ts
+  function buildOpenAIChatCompletionsPayload(model, context, options, compat) {
+    const messages = convertMessages(model, context, compat);
+    const params = {
+      model: model.id,
+      messages,
+      stream: true
+    };
+    if (compat.supportsUsageInStreaming !== false) {
+      params.stream_options = { include_usage: true };
+    }
+    if (compat.supportsStore) {
+      params.store = options?.cacheRetention !== "none";
+    }
+    if (options?.sessionId && compat.supportsStore) {
+      params.session_id = options.sessionId;
+    }
+    if (process.env.PIE_DEBUG_CACHE) {
+      console.error("[CACHE DEBUG] Request params:", JSON.stringify({
+        model: params.model,
+        store: params.store,
+        session_id: params.session_id,
+        cacheRetention: options?.cacheRetention,
+        supportsStore: compat.supportsStore,
+        provider: model.provider
+      }, null, 2));
+    }
+    if (options?.maxTokens) {
+      if (compat.maxTokensField === "max_tokens") params.max_tokens = options.maxTokens;
+      else params.max_completion_tokens = options.maxTokens;
+    }
+    if (options?.temperature !== void 0) params.temperature = options.temperature;
+    if (context.tools) params.tools = convertTools(context.tools, compat);
+    if (options?.toolChoice) params.tool_choice = options.toolChoice;
+    if (options?.reasoningEffort && model.reasoning && compat.supportsReasoningEffort) {
+      params.reasoning_effort = options.reasoningEffort;
+    }
+    return params;
+  }
+  function convertMessages(model, context, compat) {
+    const params = [];
+    const normalizeToolCallId2 = (id) => id.length > 40 ? id.slice(0, 40) : id;
+    const transformedMessages = transformMessages(context.messages, model, normalizeToolCallId2);
+    if (context.systemPrompt) {
+      params.push({
+        role: model.reasoning && compat.supportsDeveloperRole ? "developer" : "system",
+        content: context.systemPrompt
+      });
+    }
+    for (let i = 0; i < transformedMessages.length; i++) {
+      const msg = transformedMessages[i];
+      if (msg.role === "user") {
+        if (typeof msg.content === "string") {
+          params.push({ role: "user", content: msg.content });
+        } else {
+          const content = msg.content.flatMap((item) => convertUserContentItem(item));
+          const filteredContent = content.filter((c) => {
+            if (c.type === "text") return true;
+            if (c.type === "image_url") return model.input.includes("image");
+            if (c.type === "video_url") return model.input.includes("video");
+            if (c.type === "input_audio") return model.input.includes("audio");
+            return true;
+          });
+          if (filteredContent.length > 0) params.push({ role: "user", content: filteredContent });
+        }
+      } else if (msg.role === "assistant") {
+        const assistantMsg = { role: "assistant", content: null };
+        const textBlocks = msg.content.filter((b) => b.type === "text");
+        const nonEmptyTextBlocks = textBlocks.filter((b) => b.text && b.text.trim().length > 0);
+        if (nonEmptyTextBlocks.length > 0) {
+          assistantMsg.content = nonEmptyTextBlocks.map((b) => ({ type: "text", text: b.text }));
+        }
+        const thinkingBlocks = msg.content.filter((b) => b.type === "thinking");
+        const nonEmptyThinkingBlocks = thinkingBlocks.filter((b) => b.thinking && b.thinking.trim().length > 0);
+        if (nonEmptyThinkingBlocks.length > 0) {
+          if (compat.requiresThinkingAsText) {
+            const thinkingText = nonEmptyThinkingBlocks.map((b) => b.thinking).join("\n\n");
+            const textContent = assistantMsg.content;
+            assistantMsg.content = textContent ? [{ type: "text", text: thinkingText }, ...textContent] : [{ type: "text", text: thinkingText }];
+          } else {
+            const signature = nonEmptyThinkingBlocks[0].thinkingSignature;
+            if (signature && signature.length > 0) {
+              assistantMsg[signature] = nonEmptyThinkingBlocks.map((b) => b.thinking).join("\n");
+            }
+          }
+        }
+        const toolCalls = msg.content.filter((b) => b.type === "toolCall");
+        if (toolCalls.length > 0) {
+          assistantMsg.tool_calls = toolCalls.map((tc) => ({
+            id: tc.id,
+            type: "function",
+            function: { name: tc.name, arguments: JSON.stringify(tc.arguments) }
+          }));
+          if (!compat.requiresThinkingAsText && !assistantMsg.reasoning_content) {
+            assistantMsg.reasoning_content = "";
+          }
+        }
+        const content = assistantMsg.content;
+        const hasContent = content !== null && content !== void 0 && (typeof content === "string" ? content.length > 0 : Array.isArray(content) && content.length > 0);
+        if (hasContent || assistantMsg.tool_calls) params.push(assistantMsg);
+      } else if (msg.role === "toolResult") {
+        for (; i < transformedMessages.length && transformedMessages[i].role === "toolResult"; i++) {
+          const toolMsg = transformedMessages[i];
+          const textResult = toolMsg.content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+          const toolResultMsg = {
+            role: "tool",
+            content: textResult || "(empty result)",
+            tool_call_id: toolMsg.toolCallId
+          };
+          if (compat.requiresToolResultName && toolMsg.toolName) toolResultMsg.name = toolMsg.toolName;
+          params.push(toolResultMsg);
+        }
+        i -= 1;
+      }
+    }
+    return params;
+  }
+  function convertUserContentItem(item) {
+    if (item.type === "text") return [{ type: "text", text: item.text }];
+    if (item.type === "image") return [{ type: "image_url", image_url: { url: `data:${item.mimeType};base64,${item.data}` } }];
+    if (item.type === "video") {
+      const video = item;
+      return [{ type: "video_url", video_url: { url: `data:${video.mimeType};base64,${video.data}` } }];
+    }
+    if (item.type === "audio") {
+      const audio = item;
+      return [{ type: "input_audio", input_audio: { data: audio.data, format: audio.mimeType.includes("wav") ? "wav" : "mp3" } }];
+    }
+    if (item.type === "fileRef") {
+      const ref = item;
+      if (ref.modality === "image") return [{ type: "image_url", image_url: { url: ref.url } }];
+      if (ref.modality === "video") return [{ type: "video_url", video_url: { url: ref.url } }];
+      return [{ type: "file", file_url: { url: ref.url } }];
+    }
+    return [];
+  }
+  function convertTools(tools, compat) {
+    return tools.map((tool) => ({
+      type: "function",
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+        ...compat.supportsStrictMode !== false && { strict: false }
+      }
+    }));
+  }
+
+  // ../../packages/ai/src/providers/openai-compat-streaming.ts
+  function mapOpenAIStopReason(reason) {
+    if (reason === null) return "stop";
+    switch (reason) {
+      case "stop":
+        return "stop";
+      case "length":
+        return "length";
+      case "function_call":
+      case "tool_calls":
+        return "toolUse";
+      case "content_filter":
+        return "error";
+      default:
+        return "stop";
+    }
+  }
+
   // ../../packages/ai/src/providers/openai-compat.ts
   var streamOpenAICompletions = (model, context, options) => {
     const stream = new AssistantMessageEventStream();
@@ -4819,18 +5026,17 @@ var _PieAgent = (() => {
         timestamp: Date.now()
       };
       try {
-        const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
+        const apiKey = options?.apiKey || getEnvApiKey(model.provider, model.apiKeyEnv) || "";
         if (!apiKey) {
           throw new Error(`No API key for provider: ${model.provider}`);
         }
         const compat = getCompat(model);
-        const params = buildParams(model, context, options, compat);
+        const params = buildOpenAIChatCompletionsPayload(model, context, options, compat);
         options?.onPayload?.(params);
         const headers = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
-          // GLM/bigmodel requires specific accept header for SSE
-          ...model.provider === "bigmodel" ? { "Accept": "text/event-stream" } : {},
+          // Some OpenAI-compatible providers require caller-supplied SSE headers.
           ...model.headers || {},
           ...options?.headers || {}
         };
@@ -4918,7 +5124,7 @@ var _PieAgent = (() => {
               const choice = chunk.choices?.[0];
               if (!choice) continue;
               if (choice.finish_reason) {
-                output.stopReason = mapStopReason(choice.finish_reason);
+                output.stopReason = mapOpenAIStopReason(choice.finish_reason);
               }
               if (choice.delta) {
                 if (choice.delta.content !== null && choice.delta.content !== void 0 && choice.delta.content.length > 0) {
@@ -5024,6 +5230,9 @@ var _PieAgent = (() => {
           }
         }
         finishCurrentBlock(currentBlock);
+        if (output.stopReason !== "error" && output.stopReason !== "aborted" && output.content.some((block) => block.type === "toolCall")) {
+          output.stopReason = "toolUse";
+        }
         if (options?.signal?.aborted) {
           throw new Error("Request was aborted");
         }
@@ -5042,7 +5251,7 @@ var _PieAgent = (() => {
     return stream;
   };
   var streamSimpleOpenAICompletions = (model, context, options) => {
-    const apiKey = options?.apiKey || getEnvApiKey(model.provider);
+    const apiKey = options?.apiKey || getEnvApiKey(model.provider, model.apiKeyEnv);
     if (!apiKey) {
       throw new Error(`No API key for provider: ${model.provider}`);
     }
@@ -5053,239 +5262,6 @@ var _PieAgent = (() => {
       reasoningEffort
     });
   };
-  function buildParams(model, context, options, compat) {
-    const messages = convertMessages(model, context, compat);
-    const params = {
-      model: model.id,
-      messages,
-      stream: true
-    };
-    if (compat.supportsUsageInStreaming !== false) {
-      params.stream_options = { include_usage: true };
-    }
-    if (compat.supportsStore) {
-      params.store = options?.cacheRetention !== "none";
-    }
-    if (options?.sessionId && compat.supportsStore) {
-      params.session_id = options.sessionId;
-    }
-    if (process.env.PIE_DEBUG_CACHE) {
-      console.error("[CACHE DEBUG] Request params:", JSON.stringify({
-        model: params.model,
-        store: params.store,
-        session_id: params.session_id,
-        cacheRetention: options?.cacheRetention,
-        supportsStore: compat.supportsStore,
-        provider: model.provider
-      }, null, 2));
-    }
-    if (options?.maxTokens) {
-      if (compat.maxTokensField === "max_tokens") {
-        params.max_tokens = options.maxTokens;
-      } else {
-        params.max_completion_tokens = options.maxTokens;
-      }
-    }
-    if (options?.temperature !== void 0) {
-      params.temperature = options.temperature;
-    }
-    if (context.tools) {
-      params.tools = convertTools(context.tools, compat);
-    }
-    if (options?.toolChoice) {
-      params.tool_choice = options.toolChoice;
-    }
-    if (options?.reasoningEffort && model.reasoning && compat.supportsReasoningEffort) {
-      params.reasoning_effort = options.reasoningEffort;
-    }
-    return params;
-  }
-  function convertMessages(model, context, compat) {
-    const params = [];
-    const normalizeToolCallId2 = (id) => {
-      return id.length > 40 ? id.slice(0, 40) : id;
-    };
-    const transformedMessages = transformMessages(context.messages, model, (id) => normalizeToolCallId2(id));
-    if (context.systemPrompt) {
-      const useDeveloperRole = model.reasoning && compat.supportsDeveloperRole;
-      const role = useDeveloperRole ? "developer" : "system";
-      params.push({ role, content: context.systemPrompt });
-    }
-    for (let i = 0; i < transformedMessages.length; i++) {
-      const msg = transformedMessages[i];
-      if (msg.role === "user") {
-        if (typeof msg.content === "string") {
-          params.push({ role: "user", content: msg.content });
-        } else {
-          const content = msg.content.flatMap((item) => convertUserContentItem(item));
-          const filteredContent = content.filter((c) => {
-            if (c.type === "text") return true;
-            if (c.type === "image_url") return model.input.includes("image");
-            if (c.type === "video_url") return model.input.includes("video");
-            return true;
-          });
-          if (filteredContent.length === 0) continue;
-          params.push({ role: "user", content: filteredContent });
-        }
-      } else if (msg.role === "assistant") {
-        const assistantMsg = {
-          role: "assistant",
-          content: null
-        };
-        const textBlocks = msg.content.filter((b) => b.type === "text");
-        const nonEmptyTextBlocks = textBlocks.filter((b) => b.text && b.text.trim().length > 0);
-        if (nonEmptyTextBlocks.length > 0) {
-          assistantMsg.content = nonEmptyTextBlocks.map((b) => ({
-            type: "text",
-            text: b.text
-          }));
-        }
-        const thinkingBlocks = msg.content.filter((b) => b.type === "thinking");
-        const nonEmptyThinkingBlocks = thinkingBlocks.filter(
-          (b) => b.thinking && b.thinking.trim().length > 0
-        );
-        if (nonEmptyThinkingBlocks.length > 0) {
-          if (compat.requiresThinkingAsText) {
-            const thinkingText = nonEmptyThinkingBlocks.map((b) => b.thinking).join("\n\n");
-            const textContent = assistantMsg.content;
-            if (textContent) {
-              textContent.unshift({ type: "text", text: thinkingText });
-            } else {
-              assistantMsg.content = [{ type: "text", text: thinkingText }];
-            }
-          } else {
-            const signature = nonEmptyThinkingBlocks[0].thinkingSignature;
-            if (signature && signature.length > 0) {
-              assistantMsg[signature] = nonEmptyThinkingBlocks.map((b) => b.thinking).join("\n");
-            }
-          }
-        }
-        const toolCalls = msg.content.filter((b) => b.type === "toolCall");
-        if (toolCalls.length > 0) {
-          assistantMsg.tool_calls = toolCalls.map((tc) => ({
-            id: tc.id,
-            type: "function",
-            function: {
-              name: tc.name,
-              arguments: JSON.stringify(tc.arguments)
-            }
-          }));
-          if (!compat.requiresThinkingAsText && !assistantMsg.reasoning_content) {
-            assistantMsg.reasoning_content = "";
-          }
-        }
-        const content = assistantMsg.content;
-        const hasContent = content !== null && content !== void 0 && (typeof content === "string" ? content.length > 0 : content.length > 0);
-        if (!hasContent && !assistantMsg.tool_calls) {
-          continue;
-        }
-        params.push(assistantMsg);
-      } else if (msg.role === "toolResult") {
-        for (; i < transformedMessages.length && transformedMessages[i].role === "toolResult"; i++) {
-          const toolMsg = transformedMessages[i];
-          const textResult = toolMsg.content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
-          const toolResultMsg = {
-            role: "tool",
-            content: textResult || "(empty result)",
-            tool_call_id: toolMsg.toolCallId
-          };
-          if (compat.requiresToolResultName && toolMsg.toolName) {
-            toolResultMsg.name = toolMsg.toolName;
-          }
-          params.push(toolResultMsg);
-        }
-        i--;
-      }
-    }
-    return params;
-  }
-  function convertUserContentItem(item) {
-    if (item.type === "text") {
-      return [{ type: "text", text: item.text }];
-    }
-    if (item.type === "image") {
-      return [{
-        type: "image_url",
-        image_url: { url: `data:${item.mimeType};base64,${item.data}` }
-      }];
-    }
-    if (item.type === "video") {
-      const video = item;
-      return [{
-        type: "video_url",
-        video_url: { url: `data:${video.mimeType};base64,${video.data}` }
-      }];
-    }
-    if (item.type === "fileRef") {
-      const ref = item;
-      if (ref.modality === "image") {
-        return [{ type: "image_url", image_url: { url: ref.url } }];
-      }
-      if (ref.modality === "video") {
-        return [{ type: "video_url", video_url: { url: ref.url } }];
-      }
-      return [{ type: "file", file_url: { url: ref.url } }];
-    }
-    return [];
-  }
-  function convertTools(tools, compat) {
-    return tools.map((tool) => ({
-      type: "function",
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-        ...compat.supportsStrictMode !== false && { strict: false }
-      }
-    }));
-  }
-  function mapStopReason(reason) {
-    if (reason === null) return "stop";
-    switch (reason) {
-      case "stop":
-        return "stop";
-      case "length":
-        return "length";
-      case "function_call":
-      case "tool_calls":
-        return "toolUse";
-      case "content_filter":
-        return "error";
-      default:
-        return "stop";
-    }
-  }
-  function detectCompat(model) {
-    const isMoonshot = model.provider === "kimi-cn" || model.baseUrl.includes("moonshot.cn") || model.baseUrl.includes("moonshot.ai");
-    return {
-      // Moonshot/Kimi supports conversation storage for context caching
-      supportsStore: isMoonshot,
-      supportsDeveloperRole: false,
-      supportsReasoningEffort: false,
-      supportsUsageInStreaming: true,
-      maxTokensField: "max_tokens",
-      requiresToolResultName: false,
-      requiresAssistantAfterToolResult: false,
-      // Kimi K2.5 returns reasoning_content and requires it replayed as-is
-      requiresThinkingAsText: !isMoonshot,
-      supportsStrictMode: true
-    };
-  }
-  function getCompat(model) {
-    const detected = detectCompat(model);
-    if (!model.compat) return detected;
-    return {
-      supportsStore: model.compat.supportsStore ?? detected.supportsStore,
-      supportsDeveloperRole: model.compat.supportsDeveloperRole ?? detected.supportsDeveloperRole,
-      supportsReasoningEffort: model.compat.supportsReasoningEffort ?? detected.supportsReasoningEffort,
-      supportsUsageInStreaming: model.compat.supportsUsageInStreaming ?? detected.supportsUsageInStreaming,
-      maxTokensField: model.compat.maxTokensField ?? detected.maxTokensField,
-      requiresToolResultName: model.compat.requiresToolResultName ?? detected.requiresToolResultName,
-      requiresAssistantAfterToolResult: model.compat.requiresAssistantAfterToolResult ?? detected.requiresAssistantAfterToolResult,
-      requiresThinkingAsText: model.compat.requiresThinkingAsText ?? detected.requiresThinkingAsText,
-      supportsStrictMode: model.compat.supportsStrictMode ?? detected.supportsStrictMode
-    };
-  }
 
   // ../../node_modules/@anthropic-ai/sdk/version.mjs
   var VERSION = "0.39.0";
@@ -5989,8 +5965,8 @@ var _PieAgent = (() => {
   }
   var APIPromise = class _APIPromise extends Promise {
     constructor(responsePromise, parseResponse = defaultParseResponse) {
-      super((resolve) => {
-        resolve(null);
+      super((resolve2) => {
+        resolve2(null);
       });
       this.responsePromise = responsePromise;
       this.parseResponse = parseResponse;
@@ -6582,7 +6558,7 @@ var _PieAgent = (() => {
   var isAbsoluteURL = (url) => {
     return startsWithSchemeRegexp.test(url);
   };
-  var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  var sleep = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
   var validatePositiveInteger = (name, n) => {
     if (typeof n !== "number" || !Number.isInteger(n)) {
       throw new AnthropicError(`${name} must be an integer`);
@@ -7195,12 +7171,12 @@ var _PieAgent = (() => {
         }
         return this._emit("error", new AnthropicError(String(error)));
       });
-      __classPrivateFieldSet3(this, _BetaMessageStream_connectedPromise, new Promise((resolve, reject) => {
-        __classPrivateFieldSet3(this, _BetaMessageStream_resolveConnectedPromise, resolve, "f");
+      __classPrivateFieldSet3(this, _BetaMessageStream_connectedPromise, new Promise((resolve2, reject) => {
+        __classPrivateFieldSet3(this, _BetaMessageStream_resolveConnectedPromise, resolve2, "f");
         __classPrivateFieldSet3(this, _BetaMessageStream_rejectConnectedPromise, reject, "f");
       }), "f");
-      __classPrivateFieldSet3(this, _BetaMessageStream_endPromise, new Promise((resolve, reject) => {
-        __classPrivateFieldSet3(this, _BetaMessageStream_resolveEndPromise, resolve, "f");
+      __classPrivateFieldSet3(this, _BetaMessageStream_endPromise, new Promise((resolve2, reject) => {
+        __classPrivateFieldSet3(this, _BetaMessageStream_resolveEndPromise, resolve2, "f");
         __classPrivateFieldSet3(this, _BetaMessageStream_rejectEndPromise, reject, "f");
       }), "f");
       __classPrivateFieldGet3(this, _BetaMessageStream_connectedPromise, "f").catch(() => {
@@ -7358,11 +7334,11 @@ var _PieAgent = (() => {
      *   const message = await stream.emitted('message') // rejects if the stream errors
      */
     emitted(event) {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve2, reject) => {
         __classPrivateFieldSet3(this, _BetaMessageStream_catchingPromiseCreated, true, "f");
         if (event !== "error")
           this.once("error", reject);
-        this.once(event, resolve);
+        this.once(event, resolve2);
       });
     }
     async done() {
@@ -7646,7 +7622,7 @@ var _PieAgent = (() => {
             if (done) {
               return { value: void 0, done: true };
             }
-            return new Promise((resolve, reject) => readQueue.push({ resolve, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
+            return new Promise((resolve2, reject) => readQueue.push({ resolve: resolve2, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
           }
           const chunk = pushQueue.shift();
           return { value: chunk, done: false };
@@ -7920,12 +7896,12 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         }
         return this._emit("error", new AnthropicError(String(error)));
       });
-      __classPrivateFieldSet4(this, _MessageStream_connectedPromise, new Promise((resolve, reject) => {
-        __classPrivateFieldSet4(this, _MessageStream_resolveConnectedPromise, resolve, "f");
+      __classPrivateFieldSet4(this, _MessageStream_connectedPromise, new Promise((resolve2, reject) => {
+        __classPrivateFieldSet4(this, _MessageStream_resolveConnectedPromise, resolve2, "f");
         __classPrivateFieldSet4(this, _MessageStream_rejectConnectedPromise, reject, "f");
       }), "f");
-      __classPrivateFieldSet4(this, _MessageStream_endPromise, new Promise((resolve, reject) => {
-        __classPrivateFieldSet4(this, _MessageStream_resolveEndPromise, resolve, "f");
+      __classPrivateFieldSet4(this, _MessageStream_endPromise, new Promise((resolve2, reject) => {
+        __classPrivateFieldSet4(this, _MessageStream_resolveEndPromise, resolve2, "f");
         __classPrivateFieldSet4(this, _MessageStream_rejectEndPromise, reject, "f");
       }), "f");
       __classPrivateFieldGet4(this, _MessageStream_connectedPromise, "f").catch(() => {
@@ -8083,11 +8059,11 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
      *   const message = await stream.emitted('message') // rejects if the stream errors
      */
     emitted(event) {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve2, reject) => {
         __classPrivateFieldSet4(this, _MessageStream_catchingPromiseCreated, true, "f");
         if (event !== "error")
           this.once("error", reject);
-        this.once(event, resolve);
+        this.once(event, resolve2);
       });
     }
     async done() {
@@ -8371,7 +8347,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
             if (done) {
               return { value: void 0, done: true };
             }
-            return new Promise((resolve, reject) => readQueue.push({ resolve, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
+            return new Promise((resolve2, reject) => readQueue.push({ resolve: resolve2, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
           }
           const chunk = pushQueue.shift();
           return { value: chunk, done: false };
@@ -8589,7 +8565,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   function normalizeToolCallId(id) {
     return id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
   }
-  function mapStopReason2(reason) {
+  function mapStopReason(reason) {
     switch (reason) {
       case "end_turn":
         return "stop";
@@ -8764,7 +8740,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         timestamp: Date.now()
       };
       try {
-        const apiKey = options?.apiKey ?? getEnvApiKey(model.provider) ?? "";
+        const apiKey = options?.apiKey ?? getEnvApiKey(model.provider, model.apiKeyEnv) ?? "";
         const client = new sdk_default({
           apiKey,
           baseURL: model.baseUrl,
@@ -8782,8 +8758,15 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
           max_tokens: options?.maxTokens || Math.floor(model.maxTokens / 3) || 1024,
           stream: true
         };
+        const cacheCapability = model.cacheCapability ?? getModelCacheCapability(model) ?? ANTHROPIC_PROMPT_CACHE_CAPABILITY;
         if (context.systemPrompt) {
           params.system = [{ type: "text", text: sanitizeSurrogates(context.systemPrompt) }];
+        }
+        if (isPromptCacheCapability(cacheCapability) && options?.cacheRetention !== "none") {
+          params.cache_control = {
+            type: "ephemeral",
+            ...options?.cacheRetention === "long" ? { ttl: "1h" } : {}
+          };
         }
         if (options?.temperature !== void 0) {
           params.temperature = options.temperature;
@@ -8917,7 +8900,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
             }
           } else if (event.type === "message_delta") {
             if (event.delta.stop_reason) {
-              output.stopReason = mapStopReason2(event.delta.stop_reason);
+              output.stopReason = mapStopReason(event.delta.stop_reason);
             }
             if (event.usage.input_tokens != null) output.usage.input = event.usage.input_tokens;
             if (event.usage.output_tokens != null) output.usage.output = event.usage.output_tokens;
@@ -8944,7 +8927,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     return stream;
   };
   var streamSimpleAnthropic = (model, context, options) => {
-    const apiKey = options?.apiKey || getEnvApiKey(model.provider);
+    const apiKey = options?.apiKey || getEnvApiKey(model.provider, model.apiKeyEnv);
     if (!apiKey) {
       throw new Error(`No API key for provider: ${model.provider}`);
     }
@@ -8972,6 +8955,51 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   function streamSimple(model, context, options) {
     const provider = resolveApiProvider(model.api);
     return provider.streamSimple(model, context, options);
+  }
+  async function completeSimple(model, context, options) {
+    const s = streamSimple(model, context, options);
+    return s.result();
+  }
+
+  // ../../packages/ai/src/tool-model-routing.ts
+  var MODEL_CLASS_FALLBACK_ORDER = ["balanced", "light", "strong"];
+  var WEB_SEARCH_CAPABILITY_PRIORITY = {
+    anthropic_server_tool: 0,
+    openai_responses: 1,
+    chat_completions_web_search: 2
+  };
+  function fileCapabilityIsSupported(value) {
+    if (value === true) return true;
+    if (!value || typeof value !== "object") return false;
+    return value.supported !== false;
+  }
+  function fileKindForToolModelPurpose(purpose) {
+    if (purpose === "read_file.image") return "image";
+    if (purpose === "read_file.video") return "video";
+    if (purpose === "read_file.audio") return "audio";
+    if (purpose === "read_file.document") return "document";
+    return void 0;
+  }
+  function requiredCapabilityForToolPurpose(purpose) {
+    return purpose === "web_search" ? "webSearch" : fileKindForToolModelPurpose(purpose);
+  }
+  function modelSupportsToolPurpose(model, purpose) {
+    if (purpose === "web_search") return Boolean(model.webSearch);
+    const kind2 = fileKindForToolModelPurpose(purpose);
+    if (!kind2) return false;
+    if (fileCapabilityIsSupported(model.fileCapabilities?.[kind2])) return true;
+    if (kind2 !== "document" && model.input.includes(kind2)) return true;
+    return false;
+  }
+  function sortToolModelCandidatesByCapability(purpose, candidates) {
+    if (purpose !== "web_search") return candidates;
+    return [...candidates].sort((a, b) => {
+      const aType = a.model?.webSearch?.type;
+      const bType = b.model?.webSearch?.type;
+      const aRank = aType ? WEB_SEARCH_CAPABILITY_PRIORITY[aType] ?? 99 : 99;
+      const bRank = bType ? WEB_SEARCH_CAPABILITY_PRIORITY[bType] ?? 99 : 99;
+      return aRank - bRank;
+    });
   }
 
   // ../../node_modules/@sinclair/typebox/build/esm/errors/function.mjs
@@ -9299,7 +9327,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       if (!Visit5(schema.items, references, element))
         return false;
     }
-    if (schema.uniqueItems === true && !function() {
+    if (schema.uniqueItems === true && !(function() {
       const set = /* @__PURE__ */ new Set();
       for (const element of value) {
         const hashed = Hash(element);
@@ -9310,7 +9338,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         }
       }
       return true;
-    }()) {
+    })()) {
       return false;
     }
     if (!(IsDefined(schema.contains) || IsNumber2(schema.minContains) || IsNumber2(schema.maxContains))) {
@@ -9819,7 +9847,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     for (let i = 0; i < value.length; i++) {
       yield* Visit6(schema.items, references, `${path}/${i}`, value[i]);
     }
-    if (schema.uniqueItems === true && !function() {
+    if (schema.uniqueItems === true && !(function() {
       const set = /* @__PURE__ */ new Set();
       for (const element of value) {
         const hashed = Hash(element);
@@ -9830,7 +9858,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         }
       }
       return true;
-    }()) {
+    })()) {
       yield Create(ValueErrorType.ArrayUniqueItems, schema, path, value);
     }
     if (!(IsDefined2(schema.contains) || IsDefined2(schema.minContains) || IsDefined2(schema.maxContains))) {
@@ -10386,8 +10414,8 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     if (HasPropertyKey2(schema, "default")) {
       return FromDefault(schema.default);
     } else {
-      return async function* () {
-      }();
+      return (async function* () {
+      })();
     }
   }
   function FromBigInt4(schema, references) {
@@ -10471,8 +10499,8 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     if (HasPropertyKey2(schema, "default")) {
       return FromDefault(schema.default);
     } else {
-      return function* () {
-      }();
+      return (function* () {
+      })();
     }
   }
   function FromLiteral5(schema, references) {
@@ -10583,7 +10611,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     } else if ("value" in schema) {
       return Symbol.for(schema.value);
     } else {
-      return Symbol();
+      return /* @__PURE__ */ Symbol();
     }
   }
   function FromTemplateLiteral6(schema, references) {
@@ -12564,13 +12592,19 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       let result;
       let isError = false;
       let executionArgs = toolCall.arguments;
-      if (blocked) {
+      let started = false;
+      const pushToolStart = () => {
+        if (started) return;
+        started = true;
         stream.push({
           type: "tool_execution_start",
           toolCallId: toolCall.id,
           toolName: toolCall.name,
           args: executionArgs
         });
+      };
+      if (blocked) {
+        pushToolStart();
         result = {
           content: [{ type: "text", text: `Tool execution blocked: ${blockReason}` }],
           details: { blocked: true, reason: blockReason }
@@ -12579,47 +12613,23 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       } else {
         try {
           if (!tool) {
-            stream.push({
-              type: "tool_execution_start",
-              toolCallId: toolCall.id,
-              toolName: toolCall.name,
-              args: executionArgs
-            });
-            const availableTools = tools?.map((t) => t.name).join(", ") || "none";
-            const blockMessage = `I don't have permission to use the "${toolCall.name}" tool. My available tools are: [${availableTools}]. I can only perform read-only operations. Would you like me to help you with something else?`;
-            console.warn(`[AgentLoop] BLOCKED: Tool "${toolCall.name}" not in whitelist. Available: [${availableTools}]`);
-            result = {
-              content: [{ type: "text", text: blockMessage }],
-              details: { blockedByWhitelist: true, requestedTool: toolCall.name, availableTools }
-            };
-            isError = false;
-          } else {
-            const validatedArgs = validateToolArguments(tool, toolCall);
-            executionArgs = validatedArgs;
-            stream.push({
-              type: "tool_execution_start",
-              toolCallId: toolCall.id,
-              toolName: toolCall.name,
-              args: executionArgs
-            });
-            result = await tool.execute(toolCall.id, validatedArgs, signal, (partialResult) => {
-              stream.push({
-                type: "tool_execution_update",
-                toolCallId: toolCall.id,
-                toolName: toolCall.name,
-                args: executionArgs,
-                partialResult
-              });
-            });
-            isError = isError || !!result.isError;
+            throw new Error(`Tool ${toolCall.name} not found`);
           }
-        } catch (e) {
-          stream.push({
-            type: "tool_execution_start",
-            toolCallId: toolCall.id,
-            toolName: toolCall.name,
-            args: executionArgs
+          const validatedArgs = validateToolArguments(tool, toolCall);
+          executionArgs = validatedArgs;
+          pushToolStart();
+          result = await tool.execute(toolCall.id, validatedArgs, signal, (partialResult) => {
+            stream.push({
+              type: "tool_execution_update",
+              toolCallId: toolCall.id,
+              toolName: toolCall.name,
+              args: executionArgs,
+              partialResult
+            });
           });
+          isError = isError || !!result.isError;
+        } catch (e) {
+          pushToolStart();
           result = {
             content: [{ type: "text", text: e instanceof Error ? e.message : String(e) }],
             details: {}
@@ -12940,8 +12950,8 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       if (this._state.isStreaming) {
         throw new Error("Agent is already processing a prompt.");
       }
-      const promise = new Promise((resolve) => {
-        this.resolveRunningPrompt = resolve;
+      const promise = new Promise((resolve2) => {
+        this.resolveRunningPrompt = resolve2;
       });
       this.runningPrompt = promise;
       try {
@@ -12981,8 +12991,8 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       if (this._state.isStreaming) {
         throw new Error("Agent is already processing.");
       }
-      const promise = new Promise((resolve) => {
-        this.resolveRunningPrompt = resolve;
+      const promise = new Promise((resolve2) => {
+        this.resolveRunningPrompt = resolve2;
       });
       this.runningPrompt = promise;
       try {
@@ -12993,12 +13003,19 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         if (messages[messages.length - 1].role === "assistant") {
           const queuedSteering = this.dequeueSteeringMessages();
           if (queuedSteering.length > 0) {
-            await this._runLoop(queuedSteering, { skipInitialSteeringPoll: true });
+            await this._runLoop(queuedSteering, {
+              skipInitialSteeringPoll: true,
+              suppressSteeringPolls: true,
+              suppressFollowUpPolls: true
+            });
             return;
           }
           const queuedFollowUp = this.dequeueFollowUpMessages();
           if (queuedFollowUp.length > 0) {
-            await this._runLoop(queuedFollowUp);
+            await this._runLoop(queuedFollowUp, {
+              suppressSteeringPolls: true,
+              suppressFollowUpPolls: true
+            });
             return;
           }
           throw new Error("Cannot continue from message role: assistant");
@@ -13038,13 +13055,21 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         getApiKey: this.getApiKey,
         hooks: this.hooks,
         getSteeringMessages: async () => {
+          if (options?.suppressSteeringPolls) {
+            return [];
+          }
           if (skipInitialSteeringPoll) {
             skipInitialSteeringPoll = false;
             return [];
           }
           return this.dequeueSteeringMessages();
         },
-        getFollowUpMessages: async () => this.dequeueFollowUpMessages()
+        getFollowUpMessages: async () => {
+          if (options?.suppressFollowUpPolls) {
+            return [];
+          }
+          return this.dequeueFollowUpMessages();
+        }
       };
       let partial = null;
       try {
@@ -13216,20 +13241,8 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
           break;
         case "turn_end": {
           const stopReason = event.message.role === "assistant" ? event.message.stopReason : void 0;
-          if (stopReason === "toolUse") {
-            this.updateStatusSnapshot({
-              phase: "responding",
-              turnState: "continuing",
-              lastStopReason: stopReason,
-              hasPendingToolContinuation: true,
-              activeToolName: void 0
-            });
-            this.emitSemantic({
-              type: "turn_continues",
-              message: event.message,
-              toolResults: event.toolResults
-            });
-          } else if (stopReason === "error" || stopReason === "aborted") {
+          const hasToolCalls = event.message.role === "assistant" && Array.isArray(event.message.content) && event.message.content.some((block) => block.type === "toolCall");
+          if (stopReason === "error" || stopReason === "aborted") {
             this.updateStatusSnapshot({
               phase: "failed",
               turnState: "failed",
@@ -13239,6 +13252,19 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
             });
             this.emitSemantic({
               type: "turn_failed",
+              message: event.message,
+              toolResults: event.toolResults
+            });
+          } else if (hasToolCalls || stopReason === "toolUse") {
+            this.updateStatusSnapshot({
+              phase: "responding",
+              turnState: "continuing",
+              lastStopReason: stopReason,
+              hasPendingToolContinuation: true,
+              activeToolName: void 0
+            });
+            this.emitSemantic({
+              type: "turn_continues",
               message: event.message,
               toolResults: event.toolResults
             });
@@ -13285,7 +13311,2270 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     }
   };
 
+  // ../../packages/shared-headless-capabilities/src/capability.ts
+  function defineSharedCapability(definition) {
+    return definition;
+  }
+
+  // ../../packages/shared-headless-capabilities/src/loop.ts
+  function nowIso() {
+    return (/* @__PURE__ */ new Date()).toISOString();
+  }
+  function countCompleted(state) {
+    return state.steps.filter((step) => step.status === "completed").length;
+  }
+  function buildProgressMarker(state) {
+    return JSON.stringify({
+      completed: countCompleted(state),
+      currentStepId: state.currentStepId,
+      remaining: state.steps.filter((step) => step.status !== "completed").map((step) => step.id)
+    });
+  }
+  function hasTextualProgress(sample) {
+    return sample.hasSuccessfulToolResult || sample.hasCompletionText;
+  }
+  function buildTodoClosureContinuePrompt(state) {
+    const current = state.steps.find((step) => step.id === state.currentStepId);
+    const remaining = state.steps.filter((step) => step.status !== "completed");
+    const lines = [
+      "[Todo follow-up]",
+      "An active todo list exists and must be closed out before this task can finish.",
+      "Continue executing the remaining todo items.",
+      "Do not stop with a partially completed or in-progress todo list.",
+      "After finishing the current item, call manage_todo_list with action=complete_current; the tool will advance to the next item or clear the list after the final item.",
+      "Only call complete_current after the current item is actually satisfied. If the latest required install, build, test, or verification command failed, do not mark that item complete; inspect the error, retry or fix it, or clear the todo list with a reason if blocked.",
+      "If the task cannot continue, explicitly explain the failure or abort condition and call manage_todo_list with action=clear and a reason."
+    ];
+    if (current) {
+      lines.push(`Current todo item: ${current.title}`);
+    }
+    if (remaining.length > 0) {
+      lines.push(`Remaining todo items: ${remaining.map((step) => step.title).join("; ")}`);
+    }
+    return lines.join("\n");
+  }
+  function createTodoClosureLoop(state) {
+    if (state.mode !== "todo" || state.steps.length === 0 || state.lifecycle !== "active") {
+      return null;
+    }
+    const maxAttempts = state.steps.length >= 5 ? 10 : 6;
+    return {
+      goal: "Drive the active todo list to a terminal cleared state.",
+      mode: "todo_closure",
+      breakoutCondition: { type: "todo_empty" },
+      continuePrompt: buildTodoClosureContinuePrompt(state),
+      successSignal: { type: "todo_cleared" },
+      status: "active",
+      attemptCount: 0,
+      maxAttempts,
+      stagnationCount: 0,
+      lastProgressMarker: buildProgressMarker(state),
+      updatedAt: nowIso()
+    };
+  }
+  function restoreLoopState(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const value = raw;
+    if (value.mode !== "todo_closure") return null;
+    const status = value.status === "active" || value.status === "completed" || value.status === "aborted" || value.status === "failed" || value.status === "stalled" ? value.status : "active";
+    return {
+      goal: typeof value.goal === "string" && value.goal.trim().length > 0 ? value.goal : "Drive the active todo list to a terminal cleared state.",
+      mode: "todo_closure",
+      breakoutCondition: { type: "todo_empty" },
+      continuePrompt: typeof value.continuePrompt === "string" && value.continuePrompt.trim().length > 0 ? value.continuePrompt : "",
+      successSignal: { type: "todo_cleared" },
+      status,
+      attemptCount: Number.isInteger(value.attemptCount) && value.attemptCount >= 0 ? value.attemptCount : 0,
+      maxAttempts: Number.isInteger(value.maxAttempts) && value.maxAttempts > 0 ? value.maxAttempts : 6,
+      stagnationCount: Number.isInteger(value.stagnationCount) && value.stagnationCount >= 0 ? value.stagnationCount : 0,
+      lastProgressMarker: typeof value.lastProgressMarker === "string" ? value.lastProgressMarker : null,
+      updatedAt: typeof value.updatedAt === "string" && value.updatedAt.length > 0 ? value.updatedAt : nowIso()
+    };
+  }
+  function evaluateTodoClosureAfterCompletedTurn(state, loop, sample) {
+    if (state.mode !== "todo") {
+      return { loop: null, action: "none", reason: "not_todo" };
+    }
+    if (!loop || loop.status !== "active") {
+      return { loop, action: "none", reason: "already_terminal" };
+    }
+    if (state.steps.length === 0) {
+      return {
+        loop: { ...loop, status: "completed", updatedAt: nowIso() },
+        action: "clear_completed",
+        reason: "todo_empty"
+      };
+    }
+    if (state.lifecycle === "completed") {
+      return {
+        loop: { ...loop, status: "completed", updatedAt: nowIso() },
+        action: "clear_completed",
+        reason: "todo_completed"
+      };
+    }
+    const nextMarker = buildProgressMarker(state);
+    const progressed = loop.lastProgressMarker !== nextMarker || hasTextualProgress(sample);
+    const nextLoop = {
+      ...loop,
+      continuePrompt: buildTodoClosureContinuePrompt(state),
+      attemptCount: loop.attemptCount + 1,
+      stagnationCount: progressed ? 0 : loop.stagnationCount + 1,
+      lastProgressMarker: nextMarker,
+      updatedAt: nowIso()
+    };
+    if (nextLoop.attemptCount >= nextLoop.maxAttempts) {
+      return {
+        loop: { ...nextLoop, status: "failed" },
+        action: "clear_failed",
+        reason: "max_attempts"
+      };
+    }
+    if (nextLoop.stagnationCount >= 2) {
+      return {
+        loop: { ...nextLoop, status: "stalled" },
+        action: "clear_stalled",
+        reason: "stagnated"
+      };
+    }
+    return {
+      loop: nextLoop,
+      action: "continue",
+      reason: progressed ? "progressed" : "stagnated",
+      followUpPrompt: nextLoop.continuePrompt
+    };
+  }
+  function evaluateTodoClosureAfterFailedTurn(loop) {
+    if (!loop || loop.status !== "active") {
+      return { loop, action: "none", reason: "already_terminal" };
+    }
+    return {
+      loop: { ...loop, status: "failed", updatedAt: nowIso() },
+      action: "clear_failed",
+      reason: "failed_turn"
+    };
+  }
+  function evaluateTodoClosureAfterAbort(loop) {
+    if (!loop || loop.status !== "active") {
+      return { loop, action: "none", reason: "already_terminal" };
+    }
+    return {
+      loop: { ...loop, status: "aborted", updatedAt: nowIso() },
+      action: "clear_aborted",
+      reason: "aborted"
+    };
+  }
+
+  // ../../packages/shared-headless-capabilities/src/execution-state.ts
+  function nowIso2() {
+    return (/* @__PURE__ */ new Date()).toISOString();
+  }
+  function normalizeTodoStatus(status) {
+    switch (String(status || "").trim().toLowerCase()) {
+      case "completed":
+      case "done":
+      case "finished":
+        return "completed";
+      case "in-progress":
+      case "in progress":
+      case "doing":
+      case "active":
+        return "in-progress";
+      default:
+        return "not-started";
+    }
+  }
+  function normalizeStep(step, index) {
+    return {
+      id: Number.isInteger(step.id) && step.id > 0 ? step.id : index + 1,
+      title: typeof step.title === "string" && step.title.trim().length > 0 ? step.title.trim() : `Step ${index + 1}`,
+      description: typeof step.description === "string" ? step.description : "",
+      status: normalizeTodoStatus(String(step.status || "not-started"))
+    };
+  }
+  function normalizeSteps(steps) {
+    return (Array.isArray(steps) ? steps : []).map((step, index) => ({
+      ...normalizeStep(step, index),
+      id: index + 1
+    }));
+  }
+  function inferCurrentStepId(steps) {
+    const inProgress = steps.find((step) => step.status === "in-progress");
+    if (inProgress) return inProgress.id;
+    const next = steps.find((step) => step.status !== "completed");
+    return next?.id ?? null;
+  }
+  function inferLastCompletedStepId(steps) {
+    const completed = [...steps].reverse().find((step) => step.status === "completed");
+    return completed?.id ?? null;
+  }
+  function createEmptyExecutionState() {
+    return {
+      mode: "idle",
+      lifecycle: "stale",
+      steps: [],
+      currentStepId: null,
+      lastCompletedStepId: null,
+      source: "system_auto",
+      loop: null,
+      awaitingContinuation: false,
+      failureSummary: null,
+      updatedAt: nowIso2()
+    };
+  }
+  function restoreExecutionState(raw) {
+    if (!raw || typeof raw !== "object") {
+      return createEmptyExecutionState();
+    }
+    const state = raw;
+    const steps = normalizeSteps(state.steps || []);
+    const lifecycle = steps.length === 0 ? "stale" : state.lifecycle === "active" || state.lifecycle === "aborted" || state.lifecycle === "completed" || state.lifecycle === "stale" || state.lifecycle === "stalled" ? state.lifecycle : "active";
+    const mode = state.mode === "todo" || state.mode === "plan" || state.mode === "idle" ? state.mode : steps.length > 0 ? "todo" : "idle";
+    const loop = restoreLoopState(state.loop);
+    return {
+      mode,
+      lifecycle,
+      steps,
+      currentStepId: typeof state.currentStepId === "number" ? state.currentStepId : inferCurrentStepId(steps),
+      lastCompletedStepId: typeof state.lastCompletedStepId === "number" ? state.lastCompletedStepId : inferLastCompletedStepId(steps),
+      source: state.source === "user_todo" || state.source === "plan_mode" || state.source === "system_auto" ? state.source : "system_auto",
+      loop: mode === "todo" && lifecycle === "active" && steps.length > 0 ? loop ?? createTodoClosureLoop({
+        mode,
+        lifecycle,
+        steps,
+        currentStepId: typeof state.currentStepId === "number" ? state.currentStepId : inferCurrentStepId(steps),
+        lastCompletedStepId: typeof state.lastCompletedStepId === "number" ? state.lastCompletedStepId : inferLastCompletedStepId(steps),
+        source: state.source === "user_todo" || state.source === "plan_mode" || state.source === "system_auto" ? state.source : "system_auto",
+        loop: null,
+        awaitingContinuation: Boolean(state.awaitingContinuation),
+        failureSummary: typeof state.failureSummary === "string" ? state.failureSummary : null,
+        updatedAt: typeof state.updatedAt === "string" && state.updatedAt.length > 0 ? state.updatedAt : nowIso2()
+      }) : null,
+      awaitingContinuation: Boolean(state.awaitingContinuation),
+      failureSummary: typeof state.failureSummary === "string" ? state.failureSummary : null,
+      updatedAt: typeof state.updatedAt === "string" && state.updatedAt.length > 0 ? state.updatedAt : nowIso2()
+    };
+  }
+  function createExecutionStateFromTodos(todos, mode = "todo", source = "user_todo") {
+    const steps = normalizeSteps(
+      todos.map((todo) => ({
+        id: todo.id,
+        title: todo.title,
+        description: todo.description,
+        status: normalizeTodoStatus(String(todo.status))
+      }))
+    );
+    const allCompleted = steps.length > 0 && steps.every((step) => step.status === "completed");
+    return restoreExecutionState({
+      mode,
+      lifecycle: steps.length === 0 ? "stale" : allCompleted ? "completed" : "active",
+      steps,
+      currentStepId: inferCurrentStepId(steps),
+      lastCompletedStepId: inferLastCompletedStepId(steps),
+      source,
+      loop: null,
+      awaitingContinuation: false,
+      failureSummary: null,
+      updatedAt: nowIso2()
+    });
+  }
+  function buildExecutionReminder(state) {
+    if (state.lifecycle !== "active" && state.lifecycle !== "stalled" || state.steps.length === 0) {
+      return null;
+    }
+    const currentStep = state.steps.find((step) => step.id === state.currentStepId) || state.steps.find((step) => step.status === "in-progress") || state.steps.find((step) => step.status !== "completed");
+    const nextSteps = state.steps.filter((step) => step.status !== "completed" && step.id !== currentStep?.id).slice(0, 2);
+    if (!currentStep && nextSteps.length === 0) {
+      return null;
+    }
+    const lines = ["<system-reminder>", "[Execution]"];
+    if (currentStep) {
+      lines.push(`Current: ${currentStep.title}`);
+    }
+    if (nextSteps.length > 0) {
+      lines.push(`Next: ${nextSteps.map((step) => step.title).join("; ")}`);
+    }
+    lines.push("</system-reminder>", "");
+    return lines.join("\n");
+  }
+
+  // ../../packages/shared-headless-capabilities/src/tool-policy.ts
+  var BUILTIN_TOOL_CAPABILITY_METADATA = {
+    read_file: { riskClass: "read_only", concurrencySafe: true, permissionScope: "filesystem", readsFile: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
+    list_dir: { riskClass: "read_only", concurrencySafe: true, permissionScope: "filesystem", readsFile: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
+    grep_text: { riskClass: "read_only", concurrencySafe: true, permissionScope: "filesystem", readsFile: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
+    find_files: { riskClass: "read_only", concurrencySafe: true, permissionScope: "filesystem", readsFile: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
+    write_file: { riskClass: "write", concurrencySafe: false, requiresPermission: true, permissionScope: "filesystem", writesFile: true, highRisk: true },
+    edit_file: { riskClass: "write", concurrencySafe: false, requiresPermission: true, permissionScope: "filesystem", writesFile: true, highRisk: true },
+    bash: { riskClass: "shell", concurrencySafe: false, requiresPermission: true, permissionScope: "shell", executesShell: true, availableInPlanMode: true, allowedForSubagentByDefault: true, highRisk: true, maxOutputChars: 1e5 },
+    web_search: { riskClass: "network", concurrencySafe: true, permissionScope: "network", readsNetwork: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
+    web_fetch: { riskClass: "network", concurrencySafe: true, permissionScope: "network", readsNetwork: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
+    code_intel: { riskClass: "read_only", concurrencySafe: true, permissionScope: "filesystem", readsFile: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
+    spawn_subagents_parallel: { riskClass: "read_only", concurrencySafe: false, permissionScope: "host", readsHostResource: true, availableInPlanMode: true, maxOutputChars: 1e5 },
+    read_skill: { riskClass: "read_only", concurrencySafe: true, permissionScope: "host", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
+    read_resource: { riskClass: "read_only", concurrencySafe: true, permissionScope: "host", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
+    resolve_resource: { riskClass: "read_only", concurrencySafe: true, permissionScope: "host", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
+    ask_user_multi: { riskClass: "user_interaction", concurrencySafe: false, permissionScope: "user", asksUser: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
+    manage_todo_list: { riskClass: "session_mutation", concurrencySafe: false, permissionScope: "session", mutatesSession: true, availableInPlanMode: true },
+    unity_project_inspect: { riskClass: "read_only", concurrencySafe: true, permissionScope: "unity", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
+    unity_scene_query: { riskClass: "read_only", concurrencySafe: true, permissionScope: "unity", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
+    unity_scene_object_inspect: { riskClass: "read_only", concurrencySafe: true, permissionScope: "unity", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
+    unity_log_read: { riskClass: "read_only", concurrencySafe: true, permissionScope: "unity", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
+    unity_scene_object_edit: { riskClass: "external_side_effect", concurrencySafe: false, requiresPermission: true, permissionScope: "unity", externalSideEffect: true, highRisk: true },
+    unity_refresh: { riskClass: "external_side_effect", concurrencySafe: false, permissionScope: "unity", externalSideEffect: true },
+    unity_script_run: { riskClass: "external_side_effect", concurrencySafe: false, requiresPermission: true, permissionScope: "unity", externalSideEffect: true, highRisk: true },
+    read_project_memory: { riskClass: "read_only", concurrencySafe: true, permissionScope: "host", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
+    write_project_memory: { riskClass: "write", concurrencySafe: false, requiresPermission: true, permissionScope: "host", writesHostResource: true, externalSideEffect: true, highRisk: true }
+  };
+  function getToolCapabilityMetadata(tool) {
+    return tool.capabilityMetadata ?? tool.risk ?? BUILTIN_TOOL_CAPABILITY_METADATA[tool.name];
+  }
+  function describeToolPolicyDecision(tool, mode) {
+    const metadata = getToolCapabilityMetadata(tool);
+    if (!metadata) {
+      return { allowed: false, reason: "unclassified_tool", mode };
+    }
+    if (mode === "normal") return { allowed: true, metadata, mode };
+    if (mode === "plan") return { allowed: isToolAllowedInPlanMode(tool), reason: isToolAllowedInPlanMode(tool) ? void 0 : "not available in plan mode", metadata, mode };
+    const decision = getSubagentToolPolicyDecision(tool);
+    return { ...decision, metadata, mode };
+  }
+  function isToolAllowedInPlanMode(tool) {
+    const metadata = getToolCapabilityMetadata(tool);
+    if (!metadata) return false;
+    if (metadata.availableInPlanMode !== void 0) return metadata.availableInPlanMode;
+    if (metadata.writesFile || metadata.writesWorkspace || metadata.writesNetwork || metadata.externalSideEffect) return false;
+    if (metadata.executesShell) return true;
+    return Boolean(
+      metadata.readsFile || metadata.readsWorkspace || metadata.readsHostResource || metadata.readsNetwork || metadata.mutatesSession || metadata.asksUser
+    );
+  }
+  function getSubagentToolPolicyDecision(tool) {
+    const metadata = getToolCapabilityMetadata(tool);
+    if (!metadata) {
+      return { allowed: false, reason: "unclassified_tool" };
+    }
+    if (metadata.allowedForSubagentByDefault) return { allowed: true };
+    if (metadata.riskClass === "read_only" || metadata.riskClass === "network") return { allowed: true };
+    if (metadata.writesFile || metadata.writesWorkspace || metadata.writesNetwork || metadata.externalSideEffect || metadata.highRisk) {
+      return { allowed: false, reason: "subagents are read-only in this phase" };
+    }
+    if (metadata.readsFile || metadata.readsWorkspace || metadata.readsHostResource || metadata.readsNetwork || metadata.asksUser) {
+      return { allowed: true };
+    }
+    return { allowed: false, reason: "unclassified_tool" };
+  }
+  var DEFAULT_PLAN_MODE_TOOL_NAMES = Object.entries(BUILTIN_TOOL_CAPABILITY_METADATA).filter(([, metadata]) => metadata.availableInPlanMode).map(([name]) => name);
+
+  // ../../packages/shared-headless-capabilities/src/read-skill.ts
+  var ReadSkillParamsSchema = Type.Object({
+    name: Type.String({ description: "Exact skill name from the available_skills list." })
+  });
+  function validateSkillNameArgument(name) {
+    if (name.includes("<|tool")) {
+      return "The skill name must be only an exact name from the available_skills list, not tool-call markup.";
+    }
+    if (name.includes("\n")) {
+      return "The skill name must be a single exact name from the available_skills list, not multi-line text.";
+    }
+    return null;
+  }
+  function formatSkillResources(resources) {
+    if (!Array.isArray(resources) || resources.length === 0) return "";
+    const lines = resources.map((resource) => {
+      const path = String(resource.path || "").trim();
+      const kind2 = String(resource.kind || "").trim();
+      return kind2 ? `- ${path} (${kind2})` : `- ${path}`;
+    });
+    return `
+
+## Skill Resources
+${lines.join("\n")}`;
+  }
+  function createReadSkillCapability(deps) {
+    async function resolveSkill(name) {
+      if (deps.resolveSkill) {
+        return deps.resolveSkill(name);
+      }
+      const skill = deps.skillLoader?.getSkill?.(name) ?? deps.skillLoader?.loadSkill?.(name);
+      if (!skill) {
+        return null;
+      }
+      return {
+        name: skill.name,
+        content: skill.prompt,
+        resources: skill.resourceRefs
+      };
+    }
+    const tool = {
+      name: "read_skill",
+      label: "read_skill",
+      description: "Load the full contents of a skill by exact name from the available_skills list only. Do not pass tool names.",
+      parameters: ReadSkillParamsSchema,
+      async execute(toolCallIdOrArgs, maybeArgs) {
+        const args = typeof toolCallIdOrArgs === "string" ? maybeArgs : toolCallIdOrArgs;
+        const skillName = String(args?.name || "").trim();
+        const validationError = validateSkillNameArgument(skillName);
+        if (validationError) {
+          return {
+            content: [{ type: "text", text: `Invalid skill name: ${validationError}` }],
+            details: { found: false, name: skillName || void 0 },
+            isError: true
+          };
+        }
+        const skill = await resolveSkill(skillName);
+        if (!skill?.content) {
+          return {
+            content: [{ type: "text", text: `Skill not found: ${skillName || "(empty)"}` }],
+            details: { found: false, name: skillName || void 0 },
+            isError: true
+          };
+        }
+        return {
+          content: [{
+            type: "text",
+            text: `# ${skill.name}
+
+${skill.content}${formatSkillResources(skill.resources)}`
+          }],
+          details: {
+            found: true,
+            name: skill.name,
+            ...Array.isArray(skill.resources) ? { resources: skill.resources } : {}
+          }
+        };
+      }
+    };
+    return {
+      ...defineSharedCapability({
+        id: "read-skill",
+        description: "Shared capability for loading full skill contents through a host-provided skill resolver.",
+        tools: [tool]
+      }),
+      tool
+    };
+  }
+
+  // ../../packages/shared-headless-capabilities/src/read-resource.ts
+  var ReadResourceParamsSchema = Type.Object({
+    owner: Type.String({ description: "Exact skill name that owns the resource." }),
+    path: Type.String({ description: "Relative path inside the skill package." })
+  });
+  function inferKind(path) {
+    const lower = path.toLowerCase();
+    if (lower.endsWith(".md")) return "document";
+    if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".sh") || lower.endsWith(".py")) return "script";
+    return void 0;
+  }
+  function inferMimeType(path) {
+    const lower = path.toLowerCase();
+    if (lower.endsWith(".md")) return "text/markdown";
+    if (lower.endsWith(".js") || lower.endsWith(".mjs")) return "application/javascript";
+    if (lower.endsWith(".sh")) return "text/x-shellscript";
+    if (lower.endsWith(".py")) return "text/x-python";
+    if (lower.endsWith(".json")) return "application/json";
+    if (lower.endsWith(".txt")) return "text/plain";
+    return void 0;
+  }
+  function validateRelativeResourcePath(path) {
+    const trimmed = String(path || "").trim().replace(/\\/g, "/");
+    if (!trimmed) {
+      throw new Error("Resource path cannot be empty");
+    }
+    if (trimmed.startsWith("/") || /^[A-Za-z]:\//.test(trimmed)) {
+      throw new Error("Resource path must be relative");
+    }
+    const segments = trimmed.split("/");
+    if (segments.some((segment) => segment === "..")) {
+      throw new Error("Resource path cannot escape the skill package");
+    }
+    return trimmed.replace(/^\.\/+/, "");
+  }
+  function createReadResourceCapability(deps) {
+    const tool = {
+      name: "read_resource",
+      label: "read_resource",
+      description: "Load a relative resource file from inside a skill package by owner and path.",
+      parameters: ReadResourceParamsSchema,
+      async execute(toolCallIdOrArgs, maybeArgs) {
+        const args = typeof toolCallIdOrArgs === "string" ? maybeArgs : toolCallIdOrArgs;
+        const owner = String(args?.owner || "").trim();
+        let resourcePath = "";
+        try {
+          resourcePath = validateRelativeResourcePath(args?.path || "");
+        } catch (error) {
+          return {
+            content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+            details: { found: false, owner: owner || void 0, path: args?.path || void 0 },
+            isError: true
+          };
+        }
+        const resource = await deps.resolveResource?.(owner, resourcePath);
+        if (!resource?.content) {
+          return {
+            content: [{ type: "text", text: `Resource not found: ${owner || "(empty)"}/${resourcePath || "(empty)"}` }],
+            details: { found: false, owner: owner || void 0, path: resourcePath || void 0 },
+            isError: true
+          };
+        }
+        const kind2 = resource.kind || inferKind(resource.path);
+        const mimeType = resource.mimeType || inferMimeType(resource.path);
+        return {
+          content: [{
+            type: "text",
+            text: `# ${resource.owner}/${resource.path}
+
+${resource.content}`
+          }],
+          details: {
+            found: true,
+            owner: resource.owner,
+            path: resource.path,
+            kind: kind2,
+            mimeType
+          }
+        };
+      }
+    };
+    return {
+      ...defineSharedCapability({
+        id: "read-resource",
+        description: "Shared capability for loading resources scoped to a skill package.",
+        tools: [tool]
+      }),
+      tool
+    };
+  }
+
+  // node-stub:node:path
+  var sep = "/";
+  var join = (...p) => p.filter(Boolean).join("/").replace(/\/+/g, "/");
+  var basename = (p, ext) => {
+    const b = p.split("/").pop() || "";
+    return ext && b.endsWith(ext) ? b.slice(0, -ext.length) : b;
+  };
+  var resolve = (...p) => p.join("/");
+  var normalize = (p) => p.replace(/\/+/g, "/");
+  var isAbsolute = (p) => p.startsWith("/");
+  var relative = (from, to) => to;
+
+  // ../../packages/shared-headless-capabilities/src/read-file-understanding.ts
+  function getModelLabel(model) {
+    return model ? `${model.provider}/${model.id}` : void 0;
+  }
+  function textFromAssistant(message) {
+    return message.content.filter((block) => block.type === "text").map((block) => block.text).join("\n").trim();
+  }
+  function buildReadFileUnderstandingPrompt(request) {
+    const question = request.question?.trim() || `Summarize this ${request.kind} file with factual details useful to the coding task.`;
+    return {
+      type: "text",
+      text: [
+        `Analyze this ${request.kind} file for a coding agent.`,
+        `File name: ${basename(request.displayPath)}`,
+        `MIME type: ${request.mimeType}`,
+        `Task: ${question}`,
+        "Return concise factual observations. Do not invent details."
+      ].join("\n")
+    };
+  }
+  function buildDirectImageUnderstandingContent(request) {
+    if (request.kind !== "image" || !request.imageInfo) return void 0;
+    const image = {
+      type: "image",
+      mimeType: request.imageInfo.mimeType,
+      data: request.imageInfo.base64
+    };
+    return [image];
+  }
+  function createReadFileUnderstandingHandler(deps) {
+    return async (request) => understandFileWithModel(deps, request);
+  }
+  async function understandFileWithModel(deps, request) {
+    const purpose = `read_file.${request.kind}`;
+    const decision = deps.resolveToolModel(purpose);
+    const agentModel = deps.getAgentModel();
+    const routeDetails = {
+      purpose,
+      requiredCapability: decision.requiredCapability,
+      routeSource: decision.routeSource,
+      agentModel: getModelLabel(agentModel),
+      toolModel: getModelLabel(decision.model),
+      fallbackReason: decision.fallbackReason,
+      kind: request.kind,
+      mimeType: request.mimeType
+    };
+    if (!decision.model || !decision.apiKey) {
+      return {
+        content: [{
+          type: "text",
+          text: decision.fallbackReason || `No configured model declares ${request.kind} capability for ${purpose}.`
+        }],
+        details: { understanding: routeDetails },
+        isError: true
+      };
+    }
+    const sessionId = deps.getSessionId() || `read-file-${Date.now()}`;
+    try {
+      const directImageContent = buildDirectImageUnderstandingContent(request);
+      const prepared = directImageContent ? { content: directImageContent, details: { inputMode: "inlineDataUrl" } } : await deps.prepareFileContent({
+        request,
+        model: decision.model,
+        apiKey: decision.apiKey,
+        sessionId
+      });
+      const fileContent = prepared.content;
+      const content = [
+        buildReadFileUnderstandingPrompt(request),
+        ...fileContent
+      ];
+      const response = await completeSimple(
+        decision.model,
+        {
+          systemPrompt: "You are a file-understanding tool. Answer only from the provided file. Keep the answer concise and factual.",
+          messages: [{ role: "user", content, timestamp: Date.now() }]
+        },
+        {
+          apiKey: decision.apiKey,
+          maxTokens: Math.min(decision.model.maxTokens || 4096, 4096),
+          signal: request.signal
+        }
+      );
+      const errorMessage = response.stopReason === "error" || response.stopReason === "aborted" ? response.errorMessage : void 0;
+      const text = textFromAssistant(response) || (errorMessage ? `read_file ${request.kind} understanding failed: ${errorMessage}` : "(file understanding model returned no text)");
+      return {
+        content: [{ type: "text", text }],
+        details: {
+          understanding: {
+            ...routeDetails,
+            toolModel: getModelLabel(decision.model),
+            responseStopReason: response.stopReason,
+            ...prepared.details,
+            ...errorMessage ? { error: errorMessage } : {}
+          }
+        },
+        isError: response.stopReason === "error" || response.stopReason === "aborted"
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: "text", text: `read_file ${request.kind} understanding failed: ${message}` }],
+        details: {
+          understanding: {
+            ...routeDetails,
+            toolModel: getModelLabel(decision.model),
+            error: message
+          }
+        },
+        isError: true
+      };
+    }
+  }
+
+  // ../../packages/shared-headless-capabilities/src/resolve-resource.ts
+  var ResolveResourceParamsSchema = Type.Object({
+    owner: Type.String({ description: "Exact skill name that owns the resource." }),
+    path: Type.String({ description: "Relative path inside the skill package." })
+  });
+  function inferKind2(path) {
+    const lower = path.toLowerCase();
+    if (lower.endsWith(".md")) return "document";
+    if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".sh") || lower.endsWith(".py")) return "script";
+    return void 0;
+  }
+  function validateRelativeResourcePath2(path) {
+    const trimmed = String(path || "").trim().replace(/\\/g, "/");
+    if (!trimmed) {
+      throw new Error("Resource path cannot be empty");
+    }
+    if (trimmed.startsWith("/") || /^[A-Za-z]:\//.test(trimmed)) {
+      throw new Error("Resource path must be relative");
+    }
+    const segments = trimmed.split("/");
+    if (segments.some((segment) => segment === "..")) {
+      throw new Error("Resource path cannot escape the skill package");
+    }
+    return trimmed.replace(/^\.\/+/, "");
+  }
+  function createResolveResourceCapability(deps) {
+    const tool = {
+      name: "resolve_resource",
+      label: "resolve_resource",
+      description: "Resolve a relative skill resource to a host executable/readable path without loading its content.",
+      parameters: ResolveResourceParamsSchema,
+      async execute(toolCallIdOrArgs, maybeArgs) {
+        const args = typeof toolCallIdOrArgs === "string" ? maybeArgs : toolCallIdOrArgs;
+        const owner = String(args?.owner || "").trim();
+        let resourcePath = "";
+        try {
+          resourcePath = validateRelativeResourcePath2(args?.path || "");
+        } catch (error) {
+          return {
+            content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+            details: { found: false, owner: owner || void 0, path: args?.path || void 0 },
+            isError: true
+          };
+        }
+        const resource = await deps.resolveResource?.(owner, resourcePath);
+        if (!resource?.resolvedPath) {
+          return {
+            content: [{ type: "text", text: `Resource not found: ${owner || "(empty)"}/${resourcePath || "(empty)"}` }],
+            details: { found: false, owner: owner || void 0, path: resourcePath || void 0 },
+            isError: true
+          };
+        }
+        return {
+          content: [{
+            type: "text",
+            text: [
+              "Resolved skill resource:",
+              `owner: ${resource.owner}`,
+              `path: ${resource.path}`,
+              `resolvedPath: ${resource.resolvedPath}`
+            ].join("\n")
+          }],
+          details: {
+            found: true,
+            owner: resource.owner,
+            path: resource.path,
+            kind: resource.kind || inferKind2(resource.path),
+            resolvedPath: resource.resolvedPath
+          }
+        };
+      }
+    };
+    return {
+      ...defineSharedCapability({
+        id: "resolve-resource",
+        description: "Shared capability for resolving a skill resource to a host path without loading its contents.",
+        tools: [tool]
+      }),
+      tool
+    };
+  }
+
+  // ../../packages/shared-headless-capabilities/src/session-trace.ts
+  function isRecord(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  function getTextFromMessageContent(content) {
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) return "";
+    return content.filter((block) => isRecord(block) && block.type === "text").map((block) => String(block.text || "")).join("");
+  }
+  function summarizeToolResult(result) {
+    if (!isRecord(result)) return void 0;
+    const content = Array.isArray(result.content) ? result.content : [];
+    const text = content.filter((item) => isRecord(item) && item.type === "text").map((item) => String(item.text || "")).join("\n").trim();
+    if (!text) return void 0;
+    return text.length > 500 ? `${text.slice(0, 500)}...` : text;
+  }
+  function summarizeToolResultDetails(result) {
+    if (!isRecord(result) || !isRecord(result.details)) return void 0;
+    const details = result.details;
+    const keys = [
+      "providerMode",
+      "provider",
+      "modelId",
+      "agentModel",
+      "toolModel",
+      "routeSource",
+      "requiredCapability",
+      "failureCategory",
+      "fallbackReason",
+      "qualityWarnings",
+      "sourceCount",
+      "actualQueries",
+      "attempts",
+      "timedOut"
+    ];
+    const summary = {};
+    for (const key of keys) {
+      if (!(key in details)) continue;
+      const value = details[key];
+      if (key === "attempts" && Array.isArray(value)) {
+        summary[key] = value.slice(-5).map((attempt) => {
+          if (!isRecord(attempt)) return attempt;
+          return {
+            provider: attempt.provider,
+            modelId: attempt.modelId,
+            providerMode: attempt.providerMode,
+            routeSource: attempt.routeSource,
+            failureCategory: attempt.failureCategory,
+            fallbackReason: typeof attempt.fallbackReason === "string" && attempt.fallbackReason.length > 200 ? `${attempt.fallbackReason.slice(0, 200)}...` : attempt.fallbackReason,
+            sourceCount: attempt.sourceCount,
+            qualityWarnings: attempt.qualityWarnings
+          };
+        });
+        continue;
+      }
+      summary[key] = typeof value === "string" && value.length > 300 ? `${value.slice(0, 300)}...` : value;
+    }
+    return Object.keys(summary).length > 0 ? summary : void 0;
+  }
+  function createEmptyRuntimeSummary() {
+    return {
+      queuedTurnEvents: 0,
+      retryEvents: 0,
+      autoCompactionEvents: 0,
+      runtimeGuardEvents: 0,
+      subagentEvents: 0,
+      toolResults: 0,
+      toolErrors: 0
+    };
+  }
+  function summarizeMeta(meta) {
+    if (!isRecord(meta)) return meta;
+    const summary = {};
+    for (const [key, value] of Object.entries(meta)) {
+      if (key === "messages" || key === "queuedInputs" || key === "result") {
+        summary[key] = Array.isArray(value) ? { count: value.length } : typeof value;
+        continue;
+      }
+      if (key === "queuedInput" && isRecord(value)) {
+        summary[key] = {
+          mode: value.mode,
+          source: value.source,
+          visibility: value.visibility,
+          dedupeKey: value.dedupeKey
+        };
+        continue;
+      }
+      summary[key] = typeof value === "string" && value.length > 300 ? `${value.slice(0, 300)}...` : value;
+    }
+    return summary;
+  }
+  function toStringArray(value) {
+    if (!Array.isArray(value)) return void 0;
+    const entries = value.filter((entry) => typeof entry === "string");
+    return entries.length > 0 ? entries : void 0;
+  }
+  function summarizeExcludedTools(value) {
+    if (!Array.isArray(value)) return void 0;
+    const entries = value.filter(isRecord).map((entry) => ({
+      name: String(entry.name || ""),
+      reason: String(entry.reason || "")
+    })).filter((entry) => entry.name);
+    return entries.length > 0 ? entries : void 0;
+  }
+  function extractSubagentSummaries(toolCallId, toolName, result) {
+    if (toolName !== "spawn_subagents_parallel" || !isRecord(result)) return [];
+    const details = isRecord(result.details) ? result.details : void 0;
+    const tasks = Array.isArray(details?.tasks) ? details.tasks : [];
+    return tasks.filter(isRecord).map((task) => {
+      const plan = isRecord(task.plan) ? task.plan : void 0;
+      const evidence = Array.isArray(task.evidence) ? task.evidence : [];
+      const confidenceSignals = Array.isArray(task.confidenceSignals) ? task.confidenceSignals : [];
+      const runtimeEvidence = Array.isArray(task.runtimeEvidence) ? task.runtimeEvidence : [];
+      const reportedEvidence = Array.isArray(task.reportedEvidence) ? task.reportedEvidence : [];
+      return {
+        toolCallId,
+        name: String(task.name || "subagent"),
+        status: String(task.status || "unknown"),
+        modelClass: typeof plan?.modelClass === "string" ? plan.modelClass : void 0,
+        modelId: typeof plan?.modelId === "string" ? plan.modelId : void 0,
+        modelFallbackReason: typeof plan?.modelFallbackReason === "string" ? plan.modelFallbackReason : void 0,
+        timeoutSeconds: typeof task.timeoutSeconds === "number" ? task.timeoutSeconds : typeof plan?.timeoutSeconds === "number" ? plan.timeoutSeconds : void 0,
+        toolsAllowed: toStringArray(plan?.toolsAllowed),
+        toolsExcluded: summarizeExcludedTools(plan?.toolsExcluded),
+        evidenceCount: evidence.length,
+        confidenceSignalCount: confidenceSignals.length,
+        runtimeEvidenceCount: runtimeEvidence.length,
+        reportedEvidenceCount: reportedEvidence.length,
+        parentHandoffRequired: typeof task.parentHandoffRequired === "boolean" ? task.parentHandoffRequired : void 0,
+        needsParentWrite: typeof task.needsParentWrite === "boolean" ? task.needsParentWrite : void 0,
+        failureReason: typeof task.failureReason === "string" ? task.failureReason : void 0
+      };
+    });
+  }
+  function timelineEventFromTraceEvent(type, meta) {
+    const normalizedType = type.startsWith("runtime:") ? type.slice("runtime:".length) : type;
+    const data = isRecord(meta) ? meta : {};
+    const detail = summarizeMeta(meta);
+    if (normalizedType === "assistant_update" || normalizedType === "dispatch_settled" || normalizedType === "wait_for_idle_settled") {
+      return null;
+    }
+    if (normalizedType === "turn_start") {
+      return { type: "turn_start", summary: `turn ${String(data.turnIndex ?? "?")} started`, details: detail };
+    }
+    if (normalizedType === "turn_completed") {
+      return { type: "turn_end", summary: `turn ${String(data.turnIndex ?? "?")} completed`, details: detail };
+    }
+    if (normalizedType === "turn_failed") {
+      return { type: "turn_end", summary: `turn ${String(data.turnIndex ?? "?")} failed`, details: detail, failure: true };
+    }
+    if (normalizedType === "turn_aborted") {
+      return { type: "turn_end", summary: `turn aborted: ${String(data.reason ?? "unknown")}`, details: detail, failure: true };
+    }
+    if (normalizedType === "tool_start") {
+      return { type: "tool_start", summary: `tool ${String(data.toolName ?? "unknown")} started`, details: detail };
+    }
+    if (normalizedType === "tool_end") {
+      const failed = data.isError === true;
+      return {
+        type: failed ? "tool_error" : "tool_end",
+        summary: `tool ${String(data.toolName ?? "unknown")} ${failed ? "failed" : "completed"}`,
+        details: detail,
+        failure: failed
+      };
+    }
+    if (normalizedType === "stalled") {
+      return { type: "runtime_stalled", summary: `runtime stalled: ${String(data.reason ?? "unknown")}`, details: detail, failure: true };
+    }
+    if (/^(queue_changed|queued_turn_dispatched|queued_turn_blocked)$/.test(normalizedType)) {
+      return {
+        type: normalizedType,
+        summary: normalizedType === "queued_turn_blocked" ? `queued turn blocked: ${String(data.reason ?? "unknown")}` : normalizedType,
+        details: detail,
+        failure: normalizedType === "queued_turn_blocked"
+      };
+    }
+    if (/^retry_/.test(normalizedType) || /^auto_compaction_/.test(normalizedType) || normalizedType === "runtime_guard_triggered") {
+      return {
+        type: normalizedType,
+        summary: normalizedType,
+        details: detail,
+        failure: normalizedType === "retry_exhausted" || normalizedType === "runtime_guard_triggered"
+      };
+    }
+    if (/^(runtime_mode_changed|runtime_context_injected|stale_runtime_context_stripped|tools_rebuilt_for_mode)$/.test(normalizedType)) {
+      return {
+        type: normalizedType,
+        summary: normalizedType === "runtime_mode_changed" ? `runtime mode changed: ${String(data.trigger ?? "unknown")}` : normalizedType,
+        details: detail
+      };
+    }
+    if (/^(tool_model_route_selected|web_search_attempts|read_file_understanding)$/.test(normalizedType)) {
+      const purpose = String(data.purpose ?? data.toolName ?? normalizedType);
+      const toolModel = String(data.toolModel ?? data.providerMode ?? "unknown route");
+      return {
+        type: normalizedType,
+        summary: `${purpose} via ${toolModel}`,
+        details: detail,
+        failure: typeof data.failureCategory === "string" && data.failureCategory.length > 0
+      };
+    }
+    if (normalizedType === "subagent_summary") {
+      return { type: "subagent_child_end", summary: `subagent summary count=${String(data.count ?? "?")}`, details: detail };
+    }
+    return null;
+  }
+  function cloneTurn(turn) {
+    return JSON.parse(JSON.stringify(turn));
+  }
+  function cloneTrace(trace) {
+    return JSON.parse(JSON.stringify(trace));
+  }
+  function createEmptySessionTrace(sessionId) {
+    return {
+      sessionId,
+      updatedAt: Date.now(),
+      activeTurn: null,
+      recentTurns: [],
+      recentEvents: [],
+      runtimeSummary: createEmptyRuntimeSummary(),
+      subagentSummaries: [],
+      recentTimeline: []
+    };
+  }
+  var SessionTraceController = class {
+    constructor(trace, recentTurnsLimit = 10, recentEventsLimit = 100) {
+      this.trace = trace;
+      this.recentTurnsLimit = recentTurnsLimit;
+      this.recentEventsLimit = recentEventsLimit;
+      if (!Array.isArray(this.trace.recentTurns)) {
+        this.trace.recentTurns = [];
+      }
+      if (!Array.isArray(this.trace.recentEvents)) {
+        this.trace.recentEvents = [];
+      }
+      if (!this.trace.runtimeSummary) {
+        this.trace.runtimeSummary = createEmptyRuntimeSummary();
+      }
+      if (!Array.isArray(this.trace.subagentSummaries)) {
+        this.trace.subagentSummaries = [];
+      }
+      if (!Array.isArray(this.trace.recentTimeline)) {
+        this.trace.recentTimeline = [];
+      }
+    }
+    trace;
+    recentTurnsLimit;
+    recentEventsLimit;
+    pendingUserText = null;
+    pushEvent(type, meta) {
+      this.trace.recentEvents.push({
+        type,
+        at: Date.now(),
+        ...meta !== void 0 ? { meta } : {}
+      });
+      if (this.trace.recentEvents.length > this.recentEventsLimit) {
+        this.trace.recentEvents = this.trace.recentEvents.slice(-this.recentEventsLimit);
+      }
+      this.updateRuntimeSummary(type, meta);
+      const timelineEvent = timelineEventFromTraceEvent(type, meta);
+      if (timelineEvent) {
+        this.pushTimeline(timelineEvent);
+      }
+    }
+    pushTimeline(event) {
+      this.trace.recentTimeline ??= [];
+      this.trace.recentTimeline.push({
+        ...event,
+        at: Date.now()
+      });
+      if (this.trace.recentTimeline.length > this.recentEventsLimit) {
+        this.trace.recentTimeline = this.trace.recentTimeline.slice(-this.recentEventsLimit);
+      }
+    }
+    updateRuntimeSummary(type, meta) {
+      const summary = this.trace.runtimeSummary ?? createEmptyRuntimeSummary();
+      if (/queue|queued_turn/.test(type)) summary.queuedTurnEvents++;
+      if (/retry/.test(type)) summary.retryEvents++;
+      if (/auto_compaction|auto_compact|compaction/.test(type)) summary.autoCompactionEvents++;
+      if (/runtime_guard|repeated_tool_error/.test(type)) summary.runtimeGuardEvents++;
+      if (/subagent/.test(type)) summary.subagentEvents++;
+      if (type === "tool_end") summary.toolResults++;
+      if (type === "tool_end" && isRecord(meta) && meta.isError) summary.toolErrors++;
+      this.trace.runtimeSummary = summary;
+    }
+    nextTurnIndex() {
+      if (this.trace.activeTurn) {
+        return this.trace.activeTurn.turnIndex;
+      }
+      return (this.trace.recentTurns[this.trace.recentTurns.length - 1]?.turnIndex ?? -1) + 1;
+    }
+    touch() {
+      this.trace.updatedAt = Date.now();
+    }
+    notePendingUserText(text) {
+      const trimmed = String(text || "").trim();
+      if (!trimmed) return;
+      this.pendingUserText = trimmed;
+      this.pushEvent("user_queued", { text: trimmed });
+      if (!this.trace.activeTurn || ["completed", "failed", "aborted"].includes(this.trace.activeTurn.state)) {
+        this.trace.activeTurn = {
+          turnIndex: this.nextTurnIndex(),
+          state: "queued",
+          userText: trimmed,
+          toolCalls: []
+        };
+        this.touch();
+        return;
+      }
+      this.trace.activeTurn.userText = trimmed;
+      this.trace.activeTurn.state = "queued";
+      this.touch();
+    }
+    noteDispatchStart(meta) {
+      if (!this.trace.activeTurn) {
+        this.trace.activeTurn = {
+          turnIndex: this.nextTurnIndex(),
+          state: "dispatching",
+          toolCalls: []
+        };
+      }
+      this.trace.activeTurn.state = "dispatching";
+      this.pushEvent("dispatch_start", meta);
+      this.touch();
+    }
+    noteDispatchSettled(meta) {
+      if (!this.trace.activeTurn) return;
+      if (!["completed", "failed", "aborted"].includes(this.trace.activeTurn.state)) {
+        this.trace.activeTurn.state = "awaiting_turn_start";
+      }
+      this.pushEvent("dispatch_settled", meta);
+      this.touch();
+    }
+    noteWaitForIdleStart(meta) {
+      this.pushEvent("wait_for_idle_start", meta);
+      this.touch();
+    }
+    noteWaitForIdleSettled(meta) {
+      this.pushEvent("wait_for_idle_settled", meta);
+      this.touch();
+    }
+    noteStalled(reason, meta) {
+      if (!this.trace.activeTurn) {
+        this.trace.activeTurn = {
+          turnIndex: this.nextTurnIndex(),
+          state: "stalled",
+          toolCalls: []
+        };
+      }
+      this.trace.activeTurn.state = "stalled";
+      this.trace.activeTurn.errorMessage = reason;
+      this.pushEvent("stalled", { reason, ...meta !== void 0 ? { meta } : {} });
+      this.touch();
+    }
+    noteRuntimeEvent(type, meta) {
+      this.pushEvent(`runtime:${type}`, summarizeMeta(meta));
+      this.touch();
+    }
+    startTurn(turnIndex) {
+      const nextTurn = this.trace.activeTurn && !["completed", "failed", "aborted"].includes(this.trace.activeTurn.state) ? this.trace.activeTurn : {
+        turnIndex: this.nextTurnIndex(),
+        state: "running",
+        toolCalls: []
+      };
+      nextTurn.turnIndex = turnIndex ?? nextTurn.turnIndex ?? this.nextTurnIndex();
+      nextTurn.state = "running";
+      nextTurn.startedAt = Date.now();
+      if (this.pendingUserText) {
+        nextTurn.userText = this.pendingUserText;
+        this.pendingUserText = null;
+      }
+      this.trace.activeTurn = nextTurn;
+      this.pushEvent("turn_start", { turnIndex: nextTurn.turnIndex });
+      this.touch();
+    }
+    updateAssistantMessage(message) {
+      if (!message || message.role !== "assistant" || !this.trace.activeTurn) return;
+      this.trace.activeTurn.state = this.trace.activeTurn.toolCalls.some((tool) => tool.status === "running") ? "tool_running" : "streaming";
+      this.trace.activeTurn.assistantText = getTextFromMessageContent(message.content);
+      this.pushEvent("assistant_update");
+      this.touch();
+    }
+    startTool(toolCallId, toolName, args) {
+      if (!this.trace.activeTurn) {
+        this.trace.activeTurn = {
+          turnIndex: this.nextTurnIndex(),
+          state: "tool_running",
+          toolCalls: []
+        };
+      }
+      this.trace.activeTurn.state = "tool_running";
+      const existing = this.trace.activeTurn.toolCalls.find((tool) => tool.toolCallId && tool.toolCallId === toolCallId);
+      if (existing) {
+        existing.status = "running";
+        existing.args = args;
+        existing.startedAt = existing.startedAt || Date.now();
+        this.touch();
+        return;
+      }
+      this.trace.activeTurn.toolCalls.push({
+        toolCallId,
+        toolName,
+        status: "running",
+        args,
+        startedAt: Date.now()
+      });
+      this.pushEvent("tool_start", { toolCallId, toolName });
+      this.touch();
+    }
+    finishTool(toolCallId, toolName, result, isError) {
+      if (!this.trace.activeTurn) return;
+      const existing = this.trace.activeTurn.toolCalls.find(
+        (tool) => toolCallId && tool.toolCallId === toolCallId || !toolCallId && tool.toolName === toolName && tool.status === "running"
+      );
+      const target = existing ?? {
+        toolCallId,
+        toolName,
+        status: isError ? "failed" : "completed",
+        startedAt: Date.now()
+      };
+      target.status = isError ? "failed" : "completed";
+      target.endedAt = Date.now();
+      target.resultSummary = summarizeToolResult(result);
+      if (!existing) {
+        this.trace.activeTurn.toolCalls.push(target);
+      }
+      const subagentSummaries = extractSubagentSummaries(toolCallId, toolName, result);
+      if (subagentSummaries.length > 0) {
+        this.trace.subagentSummaries = [
+          ...this.trace.subagentSummaries ?? [],
+          ...subagentSummaries
+        ].slice(-50);
+        for (const summary of subagentSummaries) {
+          this.pushTimeline({
+            type: "subagent_child_end",
+            summary: `subagent ${summary.name} ${summary.status}`,
+            details: summary,
+            failure: summary.status !== "completed"
+          });
+        }
+        this.pushEvent("subagent_summary", { count: subagentSummaries.length });
+      }
+      this.trace.activeTurn.state = "streaming";
+      this.pushEvent("tool_end", { toolCallId, toolName, isError, details: summarizeToolResultDetails(result) });
+      this.touch();
+    }
+    completeTurn(message, failed = false) {
+      if (!this.trace.activeTurn) return;
+      if (message?.role === "assistant") {
+        this.trace.activeTurn.assistantText = getTextFromMessageContent(message.content);
+      }
+      this.trace.activeTurn.state = failed ? "failed" : "completed";
+      this.trace.activeTurn.completedAt = Date.now();
+      this.trace.recentTurns.push(cloneTurn(this.trace.activeTurn));
+      if (this.trace.recentTurns.length > this.recentTurnsLimit) {
+        this.trace.recentTurns = this.trace.recentTurns.slice(-this.recentTurnsLimit);
+      }
+      this.pushEvent(failed ? "turn_failed" : "turn_completed", {
+        turnIndex: this.trace.activeTurn.turnIndex
+      });
+      this.trace.activeTurn = null;
+      this.touch();
+    }
+    abortTurn(reason) {
+      if (!this.trace.activeTurn) return;
+      this.trace.activeTurn.state = "aborted";
+      this.trace.activeTurn.errorMessage = reason;
+      this.trace.activeTurn.completedAt = Date.now();
+      this.trace.recentTurns.push(cloneTurn(this.trace.activeTurn));
+      if (this.trace.recentTurns.length > this.recentTurnsLimit) {
+        this.trace.recentTurns = this.trace.recentTurns.slice(-this.recentTurnsLimit);
+      }
+      this.pushEvent("turn_aborted", { reason });
+      this.trace.activeTurn = null;
+      this.touch();
+    }
+    getSnapshot() {
+      return cloneTrace(this.trace);
+    }
+  };
+  function attachAgentEventsToSessionTrace(params) {
+    params.agent.subscribe((event) => {
+      switch (event.type) {
+        case "turn_start":
+          params.trace.startTurn();
+          break;
+        case "message_start":
+        case "message_update":
+          params.trace.updateAssistantMessage(event.message);
+          break;
+        case "tool_execution_start":
+          params.trace.startTool(event.toolCallId, event.toolName, event.args);
+          break;
+        case "tool_execution_end":
+          params.trace.finishTool(event.toolCallId, event.toolName, event.result, event.isError || false);
+          break;
+        case "agent_end": {
+          const lastMessage = params.agent.state.messages[params.agent.state.messages.length - 1];
+          if (lastMessage?.role === "assistant" && lastMessage?.stopReason === "error") {
+            params.trace.abortTurn(String(lastMessage?.errorMessage || "agent_end"));
+          }
+          break;
+        }
+      }
+    });
+    params.agent.subscribeSemantic((event) => {
+      switch (event.type) {
+        case "turn_completed":
+          params.trace.completeTurn(event.message, false);
+          break;
+        case "turn_failed":
+          params.trace.completeTurn(event.message, true);
+          break;
+      }
+    });
+  }
+  var SessionTraceSnapshotWriter = class {
+    constructor(options) {
+      this.options = options;
+      this.recentTurnsLimit = options.recentTurnsLimit ?? 10;
+      this.recentEventsLimit = options.recentEventsLimit ?? 100;
+      this.debounceMs = options.debounceMs ?? 50;
+    }
+    options;
+    cachedSessionId = null;
+    cachedController = null;
+    flushTimer = null;
+    recentTurnsLimit;
+    recentEventsLimit;
+    debounceMs;
+    loadController(sessionId) {
+      if (this.cachedSessionId === sessionId && this.cachedController) {
+        return this.cachedController;
+      }
+      const trace = this.options.loadTrace?.(sessionId) ?? createEmptySessionTrace(sessionId);
+      this.cachedSessionId = sessionId;
+      this.cachedController = new SessionTraceController(trace, this.recentTurnsLimit, this.recentEventsLimit);
+      return this.cachedController;
+    }
+    scheduleFlush() {
+      if (this.flushTimer) return;
+      this.flushTimer = setTimeout(() => {
+        this.flushTimer = null;
+        this.flush();
+      }, this.debounceMs);
+      this.flushTimer.unref?.();
+    }
+    mutate(mutator, options = {}) {
+      const sessionId = String(this.options.getSessionId() || "").trim();
+      if (!sessionId) return;
+      const controller = this.loadController(sessionId);
+      mutator(controller);
+      if (options.flush === false) {
+        this.scheduleFlush();
+        return;
+      }
+      this.flush();
+    }
+    flush() {
+      if (this.flushTimer) {
+        clearTimeout(this.flushTimer);
+        this.flushTimer = null;
+      }
+      if (!this.cachedController || !this.cachedSessionId) return;
+      this.options.saveTrace(this.cachedController.getSnapshot());
+    }
+    notePendingUserText(text) {
+      this.mutate((controller) => {
+        controller.notePendingUserText(text);
+      }, { flush: true });
+    }
+    startTurn(turnIndex) {
+      this.mutate((controller) => {
+        controller.startTurn(turnIndex);
+      }, { flush: true });
+    }
+    updateAssistantMessage(message) {
+      this.mutate((controller) => {
+        controller.updateAssistantMessage(message);
+      }, { flush: false });
+    }
+    startTool(toolCallId, toolName, args) {
+      this.mutate((controller) => {
+        controller.startTool(toolCallId, toolName, args);
+      }, { flush: true });
+    }
+    finishTool(toolCallId, toolName, result, isError) {
+      this.mutate((controller) => {
+        controller.finishTool(toolCallId, toolName, result, isError);
+      }, { flush: true });
+    }
+    completeTurn(message, failed = false) {
+      this.mutate((controller) => {
+        controller.completeTurn(message, failed);
+      }, { flush: true });
+    }
+    abortTurn(reason) {
+      this.mutate((controller) => {
+        controller.abortTurn(reason);
+      }, { flush: true });
+    }
+    noteDispatchStart(meta) {
+      this.mutate((controller) => {
+        controller.noteDispatchStart(meta);
+      }, { flush: true });
+    }
+    noteDispatchSettled(meta) {
+      this.mutate((controller) => {
+        controller.noteDispatchSettled(meta);
+      }, { flush: true });
+    }
+    noteWaitForIdleStart(meta) {
+      this.mutate((controller) => {
+        controller.noteWaitForIdleStart(meta);
+      }, { flush: true });
+    }
+    noteWaitForIdleSettled(meta) {
+      this.mutate((controller) => {
+        controller.noteWaitForIdleSettled(meta);
+      }, { flush: true });
+    }
+    noteStalled(reason, meta) {
+      this.mutate((controller) => {
+        controller.noteStalled(reason, meta);
+      }, { flush: true });
+    }
+    noteRuntimeEvent(type, meta) {
+      this.mutate((controller) => {
+        controller.noteRuntimeEvent(type, meta);
+      }, { flush: true });
+    }
+  };
+
+  // ../../packages/shared-headless-capabilities/src/skill-prompt.ts
+  function escapeXml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  }
+  function formatSkillSummariesForPrompt(skills) {
+    if (skills.length === 0) return "";
+    const lines = [
+      "\n\nThe following skills provide specialized instructions for specific tasks.",
+      "Use the read_skill tool only with an exact name from <available_skills> when the task matches its description.",
+      "Tools such as bash, read_file, grep_text, or manage_todo_list are not skills and must not be passed to read_skill.",
+      "Skills may reference package-local resources using relative paths.",
+      "When read_skill returns skill-local resources in details.resources, use read_resource(owner, path) for documents or config files that you need to inspect.",
+      "When read_skill returns a script or executable resource in details.resources, use resolve_resource(owner, path) before execution.",
+      "Do not guess host filesystem paths for skill-local resources.",
+      "",
+      "<available_skills>"
+    ];
+    for (const skill of skills) {
+      lines.push("  <skill>");
+      lines.push(`    <name>${escapeXml(skill.name)}</name>`);
+      lines.push(`    <description>${escapeXml(skill.description)}</description>`);
+      lines.push("  </skill>");
+    }
+    lines.push("</available_skills>");
+    return lines.join("\n");
+  }
+
+  // ../../packages/shared-headless-capabilities/src/bash-policy.ts
+  var DESTRUCTIVE_PATTERNS = [
+    { pattern: /\bgit\s+reset\s+--hard\b/, warning: "may discard uncommitted changes", commandClass: "git_destructive" },
+    { pattern: /\bgit\s+push\b[^;&|\n]*[ \t](--force|--force-with-lease|-f)\b/, warning: "may overwrite remote history", commandClass: "git_destructive" },
+    { pattern: /\bgit\s+clean\b(?![^;&|\n]*(?:-[a-zA-Z]*n|--dry-run))[^;&|\n]*-[a-zA-Z]*f/, warning: "may permanently delete untracked files", commandClass: "git_destructive" },
+    { pattern: /\bgit\s+(checkout|restore)\s+(--\s+)?\.[ \t]*($|[;&|\n])/, warning: "may discard all working tree changes", commandClass: "git_destructive" },
+    { pattern: /\bgit\s+stash[ \t]+(drop|clear)\b/, warning: "may permanently remove stashed changes", commandClass: "git_destructive" },
+    { pattern: /\bgit\s+branch\s+(-D[ \t]|--delete\s+--force|--force\s+--delete)\b/, warning: "may force-delete a branch", commandClass: "git_destructive" },
+    { pattern: /\bgit\s+(commit|push|merge)\b[^;&|\n]*--no-verify\b/, warning: "may skip safety hooks", commandClass: "git_destructive" },
+    { pattern: /(^|[;&|\n]\s*)rm\s+-[a-zA-Z]*[rR][a-zA-Z]*f|(^|[;&|\n]\s*)rm\s+-[a-zA-Z]*f[a-zA-Z]*[rR]/, warning: "may recursively force-remove files", commandClass: "filesystem_write" },
+    { pattern: /\bsudo\b|\bsu\s+-|\bchmod\s+777\b|\bchown\s+-R\b/, warning: "may require elevated privileges or weaken permissions", commandClass: "privilege_escalation" },
+    { pattern: /\b(DROP|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i, warning: "may drop or truncate database objects", commandClass: "infra_destructive" },
+    { pattern: /\bDELETE\s+FROM\s+\w+[ \t]*(;|"|'|\n|$)/i, warning: "may delete all rows from a database table", commandClass: "infra_destructive" },
+    { pattern: /\bkubectl\s+delete\b/, warning: "may delete Kubernetes resources", commandClass: "infra_destructive" },
+    { pattern: /\bterraform\s+destroy\b/, warning: "may destroy Terraform infrastructure", commandClass: "infra_destructive" }
+  ];
+  var POWERSHELL_DESTRUCTIVE_PATTERNS = [
+    { pattern: /\bRemove-Item\b[^;\n|]*(?:-Recurse|-Force)/i, warning: "may recursively or forcefully remove files", commandClass: "filesystem_write" },
+    { pattern: /\bRemove-Item\b[^;\n|]*(?:HKLM:|HKCU:|Registry::)/i, warning: "may remove registry entries", commandClass: "infra_destructive" },
+    { pattern: /\b(Set-ExecutionPolicy|Start-Process\b[^;\n|]*-Verb\s+RunAs)\b/i, warning: "may change execution policy or request elevation", commandClass: "privilege_escalation" },
+    { pattern: /\b(Stop-Computer|Restart-Computer)\b/i, warning: "may stop or restart the machine", commandClass: "infra_destructive" },
+    { pattern: /\bgit\s+reset\s+--hard\b/i, warning: "may discard uncommitted changes", commandClass: "git_destructive" },
+    { pattern: /\bgit\s+push\b[^;&|\n]*[ \t](--force|--force-with-lease|-f)\b/i, warning: "may overwrite remote history", commandClass: "git_destructive" }
+  ];
+  var CMD_DESTRUCTIVE_PATTERNS = [
+    { pattern: /\b(del|erase)\b[^&|\n]*(\/s|\/q)/i, warning: "may recursively or quietly delete files", commandClass: "filesystem_write" },
+    { pattern: /\brmdir\b[^&|\n]*(\/s|\/q)/i, warning: "may recursively remove directories", commandClass: "filesystem_write" },
+    { pattern: /\bformat\s+[a-z]:/i, warning: "may format a drive", commandClass: "infra_destructive" },
+    { pattern: /\b(takeown|icacls)\b[^&|\n]*(\/grant|\/reset|\/remove)/i, warning: "may alter ownership or permissions", commandClass: "privilege_escalation" },
+    { pattern: /\bgit\s+reset\s+--hard\b/i, warning: "may discard uncommitted changes", commandClass: "git_destructive" },
+    { pattern: /\bgit\s+push\b[^&|\n]*[ \t](--force|--force-with-lease|-f)\b/i, warning: "may overwrite remote history", commandClass: "git_destructive" }
+  ];
+  function splitCommand(command) {
+    return command.split(/&&|\|\||[;\n]/).map((part) => part.trim()).filter(Boolean);
+  }
+  function firstWord(command) {
+    return command.trim().split(/\s+/)[0] || "";
+  }
+  function classifyBashCommand(command) {
+    return classifyShellCommand(command, "bash");
+  }
+  function classifyShellCommand(command, shell = "bash") {
+    const warnings = [];
+    let commandClass = "unknown_shell";
+    let destructive = false;
+    const destructivePatterns = shell === "powershell" ? [...POWERSHELL_DESTRUCTIVE_PATTERNS, ...DESTRUCTIVE_PATTERNS] : shell === "cmd" ? [...CMD_DESTRUCTIVE_PATTERNS, ...DESTRUCTIVE_PATTERNS] : DESTRUCTIVE_PATTERNS;
+    for (const entry of destructivePatterns) {
+      if (entry.pattern.test(command)) {
+        warnings.push(entry.warning);
+        commandClass = entry.commandClass;
+        destructive = true;
+      }
+    }
+    if (destructive) {
+      return { commandClass, riskWarnings: [...new Set(warnings)], destructive, requiresPermission: true };
+    }
+    const normalized = command.trim().toLowerCase();
+    const words = splitCommand(normalized).map(firstWord);
+    const primary = words[0] || firstWord(normalized);
+    if (shell === "powershell" && /\b(invoke-webrequest|iwr|invoke-restmethod|irm)\b/.test(normalized)) {
+      commandClass = "network";
+    } else if (shell === "powershell" && /\b(new-item|set-content|add-content|copy-item|move-item|rename-item)\b/.test(normalized)) {
+      commandClass = "filesystem_write";
+    } else if (shell === "cmd" && /\b(curl|bitsadmin|certutil)\b/.test(normalized)) {
+      commandClass = "network";
+    } else if (shell === "cmd" && /\b(copy|xcopy|robocopy|move|mkdir|md|ren|rename)\b/.test(normalized)) {
+      commandClass = "filesystem_write";
+    } else if (/\b(npm|pnpm|yarn|bun)\s+(install|add|remove|update|ci)\b/.test(normalized)) {
+      commandClass = "package_manager";
+    } else if (/\b(npm|pnpm|yarn|bun|cargo|go|mvn|gradle|pytest|python -m pytest)\s+(run\s+)?(test|build|check|lint|typecheck|verify)\b/.test(normalized)) {
+      commandClass = "test_or_build";
+    } else if (/\b(curl|wget|http|npx|pip|gem|brew)\b/.test(normalized)) {
+      commandClass = "network";
+    } else if (/\b(cp|mv|mkdir|touch|tee|sed|perl)\b/.test(normalized) && /(^|[;&|\n])\s*(cp|mv|mkdir|touch|tee|sed|perl)\b/.test(normalized)) {
+      commandClass = "filesystem_write";
+    } else if (["ls", "pwd", "cat", "head", "tail", "grep", "rg", "find", "wc", "git", "diff", "test", "["].includes(primary)) {
+      commandClass = "diagnostic_read";
+    }
+    return {
+      commandClass,
+      riskWarnings: warnings,
+      destructive: false,
+      requiresPermission: commandClass === "filesystem_write" || commandClass === "network" || commandClass === "package_manager"
+    };
+  }
+
+  // ../../packages/shared-headless-capabilities/src/subagent.ts
+  var DEFAULT_SUBAGENT_TIMEOUT_SECONDS = 1200;
+  function formatSkillsForPrompt(skills) {
+    return formatSkillSummariesForPrompt(skills);
+  }
+  function collectLastAssistantText(messages) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message?.role !== "assistant") {
+        continue;
+      }
+      if (Array.isArray(message.content)) {
+        const textContent = message.content.filter((content) => content?.type === "text" && typeof content.text === "string").map((content) => content.text).join("\n");
+        if (textContent.trim()) {
+          return textContent;
+        }
+      }
+      if (typeof message.content === "string" && message.content.trim()) {
+        return message.content;
+      }
+    }
+    return "";
+  }
+  function inferComplexity(task, priority) {
+    const normalized = task.toLowerCase();
+    if (priority === "thorough" || task.length > 600 || /\b(across|architecture|refactor|review|investigate|debug|failing|test|compare|multiple|race|root cause)\b/.test(normalized)) {
+      return "complex";
+    }
+    if (task.length > 220 || /\b(find|search|locate|summarize|analyze|explain|trace|where)\b/.test(normalized)) {
+      return "moderate";
+    }
+    return "simple";
+  }
+  function selectModelClass(complexity, priority) {
+    if (priority === "thorough") {
+      return complexity === "complex" ? "strong" : "balanced";
+    }
+    if (complexity === "simple") return "light";
+    if (complexity === "moderate") return "balanced";
+    return "balanced";
+  }
+  function needsParentWrite(task) {
+    return /\b(edit|write|modify|change|fix|implement|create|delete|remove|rename|update)\b/i.test(task) || /修改|写入|实现|修复|删除|重命名|创建/.test(task);
+  }
+  function wrapBashGuard(tool, plan) {
+    return {
+      ...tool,
+      description: `${tool.description}
+Subagent guarded mode uses the same bash risk policy as the parent agent. Destructive commands are blocked; normal diagnostic, search, test, and build commands are allowed.`,
+      execute: async (toolCallId, params, signal, onUpdate) => {
+        const command = typeof params?.command === "string" ? params.command : "";
+        const classification = classifyBashCommand(command);
+        if (classification.destructive) {
+          const reason = `destructive bash command blocked for subagent: ${classification.riskWarnings.join("; ")}`;
+          plan.toolsExcluded.push({ name: "bash", reason });
+          return {
+            content: [{ type: "text", text: reason }],
+            details: {
+              policyDenied: true,
+              reason,
+              commandClass: classification.commandClass,
+              riskWarnings: classification.riskWarnings
+            },
+            isError: true
+          };
+        }
+        return tool.execute(toolCallId, params, signal, onUpdate);
+      }
+    };
+  }
+  function filterToolsForSubagent(runtimeTools, parentTools, plan) {
+    const parentNames = new Set(parentTools.map((tool) => tool.name));
+    const filtered = [];
+    for (const tool of runtimeTools) {
+      if (!parentNames.has(tool.name)) {
+        plan.toolsExcluded.push({ name: tool.name, reason: "not available in parent tool set" });
+        continue;
+      }
+      if (tool.name === "bash") {
+        filtered.push(wrapBashGuard(tool, plan));
+        continue;
+      }
+      const policy = getSubagentToolPolicyDecision(tool);
+      if (!policy.allowed) {
+        plan.toolsExcluded.push({ name: tool.name, reason: policy.reason || "not allowed for subagent" });
+        continue;
+      }
+      filtered.push(tool);
+    }
+    return filtered;
+  }
+  function buildSubagentPlan(deps, task, name, priority, timeoutSeconds) {
+    const complexity = inferComplexity(task, priority);
+    const modelClass = selectModelClass(complexity, priority);
+    const modelResolution = deps.resolveModelClass?.(modelClass);
+    const model = modelResolution?.model ?? deps.model;
+    const apiKey = modelResolution?.apiKey ?? deps.apiKey;
+    const partialPlan = {
+      task,
+      name,
+      priority,
+      complexity,
+      modelClass,
+      modelId: `${model?.provider ? `${model.provider}/` : ""}${model?.id ?? "unknown"}`,
+      modelFallbackReason: modelResolution?.fallbackReason,
+      toolsExcluded: [],
+      timeoutSeconds,
+      outputContract: "Return a concise answer with evidence, uncertainty, and any parent follow-up needed."
+    };
+    const runtimeTools = deps.createRuntimeTools();
+    const filteredTools = filterToolsForSubagent(runtimeTools, deps.getParentTools(), partialPlan);
+    const plan = {
+      ...partialPlan,
+      toolsAllowed: filteredTools.map((tool) => tool.name)
+    };
+    return { plan, tools: filteredTools, apiKey, model };
+  }
+  function createAgentInstance(deps, systemPrompt, tools, model, apiKey) {
+    if (deps.createAgent) {
+      return deps.createAgent({
+        systemPrompt,
+        model,
+        tools,
+        apiKey
+      });
+    }
+    return new Agent({
+      initialState: {
+        systemPrompt,
+        model,
+        tools,
+        thinkingLevel: "off"
+      },
+      apiKey
+    });
+  }
+  function extractEvidenceFromToolArgs(toolName, args) {
+    if (args && typeof args === "object") {
+      if (typeof args.path === "string") {
+        return { type: "file", value: `${toolName}: ${args.path}` };
+      }
+      if (typeof args.pattern === "string") {
+        return { type: "tool", value: `${toolName}: ${args.pattern}` };
+      }
+      if (typeof args.command === "string") {
+        return { type: "command", value: args.command.slice(0, 200) };
+      }
+    }
+    return null;
+  }
+  function extractEvidenceFromText(text) {
+    const evidence = [];
+    const pathMatches = text.match(/(?:[\w.-]+\/)+[\w.-]+/g) ?? [];
+    for (const match of pathMatches.slice(0, 8)) {
+      evidence.push({ type: "file", value: match });
+    }
+    return evidence;
+  }
+  function inferUncertainty(text, signals) {
+    if (/not sure|uncertain|could not|unable|没有找到|不确定/i.test(text)) {
+      return "high";
+    }
+    if (signals.some((signal) => signal.type === "tool_error" || signal.type === "model_fallback")) {
+      return "medium";
+    }
+    if (signals.some((signal) => signal.type === "tool_success" || signal.type === "file_read" || signal.type === "command_run")) {
+      return "low";
+    }
+    return "medium";
+  }
+  function isParentHandoffRequired(task) {
+    return task.needsParentWrite || task.status === "timeout" || task.status === "failed" || task.confidenceSignals.some((signal) => signal.type === "tool_error" || signal.type === "no_tool_use");
+  }
+  async function runSubagentWithProgress(deps, task, reportProgress) {
+    const startTime = Date.now();
+    task.status = "running";
+    let timedOut = false;
+    deps.debugLog?.("run", "runSubagentWithProgress START", { taskName: task.name, yoloMode: deps.yoloMode });
+    try {
+      reportProgress({ message: `[${task.name}] Starting...`, increment: 5 });
+      const { plan, tools, apiKey, model } = buildSubagentPlan(deps, task.task, task.name, task.priority, task.timeoutSeconds);
+      task.plan = plan;
+      task.needsParentWrite = needsParentWrite(task.task);
+      for (const excluded of plan.toolsExcluded) {
+        if (excluded.reason === "unclassified_tool") {
+          task.confidenceSignals.push({ type: "unclassified_tool", message: `${excluded.name} inherited without risk metadata` });
+        }
+      }
+      if (plan.modelFallbackReason) {
+        task.confidenceSignals.push({ type: "model_fallback", message: plan.modelFallbackReason });
+      }
+      if (!apiKey) {
+        throw new Error("No API key available for subagent execution.");
+      }
+      deps.log(`[Subagent ${task.name}] Plan: ${plan.complexity}/${plan.modelClass}, ${tools.length} tools`);
+      deps.debugLog?.("plan", "SubagentPlan", plan);
+      const systemPrompt = `You are a specialized subagent focused on one bounded task.
+
+Task boundary:
+- Work only on the assigned task.
+- Use available tools to gather evidence before making claims.
+- Do not edit files; if writing is needed, say what the parent agent should change.
+- Return a concise answer with evidence and uncertainty.
+
+Output:
+- Answer
+- Evidence
+- Uncertainty: low, medium, or high
+- Parent follow-up needed, if any
+
+${formatSkillsForPrompt(deps.skills ?? [])}`;
+      const subagent = createAgentInstance(deps, systemPrompt, tools, model, apiKey);
+      let assistantTurns = 0;
+      let toolCalls = 0;
+      let rejectTimeout = () => void 0;
+      let timeout;
+      let unsubscribe;
+      const timeoutPromise = new Promise((_, reject) => {
+        rejectTimeout = reject;
+      });
+      timeout = setTimeout(() => {
+        timedOut = true;
+        const timeoutMessage = `Subagent timed out after ${plan.timeoutSeconds} seconds`;
+        subagent.abort?.();
+        rejectTimeout(new Error(timeoutMessage));
+      }, plan.timeoutSeconds * 1e3);
+      unsubscribe = subagent.subscribe((event) => {
+        if (event.type === "tool_execution_start") {
+          toolCalls++;
+          const evidence = extractEvidenceFromToolArgs(event.toolName, event.args);
+          if (evidence) {
+            const runtimeEvidence = { ...evidence, source: "runtime" };
+            task.evidence.push(evidence);
+            task.runtimeEvidence.push(runtimeEvidence);
+          }
+          task.confidenceSignals.push({
+            type: event.toolName === "bash" ? "command_run" : event.toolName === "read_file" ? "file_read" : "tool_success",
+            message: `${event.toolName} started`
+          });
+          reportProgress({ message: `[${task.name}] Using ${event.toolName}...` });
+        }
+        if (event.type === "tool_execution_end" && event.isError) {
+          task.confidenceSignals.push({ type: "tool_error", message: `${event.toolName} failed` });
+        }
+        if (event.type === "message_end" && event.message?.role === "assistant") {
+          assistantTurns++;
+        }
+      });
+      let prompt = task.task;
+      if (task.needsParentWrite) {
+        prompt += "\n\nThis task appears to require edits. Do not write files; provide a read-only plan and set clear parent follow-up.";
+      }
+      prompt += "\n\nReturn evidence for your conclusion and state uncertainty as low, medium, or high.";
+      reportProgress({ message: `[${task.name}] Running plan ${plan.complexity}/${plan.modelClass}...`, increment: 20 });
+      try {
+        await Promise.race([
+          (async () => {
+            await subagent.prompt(prompt);
+            await subagent.waitForIdle?.();
+          })(),
+          timeoutPromise
+        ]);
+      } finally {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        unsubscribe?.();
+      }
+      const messages = subagent.state.messages;
+      deps.log(`[Subagent ${task.name}] Total messages: ${messages.length}`);
+      const response = collectLastAssistantText(messages) || "[No response]";
+      const reportedEvidence = extractEvidenceFromText(response).map((evidence) => ({ ...evidence, source: "reported" }));
+      task.evidence.push(...reportedEvidence.map(({ source: _source, ...evidence }) => evidence));
+      task.reportedEvidence.push(...reportedEvidence);
+      if (toolCalls === 0) {
+        task.confidenceSignals.push({ type: "no_tool_use", message: "subagent returned without tool use" });
+      }
+      const durationMs = Date.now() - startTime;
+      task.status = "completed";
+      task.result = response;
+      task.uncertainty = inferUncertainty(response, task.confidenceSignals);
+      task.details = {
+        turns: assistantTurns,
+        toolCalls,
+        durationMs
+      };
+      task.parentHandoffRequired = isParentHandoffRequired(task);
+      task.completedAt = Date.now();
+      reportProgress({ message: `[${task.name}] Completed (${durationMs}ms, ${toolCalls} tools)`, increment: 100 });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const stackTrace = error instanceof Error ? error.stack : void 0;
+      deps.debugLog?.("run", "EXCEPTION caught", {
+        error: errorMessage,
+        stack: stackTrace,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        taskName: task.name
+      });
+      task.status = timedOut ? "timeout" : "failed";
+      task.error = errorMessage;
+      task.uncertainty = "high";
+      task.parentHandoffRequired = isParentHandoffRequired(task);
+      task.completedAt = Date.now();
+      reportProgress({ message: `[${task.name}] Failed: ${errorMessage.slice(0, 100)}`, increment: 100 });
+    }
+  }
+  function buildParallelResult(tasks, totalDuration) {
+    let resultText = `Parallel Subagent Results (${tasks.length} tasks, ${totalDuration}ms)
+`;
+    resultText += `${"=".repeat(60)}
+
+`;
+    for (const task of tasks) {
+      const statusLabel = task.status === "completed" ? "completed" : task.status;
+      resultText += `**${task.name}** (${statusLabel}`;
+      if (task.plan) {
+        resultText += `, ${task.plan.complexity}/${task.plan.modelClass}`;
+      }
+      if (task.details) {
+        resultText += `, ${task.details.durationMs}ms, ${task.details.toolCalls} tools`;
+      }
+      resultText += `, uncertainty=${task.uncertainty})
+`;
+      if (task.status === "completed" && task.result) {
+        resultText += `${task.result}
+`;
+      } else if (task.error) {
+        resultText += `Error: ${task.error}
+`;
+      }
+      if (task.evidence.length > 0) {
+        resultText += `Evidence: ${task.evidence.slice(0, 5).map((entry) => `${entry.type}:${entry.value}`).join("; ")}
+`;
+      }
+      if (task.needsParentWrite) {
+        resultText += "Parent follow-up: writing appears to be needed; parent agent must make any edits.\n";
+      } else if (task.parentHandoffRequired) {
+        resultText += "Parent follow-up: subagent result needs parent review or continuation.\n";
+      }
+      resultText += "\n";
+    }
+    const completed = tasks.filter((task) => task.status === "completed").length;
+    const failed = tasks.filter((task) => task.status === "failed" || task.status === "timeout").length;
+    resultText += `${"=".repeat(60)}
+`;
+    resultText += `Summary: ${completed} completed, ${failed} failed, ${totalDuration}ms total
+`;
+    return resultText;
+  }
+  function normalizeTaskDefs(args) {
+    const taskDefs = args?.tasks;
+    if (!Array.isArray(taskDefs) || taskDefs.length === 0) {
+      return { error: "Invalid spawn_subagents_parallel arguments: tasks must be a non-empty array." };
+    }
+    const normalized = [];
+    for (const [index, def] of taskDefs.entries()) {
+      if (!def || typeof def !== "object") {
+        return { error: `Invalid task #${index + 1}: expected an object with task.` };
+      }
+      if ("prompt" in def || "kind" in def || "max_turns" in def) {
+        return { error: "Invalid spawn_subagents_parallel arguments: use tasks[].task plus optional name/priority; prompt, kind, and max_turns are no longer supported." };
+      }
+      const task = typeof def.task === "string" ? def.task.trim() : "";
+      if (!task) {
+        return { error: `Invalid task #${index + 1}: task cannot be empty.` };
+      }
+      const timeoutSeconds = "timeout" in def ? Number(def.timeout) : DEFAULT_SUBAGENT_TIMEOUT_SECONDS;
+      if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+        return { error: `Invalid task #${index + 1}: timeout must be a positive number of seconds.` };
+      }
+      const priority = def.priority === "thorough" ? "thorough" : "fast";
+      normalized.push({
+        name: typeof def.name === "string" && def.name.trim() ? def.name.trim() : void 0,
+        task,
+        priority,
+        timeoutSeconds
+      });
+    }
+    return normalized;
+  }
+  function createSubagentCapability(deps) {
+    const spawnParallelTool = {
+      name: "spawn_subagents_parallel",
+      label: "Spawn Subagents",
+      description: `Spawn child agents to run bounded sub-tasks in parallel.
+
+Use this for independent investigation, search, review, or triage work. Provide each task as a plain objective. Pie chooses the model class automatically. Use timeout only for unusually long tasks.`,
+      parameters: Type.Object({
+        tasks: Type.Array(
+          Type.Object(
+            {
+              task: Type.String({ description: "The bounded sub-task objective. Be specific and include expected output." }),
+              name: Type.Optional(Type.String({ description: "Short name for this subagent, shown in progress updates." })),
+              priority: Type.Optional(Type.Union([Type.Literal("fast"), Type.Literal("thorough")], { description: "fast uses lower-cost defaults; thorough raises model class when needed." })),
+              timeout: Type.Optional(Type.Number({ description: "Timeout in seconds. Default: 1200s (20 minutes). For longer tasks, explicitly set a higher value, e.g. { timeout: 3600 }." }))
+            },
+            { additionalProperties: false }
+          ),
+          { description: "Array of tasks to run in parallel", minItems: 1, maxItems: 10 }
+        )
+      }, { additionalProperties: false }),
+      async execute(first, second) {
+        const args = typeof first === "string" ? second : first;
+        const toolContext = typeof first === "string" ? { log: deps.log } : second;
+        const normalized = normalizeTaskDefs(args);
+        if ("error" in normalized) {
+          return {
+            content: [{ type: "text", text: normalized.error }],
+            isError: true,
+            details: { validationError: normalized.error }
+          };
+        }
+        const tasks = normalized.map((def, index) => ({
+          id: `subagent-${Date.now()}-${index}`,
+          name: def.name || `Task-${index + 1}`,
+          status: "pending",
+          task: def.task,
+          priority: def.priority,
+          timeoutSeconds: def.timeoutSeconds,
+          evidence: [],
+          confidenceSignals: [],
+          uncertainty: "medium",
+          needsParentWrite: false,
+          parentHandoffRequired: false,
+          runtimeEvidence: [],
+          reportedEvidence: [],
+          createdAt: Date.now()
+        }));
+        toolContext.log?.(`Spawning ${tasks.length} parallel subagents: ${tasks.map((task) => task.name).join(", ")}`);
+        toolContext.reportProgress?.({ message: `Launching ${tasks.length} parallel subagents...`, increment: 5 });
+        const startTime = Date.now();
+        await Promise.all(tasks.map((task) => runSubagentWithProgress(deps, task, toolContext.reportProgress ?? (() => void 0))));
+        const totalDuration = Date.now() - startTime;
+        const completed = tasks.filter((task) => task.status === "completed").length;
+        const failed = tasks.filter((task) => task.status === "failed" || task.status === "timeout").length;
+        deps.notify?.(`${completed}/${tasks.length} subagents completed (${totalDuration}ms)`, failed > 0 ? "warning" : "success");
+        return {
+          content: [{ type: "text", text: buildParallelResult(tasks, totalDuration) }],
+          details: {
+            tasks: tasks.map((task) => ({
+              id: task.id,
+              name: task.name,
+              status: task.status,
+              task: task.task,
+              timeoutSeconds: task.timeoutSeconds,
+              plan: task.plan,
+              evidence: task.evidence,
+              confidenceSignals: task.confidenceSignals,
+              runtimeEvidence: task.runtimeEvidence,
+              reportedEvidence: task.reportedEvidence,
+              evidenceCount: task.evidence.length,
+              runtimeEvidenceCount: task.runtimeEvidence.length,
+              reportedEvidenceCount: task.reportedEvidence.length,
+              confidenceSignalCount: task.confidenceSignals.length,
+              uncertainty: task.uncertainty,
+              needsParentWrite: task.needsParentWrite,
+              parentHandoffRequired: task.parentHandoffRequired,
+              failureReason: task.error,
+              details: task.details
+            })),
+            totalDuration,
+            completed,
+            failed
+          },
+          isError: failed > 0
+        };
+      }
+    };
+    return {
+      ...defineSharedCapability({
+        id: "subagent",
+        description: "Shared headless subagent capability for spawning child agents in parallel using host-provided runtime tools.",
+        tools: [spawnParallelTool],
+        extensions: [{ name: "subagent", description: "Provides subagent task orchestration and result aggregation." }]
+      }),
+      tools: [spawnParallelTool]
+    };
+  }
+
+  // ../../packages/shared-headless-capabilities/src/todo.ts
+  var TodoInputItemSchema = Type.Object(
+    {
+      title: Type.String({ description: "Concise action-oriented todo label." }),
+      description: Type.Optional(Type.String({ description: "Optional context or implementation notes." }))
+    },
+    { additionalProperties: false }
+  );
+  var ManageTodoListParamsSchema = Type.Object(
+    {
+      action: Type.Union([Type.Literal("create"), Type.Literal("read"), Type.Literal("complete_current"), Type.Literal("clear")], {
+        description: "create: create a new ordered todo list. read: return the current list. complete_current: complete the current item and advance to the next. clear: clear the active list."
+      }),
+      items: Type.Optional(
+        Type.Array(TodoInputItemSchema, {
+          minItems: 1,
+          description: "Required only for create. Provide todo titles and optional descriptions only; do not provide ids or status. The tool assigns ids and starts item 1 automatically."
+        })
+      ),
+      reason: Type.Optional(Type.String({ description: "Optional reason for clear." }))
+    },
+    { additionalProperties: false }
+  );
+  function cloneTodos(todos) {
+    return todos.map((todo) => ({ ...todo }));
+  }
+  function normalizeStatus(status) {
+    const value = String(status || "").trim().toLowerCase();
+    if (!value) return null;
+    if (value === "not-started" || value === "not_started" || value === "pending" || value === "todo" || value === "not started") {
+      return "not-started";
+    }
+    if (value === "in-progress" || value === "in_progress" || value === "in progress" || value === "doing" || value === "active" || value === "working") {
+      return "in-progress";
+    }
+    if (value === "completed" || value === "complete" || value === "done" || value === "finished") {
+      return "completed";
+    }
+    return null;
+  }
+  function normalizeTodos(todos) {
+    let seenInProgress = false;
+    return todos.map((todo) => {
+      const normalizedStatus = normalizeStatus(todo.status) ?? todo.status;
+      const status = normalizedStatus === "in-progress" ? seenInProgress ? "not-started" : (seenInProgress = true, "in-progress") : normalizedStatus;
+      return {
+        ...todo,
+        status
+      };
+    });
+  }
+  function validateTodoStateSequence(todos) {
+    if (todos.length === 0) return [];
+    const inProgressIndexes = todos.map((todo, index) => todo.status === "in-progress" ? index : -1).filter((index) => index >= 0);
+    if (inProgressIndexes.length !== 1) {
+      return ["active todo state must contain exactly one in-progress item"];
+    }
+    const currentIndex = inProgressIndexes[0];
+    const errors = [];
+    for (let index = 0; index < todos.length; index++) {
+      const expected = index < currentIndex ? "completed" : index === currentIndex ? "in-progress" : "not-started";
+      if (todos[index].status !== expected) {
+        errors.push(`Item ${index + 1}: expected ${expected} for sequential todo state`);
+      }
+    }
+    return errors;
+  }
+  function validateTodos(todos) {
+    const errors = [];
+    const validStatuses = /* @__PURE__ */ new Set(["not-started", "in-progress", "completed"]);
+    for (let index = 0; index < todos.length; index++) {
+      const item = todos[index];
+      const prefix = `Item ${index + 1}`;
+      if (typeof item?.id !== "number" || !Number.isInteger(item.id) || item.id < 1) {
+        errors.push(`${prefix}: 'id' must be a positive integer`);
+      }
+      if (item?.id !== index + 1) {
+        errors.push(`${prefix}: ids must be sequential starting from 1`);
+      }
+      if (typeof item?.title !== "string" || item.title.trim().length === 0) {
+        errors.push(`${prefix}: 'title' is required`);
+      }
+      if (typeof item?.description !== "string") {
+        errors.push(`${prefix}: 'description' must be a string`);
+      }
+      if (!validStatuses.has(item?.status)) {
+        errors.push(`${prefix}: 'status' must be one of: not-started, in-progress, completed`);
+      }
+    }
+    return errors;
+  }
+  function getTodoValidation(todos) {
+    const errors = [...validateTodos(todos), ...validateTodoStateSequence(todos)];
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  }
+  function getTodoStats(todos) {
+    const total = todos.length;
+    const completed = todos.filter((todo) => todo.status === "completed").length;
+    const inProgress = todos.filter((todo) => todo.status === "in-progress").length;
+    return {
+      total,
+      completed,
+      inProgress,
+      notStarted: total - completed - inProgress
+    };
+  }
+  function rejectTodoAction(action, message, currentTodos) {
+    const safeCurrentTodos = cloneTodos(currentTodos);
+    return {
+      nextTodos: safeCurrentTodos,
+      result: {
+        content: [{ type: "text", text: `Todo action failed: ${message}` }],
+        details: { action, todos: safeCurrentTodos, error: message },
+        isError: true
+      }
+    };
+  }
+  function validateTodoInputItems(items) {
+    if (!Array.isArray(items) || items.length === 0) {
+      return { error: "items is required for create and must contain at least one item" };
+    }
+    const normalized = [];
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      if (!item || typeof item !== "object") {
+        return { error: `item ${index + 1} must be an object` };
+      }
+      if (typeof item.title !== "string" || item.title.trim().length === 0) {
+        return { error: `item ${index + 1} title is required` };
+      }
+      if (item.description !== void 0 && typeof item.description !== "string") {
+        return { error: `item ${index + 1} description must be a string` };
+      }
+      normalized.push({
+        title: item.title.trim(),
+        description: typeof item.description === "string" ? item.description.trim() : ""
+      });
+    }
+    return { items: normalized };
+  }
+  function createTodosFromItems(items) {
+    return items.map((item, index) => ({
+      id: index + 1,
+      title: item.title,
+      description: item.description ?? "",
+      status: index === 0 ? "in-progress" : "not-started"
+    }));
+  }
+  function executeManageTodoList(args, currentTodos) {
+    const safeCurrentTodos = cloneTodos(currentTodos);
+    switch (args.action) {
+      case "read":
+        return {
+          nextTodos: safeCurrentTodos,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: safeCurrentTodos.length ? JSON.stringify(safeCurrentTodos, null, 2) : "No active todo list. Use action=create with items to create one."
+              }
+            ],
+            details: { action: "read", todos: safeCurrentTodos }
+          }
+        };
+      case "create": {
+        if (safeCurrentTodos.length > 0) {
+          return rejectTodoAction("create", "an active todo list already exists; complete it or clear it before creating a new one", safeCurrentTodos);
+        }
+        const parsed = validateTodoInputItems(args.items);
+        if ("error" in parsed) {
+          return rejectTodoAction("create", parsed.error, safeCurrentTodos);
+        }
+        const nextTodos = createTodosFromItems(parsed.items);
+        return {
+          nextTodos,
+          result: {
+            content: [{ type: "text", text: `Created ${nextTodos.length} todo${nextTodos.length === 1 ? "" : "s"}. Started item 1: ${nextTodos[0]?.title}.` }],
+            details: { action: "create", todos: cloneTodos(nextTodos) }
+          }
+        };
+      }
+      case "complete_current": {
+        if (safeCurrentTodos.length === 0) {
+          return rejectTodoAction("complete_current", "no active todo list", safeCurrentTodos);
+        }
+        const validation = getTodoValidation(safeCurrentTodos);
+        if (!validation.valid) {
+          return rejectTodoAction("complete_current", validation.errors.join("; "), safeCurrentTodos);
+        }
+        const currentIndex = safeCurrentTodos.findIndex((todo) => todo.status === "in-progress");
+        if (currentIndex < 0) {
+          return rejectTodoAction("complete_current", "no current in-progress todo item", safeCurrentTodos);
+        }
+        const nextTodos = cloneTodos(safeCurrentTodos);
+        nextTodos[currentIndex] = { ...nextTodos[currentIndex], status: "completed" };
+        if (currentIndex + 1 < nextTodos.length) {
+          nextTodos[currentIndex + 1] = { ...nextTodos[currentIndex + 1], status: "in-progress" };
+          return {
+            nextTodos,
+            result: {
+              content: [{ type: "text", text: `Completed item ${currentIndex + 1}. Started item ${currentIndex + 2}: ${nextTodos[currentIndex + 1]?.title}.` }],
+              details: { action: "complete_current", todos: cloneTodos(nextTodos) }
+            }
+          };
+        }
+        return {
+          nextTodos: [],
+          result: {
+            content: [{ type: "text", text: `Completed item ${currentIndex + 1}. All todos are complete, so the list was cleared.` }],
+            details: {
+              action: "complete_current",
+              todos: [],
+              autoCleared: true,
+              completedTodos: cloneTodos(nextTodos)
+            }
+          }
+        };
+      }
+      case "clear": {
+        const reason = typeof args.reason === "string" ? args.reason.trim() : void 0;
+        return {
+          nextTodos: [],
+          result: {
+            content: [{ type: "text", text: reason ? `Cleared todo list: ${reason}` : "Cleared todo list." }],
+            details: { action: "clear", todos: [], reason }
+          }
+        };
+      }
+      default:
+        return rejectTodoAction("read", `unknown action: ${args.action}`, safeCurrentTodos);
+    }
+  }
+  function restoreTodoState(state) {
+    if (!Array.isArray(state)) {
+      return [];
+    }
+    const normalized = normalizeTodos(cloneTodos(state));
+    return getTodoValidation(normalized).valid ? normalized : [];
+  }
+  function restoreTodosFromMessages(messages) {
+    let todos = [];
+    for (const message of messages || []) {
+      const toolResultMessage = message;
+      if (toolResultMessage.role !== "toolResult" || toolResultMessage.toolName !== "manage_todo_list") {
+        continue;
+      }
+      const details = toolResultMessage.details;
+      if (details?.todos) {
+        todos = restoreTodoState(details.todos);
+      }
+    }
+    return todos;
+  }
+  function createTodoStore(initialState) {
+    let todos = restoreTodoState(initialState);
+    return {
+      read() {
+        return cloneTodos(todos);
+      },
+      write(nextTodos) {
+        todos = restoreTodoState(nextTodos);
+      },
+      clear() {
+        todos = [];
+      },
+      restore(state) {
+        todos = restoreTodoState(state);
+      },
+      restoreFromMessages(messages) {
+        todos = restoreTodosFromMessages(messages);
+      },
+      getStats() {
+        return getTodoStats(todos);
+      },
+      validate(nextTodos) {
+        if (!Array.isArray(nextTodos)) {
+          return { valid: false, errors: ["todos must be an array"] };
+        }
+        return getTodoValidation(normalizeTodos(cloneTodos(nextTodos)));
+      }
+    };
+  }
+
   // ../../packages/agent-framework/src/skills/parser.ts
+  function inferResourceKind(path) {
+    const lower = path.toLowerCase();
+    if (lower.endsWith(".md")) return "document";
+    if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".sh") || lower.endsWith(".py")) return "script";
+    return void 0;
+  }
+  function extractResourceRefs(content) {
+    const matches = content.match(/`((?:\.\/)?(?:references|scripts)\/[^`\s]+)`/g) || [];
+    const refs = matches.map((raw) => raw.slice(1, -1).replace(/^\.\//, "")).filter((path, index, all) => path.length > 0 && all.indexOf(path) === index).map((path) => ({ path, kind: inferResourceKind(path) }));
+    return refs.length > 0 ? refs : void 0;
+  }
   function parseFrontmatter(yaml) {
     const result = {};
     const lines = yaml.split("\n");
@@ -13367,6 +15656,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       displayName,
       description,
       prompt: content,
+      resourceRefs: extractResourceRefs(content),
       allowedTools: Array.isArray(frontmatter.tools) ? frontmatter.tools : typeof frontmatter.tools === "string" ? [frontmatter.tools] : void 0,
       tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : typeof frontmatter.tags === "string" ? [frontmatter.tags] : void 0,
       author: frontmatter.author,
@@ -13471,30 +15761,6 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       skills: Array.from(skillMap.values()),
       diagnostics: allDiagnostics
     };
-  }
-  function formatSkillsForPrompt(skills) {
-    if (skills.length === 0) {
-      return "";
-    }
-    const lines = [
-      "\n\nThe following skills provide specialized instructions for specific tasks.",
-      "Use the read tool to load a skill's file when the task matches its description.",
-      "When a skill file references a relative path, resolve it against the skill directory.",
-      "",
-      "<available_skills>"
-    ];
-    for (const skill of skills) {
-      lines.push("  <skill>");
-      lines.push(`    <name>${escapeXml(skill.name)}</name>`);
-      lines.push(`    <description>${escapeXml(skill.description)}</description>`);
-      lines.push(`    <location>${escapeXml(skill.filePath || "")}</location>`);
-      lines.push("  </skill>");
-    }
-    lines.push("</available_skills>");
-    return lines.join("\n");
-  }
-  function escapeXml(str) {
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
   }
   var SkillLoader = class {
     userDir;
@@ -14509,8 +16775,744 @@ ${compactSummary}`;
     return new SessionManager(options);
   }
 
+  // ../../packages/agent-framework/src/session/controller.ts
+  function isAgentMessage2(value) {
+    return !!value && typeof value === "object" && "role" in value;
+  }
+  function isUserContentBlock2(value) {
+    if (!value || typeof value !== "object" || !("type" in value)) {
+      return false;
+    }
+    const type = value.type;
+    return type === "text" || type === "image" || type === "audio" || type === "video" || type === "fileRef";
+  }
+  function normalizePromptInput(input) {
+    if (typeof input === "string") {
+      return [{ role: "user", content: input, timestamp: Date.now() }];
+    }
+    if (Array.isArray(input)) {
+      if (input.every(isAgentMessage2)) {
+        return input;
+      }
+      if (input.every(isUserContentBlock2)) {
+        return [{ role: "user", content: input, timestamp: Date.now() }];
+      }
+      throw new Error("Invalid prompt array: expected user content blocks or agent messages.");
+    }
+    if (isAgentMessage2(input)) {
+      return [input];
+    }
+    throw new Error("Invalid prompt input.");
+  }
+  function textFromMessage(message) {
+    const content = message.content;
+    if (typeof content === "string") {
+      return content;
+    }
+    if (Array.isArray(content)) {
+      return content.filter((block) => !!block && typeof block === "object" && "type" in block).filter((block) => block.type === "text").map((block) => block.text || "").join("");
+    }
+    return "";
+  }
+  function stableStringify(value) {
+    if (value === null || typeof value !== "object") {
+      return JSON.stringify(value) ?? String(value);
+    }
+    if (Array.isArray(value)) {
+      return `[${value.map(stableStringify).join(",")}]`;
+    }
+    const record = value;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(",")}}`;
+  }
+  function summarizeToolResultForGuard(result) {
+    if (!result || typeof result !== "object") {
+      return String(result ?? "");
+    }
+    const content = Array.isArray(result.content) ? result.content : [];
+    const text = content.filter((block) => !!block && typeof block === "object" && "type" in block).filter((block) => block.type === "text").map((block) => block.text || "").join("\n").trim();
+    return text || stableStringify(result);
+  }
+  function cloneQueuedInput(input) {
+    return {
+      ...input,
+      messages: input.messages.slice()
+    };
+  }
+  var AgentSessionController = class {
+    agent;
+    sessionManager;
+    cwd;
+    compaction;
+    listeners = /* @__PURE__ */ new Set();
+    unsubscribeAgent;
+    unsubscribeSemantic;
+    queuedInputs = [];
+    lastSyncedMessageCount = 0;
+    disposed = false;
+    baseSystemPrompt;
+    prepareTurn;
+    afterAgentEnd;
+    canDispatchQueuedTurn;
+    getAutoCompactDecision;
+    getAutoContinueMessage;
+    retry;
+    retryAttempt = 0;
+    retryTimer;
+    dispatchTimer;
+    autoCompactTimer;
+    autoContinueTimer;
+    pendingAutoCompact;
+    queueIdCounter = 0;
+    repeatedToolFailures = /* @__PURE__ */ new Map();
+    runtimeGuardTriggered = false;
+    constructor(options) {
+      this.agent = options.agent;
+      this.sessionManager = options.sessionManager;
+      this.cwd = options.cwd;
+      this.compaction = options.compaction;
+      this.baseSystemPrompt = options.baseSystemPrompt ?? this.agent.state.systemPrompt;
+      this.prepareTurn = options.prepareTurn;
+      this.afterAgentEnd = options.afterAgentEnd;
+      this.canDispatchQueuedTurn = options.canDispatchQueuedTurn;
+      this.getAutoCompactDecision = options.getAutoCompactDecision;
+      this.getAutoContinueMessage = options.getAutoContinueMessage;
+      this.retry = options.retry;
+      if (options.onEvent) {
+        this.listeners.add(options.onEvent);
+      }
+      this.syncFromActiveSession();
+      this.unsubscribeAgent = this.agent.subscribe((event) => {
+        this.emit({ type: "agent_event", event });
+        if (event.type === "agent_start") {
+          this.resetRuntimeGuardState();
+          this.emit({ type: "streaming_changed", isStreaming: true });
+        }
+        if (event.type === "tool_execution_end") {
+          this.recordToolExecutionEndForGuard(event);
+        }
+        if (event.type === "message_end") {
+          this.markQueuedMessageDelivered(event.message);
+        }
+        if (event.type === "turn_end") {
+          void this.syncNewAgentMessages();
+          void this.handleTurnEndRuntimePolicies(event.message);
+        }
+        if (event.type === "agent_end") {
+          void this.handleAgentEndHook(event.messages);
+          this.emit({ type: "streaming_changed", isStreaming: false });
+        }
+      });
+      this.unsubscribeSemantic = this.agent.subscribeSemantic((event) => {
+        this.emit({ type: "semantic_event", event });
+      });
+    }
+    get isStreaming() {
+      return this.agent.state.isStreaming;
+    }
+    get hasQueuedMessages() {
+      return this.queuedInputs.length > 0 || this.agent.hasQueuedMessages();
+    }
+    get pendingMessageCount() {
+      return this.queuedInputs.length;
+    }
+    get queuedInputsSnapshot() {
+      return this.queuedInputs.map(cloneQueuedInput);
+    }
+    get activeSessionMetadata() {
+      const metadata = this.sessionManager.getActiveSession()?.metadata;
+      return metadata ? { ...metadata } : void 0;
+    }
+    get syncedMessageCount() {
+      return this.lastSyncedMessageCount;
+    }
+    get runtimeContext() {
+      return {
+        systemPrompt: this.agent.state.systemPrompt,
+        tools: this.agent.state.tools.slice()
+      };
+    }
+    getRuntimeSnapshot() {
+      return {
+        isStreaming: this.isStreaming,
+        hasQueuedMessages: this.hasQueuedMessages,
+        pendingMessageCount: this.pendingMessageCount,
+        queuedInputs: this.queuedInputsSnapshot,
+        activeSessionMetadata: this.activeSessionMetadata,
+        syncedMessageCount: this.syncedMessageCount
+      };
+    }
+    subscribe(listener) {
+      this.listeners.add(listener);
+      return () => this.listeners.delete(listener);
+    }
+    syncFromActiveSession(messages) {
+      const activeSession = this.sessionManager.getActiveSession();
+      this.agent.sessionId = activeSession?.id;
+      const sessionMessages = messages ?? this.sessionManager.getMessages();
+      const conversationMessages = sessionMessages.filter(
+        (message) => message.role === "user" || message.role === "assistant" || message.role === "toolResult"
+      );
+      this.agent.replaceMessages(conversationMessages);
+      this.lastSyncedMessageCount = conversationMessages.length;
+      this.clearQueuedInputs();
+    }
+    markSyncedToAgentState() {
+      this.lastSyncedMessageCount = this.agent.state.messages.length;
+    }
+    replaceMessagesAndMarkSynced(messages, options) {
+      this.agent.replaceMessages(messages);
+      if (options?.updateSession) {
+        this.sessionManager.updateMessages(messages);
+      }
+      this.markSyncedToAgentState();
+    }
+    updateRuntimeContext(context) {
+      if (context.systemPrompt !== void 0) {
+        this.baseSystemPrompt = context.systemPrompt;
+        this.agent.setSystemPrompt(context.systemPrompt);
+      }
+      if (context.tools !== void 0) {
+        this.agent.setTools(context.tools);
+      }
+    }
+    async prompt(input, options) {
+      const messages = normalizePromptInput(input);
+      if (options?.streamingBehavior) {
+        this.enqueueMessages(messages, options.streamingBehavior, options);
+        if (!this.isStreaming) {
+          this.scheduleQueueDispatch();
+        }
+        return;
+      }
+      if (this.isStreaming) {
+        throw new Error("Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.");
+      }
+      const prepared = await this.preparePromptMessages(messages, options);
+      if (prepared.handled) {
+        return;
+      }
+      if (prepared.systemPrompt !== void 0) {
+        this.agent.setSystemPrompt(prepared.systemPrompt);
+      }
+      await this.agent.prompt(prepared.messages);
+      await this.syncNewAgentMessages();
+    }
+    async continue() {
+      if (this.isStreaming) {
+        throw new Error("Agent is already processing. Wait for completion before continuing.");
+      }
+      await this.agent.continue();
+      await this.syncNewAgentMessages();
+    }
+    abort() {
+      this.cancelRetry();
+      this.cancelAutoCompactTimerOnly();
+      this.cancelDispatchTimerOnly();
+      this.cancelAutoContinueTimerOnly();
+      this.agent.abort();
+    }
+    waitForIdle() {
+      return this.agent.waitForIdle();
+    }
+    async runAutoCompact(reason, willRetry = false) {
+      if (!this.compaction) {
+        throw new Error("No compaction handler configured");
+      }
+      this.emit({ type: "auto_compaction_start", reason, willRetry });
+      try {
+        if (reason === "overflow") {
+          this.removeTrailingAssistantError();
+        }
+        const result = await this.compaction.compact({
+          reason,
+          willRetry,
+          agent: this.agent,
+          sessionManager: this.sessionManager,
+          messages: this.agent.state.messages.slice(),
+          cwd: this.cwd
+        });
+        if (result?.summary && result.firstKeptEntryId) {
+          this.sessionManager.appendCompaction(result.summary, result.firstKeptEntryId, result.tokensBefore);
+          this.replaceMessagesAndMarkSynced(this.sessionManager.getMessages());
+        } else if (result?.messages) {
+          this.replaceMessagesAndMarkSynced(result.messages, { updateSession: true });
+        }
+        this.markSyncedToAgentState();
+        await this.sessionManager.save();
+        if (willRetry && !result?.aborted) {
+          await this.continue();
+        }
+        this.emit({ type: "auto_compaction_end", reason, willRetry, result });
+        return result;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.emit({ type: "auto_compaction_end", reason, willRetry, errorMessage });
+        throw error;
+      }
+    }
+    dispose() {
+      if (this.disposed) return;
+      this.disposed = true;
+      this.cancelRetry();
+      this.cancelAutoCompactTimerOnly();
+      this.cancelDispatchTimerOnly();
+      this.cancelAutoContinueTimerOnly();
+      this.unsubscribeAgent?.();
+      this.unsubscribeSemantic?.();
+      this.listeners.clear();
+      this.queuedInputs = [];
+    }
+    drainQueuedInputsForEditor() {
+      const drained = this.queuedInputs.map(cloneQueuedInput);
+      this.queuedInputs = [];
+      this.agent.clearAllQueues();
+      this.emitQueueChanged();
+      return drained;
+    }
+    replaceQueuedInputText(search, replacement) {
+      if (!search || this.queuedInputs.length === 0) {
+        return;
+      }
+      let changed = false;
+      for (const input of this.queuedInputs) {
+        if (input.displayText.includes(search)) {
+          input.displayText = input.displayText.split(search).join(replacement);
+          changed = true;
+        }
+        for (const message of input.messages) {
+          if (message.role !== "user") {
+            continue;
+          }
+          const content = message.content;
+          if (typeof content === "string" && content.includes(search)) {
+            message.content = content.split(search).join(replacement);
+            changed = true;
+          } else if (Array.isArray(content)) {
+            for (const block of content) {
+              if (block && typeof block === "object" && "type" in block && block.type === "text" && typeof block.text === "string" && block.text.includes(search)) {
+                block.text = block.text.split(search).join(replacement);
+                changed = true;
+              }
+            }
+          }
+        }
+      }
+      if (changed) {
+        this.emitQueueChanged();
+      }
+    }
+    requestQueueDispatch() {
+      if (this.queuedInputs.length > 0) {
+        this.scheduleQueueDispatch();
+      }
+    }
+    async preparePromptMessages(messages, options) {
+      if (this.baseSystemPrompt !== void 0) {
+        this.agent.setSystemPrompt(this.baseSystemPrompt);
+      }
+      if (!this.prepareTurn) {
+        return { handled: false, messages };
+      }
+      this.emit({ type: "prepare_turn", source: options?.source, messageCount: messages.length });
+      const result = await this.prepareTurn({
+        source: options?.source,
+        streamingBehavior: options?.streamingBehavior,
+        messages,
+        agent: this.agent,
+        sessionManager: this.sessionManager,
+        cwd: this.cwd,
+        baseSystemPrompt: this.baseSystemPrompt
+      });
+      return {
+        handled: result?.handled === true,
+        messages: result?.messages ?? messages,
+        systemPrompt: result?.systemPrompt
+      };
+    }
+    async syncNewAgentMessages() {
+      const activeSession = this.sessionManager.getActiveSession();
+      if (!activeSession) {
+        this.lastSyncedMessageCount = this.agent.state.messages.length;
+        return;
+      }
+      const currentAgentCount = this.agent.state.messages.length;
+      if (currentAgentCount <= this.lastSyncedMessageCount) {
+        return;
+      }
+      const addedMessages = this.agent.state.messages.slice(this.lastSyncedMessageCount);
+      for (const message of addedMessages) {
+        this.sessionManager.addMessage(message);
+      }
+      this.lastSyncedMessageCount = currentAgentCount;
+      this.emit({ type: "session_synced", addedMessages, totalMessages: currentAgentCount });
+      await this.sessionManager.save();
+    }
+    enqueueMessages(messages, mode, options) {
+      if (options.dedupeKey && this.queuedInputs.some((input) => input.dedupeKey === options.dedupeKey)) {
+        return;
+      }
+      for (const message of messages) {
+        const queuedInput = {
+          id: `queued-${++this.queueIdCounter}`,
+          mode,
+          source: options.source,
+          displayText: options.displayText ?? textFromMessage(message),
+          dedupeKey: options.dedupeKey,
+          clearEditor: options.clearEditor ?? true,
+          visibility: options.visibility ?? "user",
+          deliveredToAgent: false,
+          messages: [message],
+          createdAt: Date.now()
+        };
+        this.queuedInputs.push(queuedInput);
+        if (this.isStreaming) {
+          this.deliverQueuedInputToAgent(queuedInput);
+        }
+      }
+      this.emitQueueChanged();
+    }
+    deliverQueuedInputToAgent(queuedInput) {
+      if (queuedInput.deliveredToAgent) {
+        return;
+      }
+      for (const message of queuedInput.messages) {
+        if (queuedInput.mode === "steer") {
+          this.agent.steer(message);
+        } else {
+          this.agent.followUp(message);
+        }
+      }
+      queuedInput.deliveredToAgent = true;
+    }
+    markQueuedMessageDelivered(message) {
+      if (this.queuedInputs.length === 0 || message.role !== "user") {
+        return;
+      }
+      const index = this.queuedInputs.findIndex((queued) => queued.messages.includes(message));
+      if (index >= 0) {
+        const [delivered2] = this.queuedInputs.splice(index, 1);
+        if (delivered2) {
+          this.emit({ type: "queued_turn_dispatched", queuedInput: cloneQueuedInput(delivered2) });
+        }
+        this.emitQueueChanged();
+        return;
+      }
+      const delivered = this.queuedInputs.shift();
+      if (delivered) {
+        this.emit({ type: "queued_turn_dispatched", queuedInput: cloneQueuedInput(delivered) });
+      }
+      this.emitQueueChanged();
+    }
+    clearQueuedInputs() {
+      if (this.queuedInputs.length === 0 && !this.agent.hasQueuedMessages()) {
+        return;
+      }
+      this.queuedInputs = [];
+      this.agent.clearAllQueues();
+      this.emitQueueChanged();
+    }
+    removeTrailingAssistantError() {
+      const messages = this.agent.state.messages;
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.role === "assistant" && (lastMessage.stopReason === "error" || Boolean(lastMessage.errorMessage))) {
+        const nextMessages = messages.slice(0, -1);
+        this.replaceMessagesAndMarkSynced(nextMessages, { updateSession: true });
+      }
+    }
+    async handleTurnEndRuntimePolicies(message) {
+      if (this.disposed) {
+        return;
+      }
+      if (this.runtimeGuardTriggered) {
+        return;
+      }
+      const compactDecision = this.getAutoCompactDecision?.({
+        agent: this.agent,
+        sessionManager: this.sessionManager,
+        cwd: this.cwd,
+        message,
+        messages: this.agent.state.messages.slice()
+      });
+      if (compactDecision) {
+        this.scheduleAutoCompact(compactDecision);
+        return;
+      }
+      await this.handleTurnEndForRetry(message);
+    }
+    async handleTurnEndForRetry(message) {
+      if (!this.retry || !message || message.role !== "assistant") {
+        return;
+      }
+      const errorMessage = message.stopReason === "error" ? message.errorMessage : void 0;
+      if (!errorMessage) {
+        if (this.retryAttempt > 0) {
+          this.emit({ type: "retry_succeeded", attempts: this.retryAttempt });
+          this.retryAttempt = 0;
+        }
+        return;
+      }
+      if (!this.retry.isRetryableError(errorMessage)) {
+        return;
+      }
+      const maxRetries = this.retry.maxRetries ?? 3;
+      this.retryAttempt += 1;
+      if (this.retryAttempt > maxRetries) {
+        this.emit({ type: "retry_exhausted", errorMessage, maxRetries });
+        this.retryAttempt = 0;
+        return;
+      }
+      const attempt = this.retryAttempt;
+      const delayMs = (this.retry.baseDelayMs ?? 2e3) * 2 ** (attempt - 1);
+      this.emit({ type: "retry_scheduled", errorMessage, attempt, maxRetries, delayMs });
+      this.cancelRetryTimerOnly();
+      const setTimer = this.retry.setTimeout ?? ((callback, delay) => setTimeout(callback, delay));
+      this.retryTimer = setTimer(() => {
+        this.retryTimer = void 0;
+        this.emit({ type: "retry_start", attempt, maxRetries });
+        this.removeTrailingAssistantError();
+        void this.continue().catch(() => {
+        });
+      }, delayMs);
+    }
+    async handleAgentEndHook(messages) {
+      if (this.disposed) {
+        return;
+      }
+      if (this.runtimeGuardTriggered) {
+        return;
+      }
+      if (this.afterAgentEnd) {
+        this.emit({ type: "agent_end_hook_start", hasQueuedMessages: this.hasQueuedMessages });
+        try {
+          await this.afterAgentEnd({
+            messages,
+            agent: this.agent,
+            sessionManager: this.sessionManager,
+            cwd: this.cwd,
+            hasQueuedMessages: this.hasQueuedMessages
+          });
+          this.emit({ type: "agent_end_hook_end" });
+        } catch (error) {
+          this.emit({
+            type: "agent_end_hook_end",
+            errorMessage: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+      if (this.queuedInputs.length > 0) {
+        this.scheduleQueueDispatch();
+      }
+      this.scheduleAutoContinueCheck(messages);
+    }
+    cancelRetryTimerOnly() {
+      if (this.retryTimer === void 0) {
+        return;
+      }
+      const clearTimer = this.retry?.clearTimeout ?? ((handle) => clearTimeout(handle));
+      clearTimer(this.retryTimer);
+      this.retryTimer = void 0;
+    }
+    cancelRetry() {
+      this.cancelRetryTimerOnly();
+      this.retryAttempt = 0;
+    }
+    scheduleQueueDispatch(delayMs = 0) {
+      if (this.disposed || this.runtimeGuardTriggered || this.dispatchTimer !== void 0) {
+        return;
+      }
+      const setTimer = this.retry?.setTimeout ?? ((callback, delay) => setTimeout(callback, delay));
+      this.dispatchTimer = setTimer(() => {
+        this.dispatchTimer = void 0;
+        void this.dispatchNextQueuedInput();
+      }, delayMs);
+    }
+    async dispatchNextQueuedInput() {
+      if (this.disposed || this.isStreaming || this.retryTimer !== void 0 || this.autoCompactTimer !== void 0) {
+        return false;
+      }
+      const queuedInput = this.queuedInputs[0];
+      if (!queuedInput) {
+        return false;
+      }
+      const decision = await this.canDispatchQueuedTurn?.({
+        agent: this.agent,
+        sessionManager: this.sessionManager,
+        cwd: this.cwd,
+        queuedInput: cloneQueuedInput(queuedInput)
+      });
+      const dispatchDecision = typeof decision === "boolean" ? { allowed: decision } : decision ?? { allowed: true };
+      if (!dispatchDecision.allowed) {
+        this.emit({ type: "queued_turn_blocked", queuedInput: cloneQueuedInput(queuedInput), reason: dispatchDecision.reason });
+        if (dispatchDecision.retryAfterMs !== void 0 && dispatchDecision.retryAfterMs >= 0) {
+          this.scheduleQueueDispatch(dispatchDecision.retryAfterMs);
+        }
+        return false;
+      }
+      this.queuedInputs.shift();
+      this.emitQueueChanged();
+      this.emit({ type: "queued_turn_dispatched", queuedInput: cloneQueuedInput(queuedInput) });
+      if (queuedInput.deliveredToAgent || this.agent.state.messages.at(-1)?.role === "assistant") {
+        if (!queuedInput.deliveredToAgent) {
+          this.deliverQueuedInputToAgent(queuedInput);
+        }
+        await this.continue();
+      } else {
+        const prepared = await this.preparePromptMessages(queuedInput.messages, {
+          source: queuedInput.source,
+          streamingBehavior: queuedInput.mode,
+          displayText: queuedInput.displayText,
+          dedupeKey: queuedInput.dedupeKey,
+          clearEditor: queuedInput.clearEditor,
+          visibility: queuedInput.visibility
+        });
+        if (!prepared.handled) {
+          if (prepared.systemPrompt !== void 0) {
+            this.agent.setSystemPrompt(prepared.systemPrompt);
+          }
+          await this.agent.prompt(prepared.messages);
+          await this.syncNewAgentMessages();
+        }
+      }
+      return true;
+    }
+    scheduleAutoContinueCheck(messages) {
+      if (!this.getAutoContinueMessage || this.disposed || this.autoContinueTimer !== void 0) {
+        return;
+      }
+      const setTimer = this.retry?.setTimeout ?? ((callback, delay) => setTimeout(callback, delay));
+      const snapshot = messages.slice();
+      this.autoContinueTimer = setTimer(() => {
+        this.autoContinueTimer = void 0;
+        void this.maybeScheduleAutoContinue(snapshot);
+      }, 0);
+    }
+    async maybeScheduleAutoContinue(messages) {
+      if (!this.getAutoContinueMessage || this.disposed || this.runtimeGuardTriggered || this.hasQueuedMessages || this.isStreaming) {
+        if (this.hasQueuedMessages) {
+          this.emit({ type: "auto_continue_skipped", reason: "queued_messages" });
+        }
+        return;
+      }
+      const result = await this.getAutoContinueMessage({
+        agent: this.agent,
+        sessionManager: this.sessionManager,
+        cwd: this.cwd,
+        messages,
+        hasQueuedMessages: this.hasQueuedMessages
+      });
+      const message = result && "role" in result ? result : result?.message;
+      const reason = result && "role" in result ? void 0 : result?.reason;
+      if (!message) {
+        this.emit({ type: "auto_continue_skipped", reason: reason ?? "no_message" });
+        return;
+      }
+      if (this.hasQueuedMessages || this.isStreaming) {
+        this.emit({ type: "auto_continue_skipped", reason: "runtime_busy" });
+        return;
+      }
+      this.emit({ type: "auto_continue_scheduled", reason });
+      this.agent.followUp(message);
+      const setTimer = this.retry?.setTimeout ?? ((callback, delay) => setTimeout(callback, delay));
+      this.autoContinueTimer = setTimer(() => {
+        this.autoContinueTimer = void 0;
+        if (this.disposed) {
+          return;
+        }
+        void this.continue().catch(() => {
+        });
+      }, 0);
+    }
+    scheduleAutoCompact(decision, delayMs = 0) {
+      if (this.runtimeGuardTriggered) {
+        return;
+      }
+      this.pendingAutoCompact = decision;
+      if (this.autoCompactTimer !== void 0) {
+        return;
+      }
+      const setTimer = this.retry?.setTimeout ?? ((callback, delay) => setTimeout(callback, delay));
+      this.autoCompactTimer = setTimer(() => {
+        this.autoCompactTimer = void 0;
+        const pending = this.pendingAutoCompact;
+        this.pendingAutoCompact = void 0;
+        if (!pending || this.disposed) {
+          return;
+        }
+        if (this.isStreaming) {
+          this.pendingAutoCompact = pending;
+          this.scheduleAutoCompact(pending, 100);
+          return;
+        }
+        void this.runAutoCompact(pending.reason, pending.willRetry);
+      }, delayMs);
+    }
+    cancelDispatchTimerOnly() {
+      if (this.dispatchTimer === void 0) {
+        return;
+      }
+      const clearTimer = this.retry?.clearTimeout ?? ((handle) => clearTimeout(handle));
+      clearTimer(this.dispatchTimer);
+      this.dispatchTimer = void 0;
+    }
+    cancelAutoCompactTimerOnly() {
+      if (this.autoCompactTimer === void 0) {
+        return;
+      }
+      const clearTimer = this.retry?.clearTimeout ?? ((handle) => clearTimeout(handle));
+      clearTimer(this.autoCompactTimer);
+      this.autoCompactTimer = void 0;
+      this.pendingAutoCompact = void 0;
+    }
+    cancelAutoContinueTimerOnly() {
+      if (this.autoContinueTimer === void 0) {
+        return;
+      }
+      const clearTimer = this.retry?.clearTimeout ?? ((handle) => clearTimeout(handle));
+      clearTimer(this.autoContinueTimer);
+      this.autoContinueTimer = void 0;
+    }
+    emitQueueChanged() {
+      this.emit({ type: "queue_changed", queuedInputs: this.queuedInputsSnapshot });
+    }
+    resetRuntimeGuardState() {
+      this.repeatedToolFailures.clear();
+      this.runtimeGuardTriggered = false;
+    }
+    recordToolExecutionEndForGuard(event) {
+      if (!event.isError) {
+        const prefix = `${event.toolName}:`;
+        for (const key2 of this.repeatedToolFailures.keys()) {
+          if (key2.startsWith(prefix)) {
+            this.repeatedToolFailures.delete(key2);
+          }
+        }
+        return;
+      }
+      const resultSummary = summarizeToolResultForGuard(event.result).slice(0, 500);
+      const key = `${event.toolName}:${stableStringify(event.args)}:${resultSummary}`;
+      const repeatCount = (this.repeatedToolFailures.get(key) ?? 0) + 1;
+      this.repeatedToolFailures.set(key, repeatCount);
+      if (repeatCount < 3 || this.runtimeGuardTriggered) {
+        return;
+      }
+      this.runtimeGuardTriggered = true;
+      this.cancelRetry();
+      this.cancelAutoCompactTimerOnly();
+      this.cancelDispatchTimerOnly();
+      this.cancelAutoContinueTimerOnly();
+      const reason = "repeated_tool_error";
+      this.emit({ type: "runtime_guard_triggered", toolName: event.toolName, repeatCount, reason });
+      this.agent.abort();
+    }
+    emit(event) {
+      for (const listener of this.listeners) {
+        listener(event);
+      }
+    }
+  };
+
   // ../../packages/agent-framework/src/extensions/runtime-registry.ts
-  var typeBoxKind = Symbol.for("TypeBox.Kind");
+  var typeBoxKind = /* @__PURE__ */ Symbol.for("TypeBox.Kind");
   function isTypeBoxSchema(value) {
     return !!value && typeof value === "object" && typeBoxKind in value;
   }
@@ -14749,312 +17751,133 @@ ${compactSummary}`;
     return adapter;
   }
 
-  // ../../packages/shared-headless-capabilities/src/capability.ts
-  function defineSharedCapability(definition) {
-    return definition;
-  }
-  function collectSharedCapabilityPromptAdditions(definitions, activeToolNames) {
-    const activeTools = activeToolNames ? new Set(activeToolNames) : null;
-    const additions = /* @__PURE__ */ new Set();
-    for (const definition of definitions) {
-      if (!definition.systemPromptAdditions?.length) continue;
-      if (activeTools && definition.tools?.length) {
-        const hasActiveTool = definition.tools.some((tool) => {
-          return typeof tool?.name === "string" && activeTools.has(tool.name);
-        });
-        if (!hasActiveTool) continue;
+  // ../../packages/agent-framework/src/knowledge-index.ts
+  function parseFrontmatterBlock(yaml) {
+    const result = {};
+    const lines = yaml.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const colonIndex = trimmed.indexOf(":");
+      if (colonIndex === -1) continue;
+      const key = trimmed.slice(0, colonIndex).trim();
+      let value = trimmed.slice(colonIndex + 1).trim();
+      if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
+        value = value.slice(1, -1);
       }
-      for (const addition of definition.systemPromptAdditions) {
-        const trimmed = addition.trim();
-        if (trimmed) additions.add(trimmed);
+      switch (key) {
+        case "title":
+          result.title = value;
+          break;
+        case "desc":
+        case "description":
+          result.description = value;
+          break;
       }
     }
-    return [...additions];
+    return result;
   }
-
-  // ../../packages/shared-headless-capabilities/src/read-skill.ts
-  var ReadSkillParamsSchema = Type.Object({
-    name: Type.String({ description: "Exact skill name from the available_skills list." })
-  });
-  function createReadSkillCapability(deps) {
-    async function resolveSkill(name) {
-      if (deps.resolveSkill) {
-        return deps.resolveSkill(name);
-      }
-      const skill = deps.skillLoader?.getSkill?.(name) ?? deps.skillLoader?.loadSkill?.(name);
-      if (!skill) {
-        return null;
-      }
-      return {
-        name: skill.name,
-        source: skill.filePath || "skill-registry",
-        content: skill.prompt
-      };
+  function stripFrontmatter(content) {
+    const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+    if (!match) {
+      return { metadata: {}, body: content };
     }
-    const tool = {
-      name: "read_skill",
-      label: "read_skill",
-      description: "Load the full contents of a builtin or project skill by exact name.",
-      parameters: ReadSkillParamsSchema,
-      async execute(toolCallIdOrArgs, maybeArgs) {
-        const args = typeof toolCallIdOrArgs === "string" ? maybeArgs : toolCallIdOrArgs;
-        const skillName = String(args?.name || "").trim();
-        const skill = await resolveSkill(skillName);
-        if (!skill?.content) {
-          return {
-            content: [{ type: "text", text: `Skill not found: ${skillName || "(empty)"}` }],
-            details: { found: false, name: skillName || void 0 },
-            isError: true
-          };
-        }
-        return {
-          content: [{
-            type: "text",
-            text: `# ${skill.name}
-source: ${skill.source}
-
-${skill.content}`
-          }],
-          details: { found: true, name: skill.name, source: skill.source }
-        };
-      }
-    };
     return {
-      ...defineSharedCapability({
-        id: "read-skill",
-        description: "Shared capability for loading full skill contents through a host-provided skill resolver.",
-        tools: [tool]
-      }),
-      tool
+      metadata: parseFrontmatterBlock(match[1]),
+      body: content.slice(match[0].length)
     };
   }
-
-  // ../../packages/shared-headless-capabilities/src/todo.ts
-  var TodoItemSchema = Type.Object({
-    id: Type.Number({ description: "Unique identifier for the todo. Use sequential numbers starting from 1." }),
-    title: Type.String({ description: "Concise action-oriented todo label (3-7 words)." }),
-    description: Type.String({ description: "Detailed context or implementation notes." }),
-    status: Type.String({
-      description: "Progress state. Preferred values: not-started, in-progress, completed. Also accepts aliases like pending, todo, doing, done."
-    })
-  });
-  var ManageTodoListParamsSchema = Type.Object({
-    operation: Type.Union([Type.Literal("write"), Type.Literal("read")], {
-      description: "write: Replace the entire todo list. read: Return the current todo list."
-    }),
-    todoList: Type.Optional(
-      Type.Array(TodoItemSchema, {
-        description: "Required for write. Must include the full todo list with sequential ids starting from 1."
-      })
-    )
-  });
-  function cloneTodos(todos) {
-    return todos.map((todo) => ({ ...todo }));
-  }
-  function normalizeStatus(status) {
-    const value = String(status || "").trim().toLowerCase();
-    if (!value) return null;
-    if (value === "not-started" || value === "not_started" || value === "pending" || value === "todo" || value === "not started") {
-      return "not-started";
+  function extractHeadings(body, maxLevel = 3) {
+    const headings = [];
+    const lines = body.split("\n");
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      const match = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+      if (!match) continue;
+      const level = match[1].length;
+      if (level > maxLevel) continue;
+      headings.push({ level, text: match[2].trim() });
     }
-    if (value === "in-progress" || value === "in_progress" || value === "in progress" || value === "doing" || value === "active" || value === "working") {
-      return "in-progress";
-    }
-    if (value === "completed" || value === "complete" || value === "done" || value === "finished") {
-      return "completed";
-    }
-    return null;
+    return headings;
   }
-  function normalizeTodos(todos) {
-    return todos.map((todo) => ({
-      ...todo,
-      status: normalizeStatus(todo.status) ?? todo.status
-    }));
+  function extractTitle(metadata, headings) {
+    if (metadata.title && metadata.title.trim()) return metadata.title.trim();
+    const firstHeading = headings.find((heading) => heading.level === 1) || headings[0];
+    return firstHeading?.text?.trim() || "";
   }
-  function validateTodos(todos) {
-    const errors = [];
-    const validStatuses = /* @__PURE__ */ new Set(["not-started", "in-progress", "completed"]);
-    for (let index = 0; index < todos.length; index++) {
-      const item = todos[index];
-      const prefix = `Item ${index + 1}`;
-      if (typeof item?.id !== "number" || !Number.isInteger(item.id) || item.id < 1) {
-        errors.push(`${prefix}: 'id' must be a positive integer`);
-      }
-      if (item?.id !== index + 1) {
-        errors.push(`${prefix}: ids must be sequential starting from 1`);
-      }
-      if (typeof item?.title !== "string" || item.title.trim().length === 0) {
-        errors.push(`${prefix}: 'title' is required`);
-      }
-      if (typeof item?.description !== "string") {
-        errors.push(`${prefix}: 'description' must be a string`);
-      }
-      if (!validStatuses.has(item?.status)) {
-        errors.push(`${prefix}: 'status' must be one of: not-started, in-progress, completed`);
+  function extractDescription(metadata, body) {
+    const explicit = metadata.description;
+    if (explicit && explicit.trim()) {
+      return explicit.trim();
+    }
+    const lines = body.split("\n");
+    for (const rawLine of lines.slice(0, 24)) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      const descriptionMatch = line.match(/^description:\s*(.+)$/i);
+      if (descriptionMatch) {
+        return descriptionMatch[1].trim();
       }
     }
-    return errors;
-  }
-  function getTodoValidation(todos) {
-    const errors = validateTodos(todos);
-    return {
-      valid: errors.length === 0,
-      errors
-    };
-  }
-  function getTodoStats(todos) {
-    const total = todos.length;
-    const completed = todos.filter((todo) => todo.status === "completed").length;
-    const inProgress = todos.filter((todo) => todo.status === "in-progress").length;
-    return {
-      total,
-      completed,
-      inProgress,
-      notStarted: total - completed - inProgress
-    };
-  }
-  function buildTodoSuccessMessage(todos) {
-    const { completed, total } = getTodoStats(todos);
-    if (total > 0 && completed === total) {
-      return `Todos updated successfully. ${completed}/${total} completed. All todos are complete, so the list was cleared.`;
-    }
-    return `Todos updated successfully. ${completed}/${total} completed. Continue updating the list until all items are completed; it will clear automatically when done.`;
-  }
-  function executeManageTodoList(args, currentTodos) {
-    const safeCurrentTodos = cloneTodos(currentTodos);
-    if (args.operation === "read") {
-      return {
-        nextTodos: safeCurrentTodos,
-        result: {
-          content: [
-            {
-              type: "text",
-              text: safeCurrentTodos.length ? JSON.stringify(safeCurrentTodos, null, 2) : "No todos. Use write operation to create a todo list."
-            }
-          ],
-          details: { operation: "read", todos: safeCurrentTodos }
+    let seenHeading = false;
+    let paragraphLines = [];
+    for (const rawLine of body.split("\n")) {
+      const line = rawLine.trim();
+      if (!line) {
+        if (seenHeading && paragraphLines.length > 0) {
+          break;
         }
-      };
-    }
-    if (!Array.isArray(args.todoList)) {
-      return {
-        nextTodos: safeCurrentTodos,
-        result: {
-          content: [{ type: "text", text: "Error: todoList is required for write operation." }],
-          details: { operation: "write", todos: safeCurrentTodos, error: "todoList required" },
-          isError: true
-        }
-      };
-    }
-    const nextTodos = normalizeTodos(cloneTodos(args.todoList));
-    const errors = validateTodos(nextTodos);
-    if (errors.length > 0) {
-      return {
-        nextTodos: safeCurrentTodos,
-        result: {
-          content: [{ type: "text", text: `Validation failed:
-${errors.map((error) => `  - ${error}`).join("\n")}` }],
-          details: { operation: "write", todos: safeCurrentTodos, error: errors.join("; ") },
-          isError: true
-        }
-      };
-    }
-    const stats = getTodoStats(nextTodos);
-    const autoCleared = stats.total > 0 && stats.completed === stats.total;
-    const storedTodos = autoCleared ? [] : nextTodos;
-    return {
-      nextTodos: storedTodos,
-      result: {
-        content: [{ type: "text", text: buildTodoSuccessMessage(nextTodos) }],
-        details: {
-          operation: "write",
-          todos: cloneTodos(storedTodos),
-          autoCleared,
-          completedTodos: autoCleared ? cloneTodos(nextTodos) : void 0
-        }
-      }
-    };
-  }
-  function restoreTodoState(state) {
-    if (!Array.isArray(state)) {
-      return [];
-    }
-    const normalized = normalizeTodos(cloneTodos(state));
-    return validateTodos(normalized).length === 0 ? normalized : [];
-  }
-  function restoreTodosFromMessages(messages) {
-    let todos = [];
-    for (const message of messages || []) {
-      const toolResultMessage = message;
-      if (toolResultMessage.role !== "toolResult" || toolResultMessage.toolName !== "manage_todo_list") {
         continue;
       }
-      const details = toolResultMessage.details;
-      if (details?.todos) {
-        todos = restoreTodoState(details.todos);
-      }
-    }
-    return todos;
-  }
-  function createTodoStore(initialState) {
-    let todos = restoreTodoState(initialState);
-    return {
-      read() {
-        return cloneTodos(todos);
-      },
-      write(nextTodos) {
-        todos = restoreTodoState(nextTodos);
-      },
-      clear() {
-        todos = [];
-      },
-      restore(state) {
-        todos = restoreTodoState(state);
-      },
-      restoreFromMessages(messages) {
-        todos = restoreTodosFromMessages(messages);
-      },
-      getStats() {
-        return getTodoStats(todos);
-      },
-      validate(nextTodos) {
-        if (!Array.isArray(nextTodos)) {
-          return { valid: false, errors: ["todoList must be an array"] };
+      if (/^#{1,6}\s+/.test(line)) {
+        if (seenHeading && paragraphLines.length > 0) {
+          break;
         }
-        return getTodoValidation(normalizeTodos(cloneTodos(nextTodos)));
+        seenHeading = true;
+        continue;
       }
+      if (!seenHeading) {
+        continue;
+      }
+      if (/^description:\s*/i.test(line)) {
+        continue;
+      }
+      paragraphLines.push(line);
+    }
+    if (paragraphLines.length > 0) {
+      return paragraphLines.join(" ").trim();
+    }
+    return "";
+  }
+  function buildKnowledgeIndexEntry(path, content) {
+    const trimmed = String(content || "").trim();
+    if (!trimmed) return null;
+    const { metadata, body } = stripFrontmatter(trimmed);
+    const headings = extractHeadings(body, 3);
+    const title = extractTitle(metadata, headings);
+    const description = extractDescription(metadata, body);
+    return {
+      path,
+      title,
+      description,
+      headings
     };
   }
-  function createManageTodoCapability() {
-    const store = createTodoStore();
-    const tool = {
-      name: "manage_todo_list",
-      label: "manage_todo_list",
-      description: "Read or replace the shared todo checklist for the current session. Use this to actually create and update todo tracking when the user asks for a todo demonstration or progress checklist, not just to describe how todo tracking works.",
-      parameters: ManageTodoListParamsSchema,
-      async execute(args) {
-        const { nextTodos, result } = executeManageTodoList(args, store.read());
-        store.write(nextTodos);
-        return result;
-      }
-    };
-    return {
-      ...defineSharedCapability({
-        id: "todo",
-        description: "Shared headless todo/checklist capability.",
-        tools: [tool],
-        extensions: [{ name: "todo-state", description: "Provides capability-local todo state storage." }],
-        systemPromptAdditions: [
-          "When the user asks you to demonstrate or use todo tracking, call `manage_todo_list` instead of only describing how it works.",
-          "When you start using manage_todo_list for a task, keep the checklist updated whenever step status changes.",
-          "Maintain exactly one in-progress item while work is active, continue updating the checklist until every item is completed, and do not abandon a started checklist.",
-          "A todo demonstration is not complete until `manage_todo_list` has been updated through all steps and the list auto-clears.",
-          "manage_todo_list clears itself automatically when all items are completed, so drive the checklist to completion instead of leaving completed items behind."
-        ]
-      }),
-      tool,
-      createStore: createTodoStore
-    };
+  function formatHeadings(headings) {
+    if (headings.length === 0) return "(none)";
+    return headings.map((heading) => `${"#".repeat(heading.level)} ${heading.text}`).join(" | ");
+  }
+  function buildKnowledgeIndexSection(entries, heading = "Project Knowledge Index") {
+    const filtered = entries.filter((entry) => entry && (entry.title || entry.description || entry.headings.length > 0));
+    if (filtered.length === 0) return "";
+    const lines = [`[${heading}]`];
+    for (const entry of filtered) {
+      lines.push(`- path: ${entry.path}`);
+      if (entry.title) lines.push(`  title: ${entry.title}`);
+      if (entry.description) lines.push(`  description: ${entry.description}`);
+      lines.push(`  headings: ${formatHeadings(entry.headings)}`);
+    }
+    return lines.join("\n");
   }
 
   // ../../packages/shared-headless-capabilities/src/ask-user.ts
@@ -15470,6 +18293,149 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
     };
   }
 
+  // ../../packages/shared-headless-capabilities/src/policy-enforcer.ts
+  var POLICY_ENFORCED = /* @__PURE__ */ Symbol.for("pie.capabilityPolicy.enforced");
+  function evaluateToolPermission(tool, context = {}) {
+    const mode = context.mode ?? "normal";
+    const metadata = getToolCapabilityMetadata(tool);
+    const base = describeToolPolicyDecision(tool, mode);
+    if (!metadata && mode === "normal") {
+      return {
+        disposition: "allow",
+        allowed: true,
+        reason: "unclassified_tool",
+        policyReason: "unclassified_tool",
+        mode,
+        yoloMode: context.yoloMode
+      };
+    }
+    if (!metadata || !base.allowed) {
+      return {
+        disposition: "deny",
+        allowed: false,
+        reason: base.reason ?? "tool not allowed by runtime policy",
+        policyReason: base.reason ?? "tool not allowed by runtime policy",
+        mode,
+        yoloMode: context.yoloMode,
+        riskClass: metadata?.riskClass,
+        permissionScope: metadata?.permissionScope,
+        requiresPermission: metadata?.requiresPermission
+      };
+    }
+    const requiresConfirmation = Boolean(metadata.highRisk || metadata.requiresPermission);
+    if (!requiresConfirmation || context.yoloMode || context.confirmationPolicy === "allow") {
+      return {
+        disposition: "allow",
+        allowed: true,
+        mode,
+        yoloMode: context.yoloMode,
+        riskClass: metadata.riskClass,
+        permissionScope: metadata.permissionScope,
+        requiresPermission: requiresConfirmation
+      };
+    }
+    if (context.confirmationPolicy === "deny" || mode === "subagent") {
+      const reason = mode === "subagent" ? "subagent cannot request interactive permission" : "permission confirmation is unavailable";
+      return {
+        disposition: "deny",
+        allowed: false,
+        reason,
+        policyReason: reason,
+        mode,
+        yoloMode: context.yoloMode,
+        riskClass: metadata.riskClass,
+        permissionScope: metadata.permissionScope,
+        requiresPermission: true
+      };
+    }
+    return {
+      disposition: "confirm",
+      allowed: false,
+      reason: "permission confirmation required",
+      policyReason: "permission confirmation required",
+      mode,
+      yoloMode: context.yoloMode,
+      riskClass: metadata.riskClass,
+      permissionScope: metadata.permissionScope,
+      requiresPermission: true
+    };
+  }
+  function blockedResult(toolName, decision) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Blocked ${toolName}: ${decision.reason ?? decision.policyReason ?? "permission denied"}`
+        }
+      ],
+      details: { permissionDecision: decision },
+      isError: true
+    };
+  }
+  function mergePermissionDetails(details, decision) {
+    if (details && typeof details === "object" && !Array.isArray(details)) {
+      const record = details;
+      if (record.permissionDecision) {
+        return { ...record, capabilityPolicyDecision: decision };
+      }
+      return { ...record, permissionDecision: decision };
+    }
+    return { permissionDecision: decision };
+  }
+  function createPolicyEnforcedTool(tool, options = {}) {
+    if (tool[POLICY_ENFORCED]) return tool;
+    const wrapped = {
+      ...tool,
+      execute: async (toolCallId, args, signal, onUpdate) => {
+        let decision = evaluateToolPermission(tool, options.getContext?.());
+        if (decision.disposition === "confirm") {
+          const approved = await options.permissionProvider?.confirm({ toolName: tool.name, args, decision }).catch(() => false);
+          if (!approved) {
+            return blockedResult(tool.name, {
+              ...decision,
+              disposition: "deny",
+              reason: "permission denied by user",
+              policyReason: "permission denied by user"
+            });
+          }
+          decision = {
+            ...decision,
+            disposition: "allow",
+            allowed: true,
+            reason: void 0,
+            policyReason: void 0
+          };
+        }
+        if (!decision.allowed) return blockedResult(tool.name, decision);
+        const result = await tool.execute(toolCallId, args, signal, onUpdate);
+        return {
+          ...result,
+          details: mergePermissionDetails(result.details, decision)
+        };
+      }
+    };
+    wrapped[POLICY_ENFORCED] = true;
+    return wrapped;
+  }
+  function createPolicyEnforcedTools(tools, options = {}) {
+    return tools.map((tool) => createPolicyEnforcedTool(tool, options));
+  }
+  function formatCapabilityPolicySummary(tools, context = {}) {
+    const lines = [
+      "Pie permissions and safety model",
+      "",
+      `Mode: ${context.mode ?? "normal"}${context.yoloMode ? " (YOLO)" : ""}`,
+      ""
+    ];
+    for (const tool of tools) {
+      const decision = evaluateToolPermission(tool, context);
+      lines.push(
+        `- ${tool.name}: ${decision.disposition}${decision.permissionScope ? `, scope=${decision.permissionScope}` : ""}${decision.riskClass ? `, risk=${decision.riskClass}` : ""}${decision.reason ? `, reason=${decision.reason}` : ""}`
+      );
+    }
+    return lines.join("\n");
+  }
+
   // ../../packages/shared-headless-capabilities/src/builtin/fs/path-utils.ts
   function isInAllowlist(path, allowlistedDirs) {
     const normalized = normalizeForComparison(path);
@@ -15486,6 +18452,18 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
     const normalized = path.replace(/\\/g, "/").replace(/\/+/g, "/");
     if (normalized === "/") return normalized;
     return normalized.replace(/\/+$/, "");
+  }
+  function validateToolPathArgument(filePath) {
+    const trimmed = filePath.trim();
+    if (/^:\s*\d+\s*$/.test(trimmed)) {
+      throw new Error(`Invalid path "${filePath}". Do not pass a line number as the path; pass the real file path and use offset for line numbers.`);
+    }
+    if (trimmed.includes("<|tool")) {
+      throw new Error(`Invalid path "${filePath}". The path argument must be only a real file path, not tool-call markup.`);
+    }
+    if (trimmed.includes("\n")) {
+      throw new Error(`Invalid path "${filePath}". The path argument must be a single file path, not multi-line text.`);
+    }
   }
   function withTrailingSep(path) {
     return path.endsWith("/") ? path : `${path}/`;
@@ -15578,7 +18556,8 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
     if (!filePath) {
       throw new Error("Path cannot be empty");
     }
-    const cleaned = filePath.startsWith("@") ? filePath.slice(1) : filePath;
+    validateToolPathArgument(filePath);
+    const cleaned = filePath.trim().startsWith("@") ? filePath.trim().slice(1) : filePath.trim();
     if (fs.isAbsolute(cleaned)) {
       const normalized = fs.normalize(cleaned);
       const selectedRoot2 = rootName ? getRootByName(rootName, sandboxRoot, options) : void 0;
@@ -15662,8 +18641,11 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
   }
   function buildPathResolutionDescription(sandboxRoot, options) {
     const roots = getAvailableRoots(options);
+    const allowlistedDirs = options?.allowlistedDirs ?? [];
+    const hasGlobalAllowlist = allowlistedDirs.some((dir) => dir.trim() === "/");
+    const allowlistSentence = hasGlobalAllowlist ? "Absolute paths anywhere on the local filesystem are accepted in the current runtime mode." : allowlistedDirs.length > 0 ? `Absolute paths inside allowlisted directories are accepted: ${allowlistedDirs.join(", ")}.` : "";
     if (roots.length === 0) {
-      return "Relative paths resolve against the workspace root.";
+      return ["Relative paths resolve against the workspace root.", allowlistSentence].filter(Boolean).join(" ");
     }
     const rootSummaries = roots.map((root) => {
       const pieces = [`'${root.name}'`];
@@ -15679,7 +18661,7 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
     const defaultRoot = getDefaultRootName(sandboxRoot, options);
     const hasPrefixRules = roots.some((root) => (root.defaultPrefixes?.length ?? 0) > 0);
     const defaultSentence = defaultRoot ? hasPrefixRules ? `When root is omitted, prefix-matched roots win first; otherwise '${defaultRoot}' is used.` : `When root is omitted, '${defaultRoot}' is used.` : "";
-    return `Available roots: ${rootSummaries.join("; ")}. ${defaultSentence}`.trim();
+    return `Available roots: ${rootSummaries.join("; ")}. ${defaultSentence} ${allowlistSentence}`.trim();
   }
 
   // ../../packages/shared-headless-capabilities/src/builtin/fs/truncate.ts
@@ -15773,19 +18755,20 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
       path: Type.String({ description: "Path to the file to read. Example: 'Scripts/PlayerController.cs' or 'Assets/Gen/config.json'." }),
       ...rootSchema ? { root: rootSchema } : {},
       offset: Type.Optional(Type.Number({ description: "Line number to start reading from, 1-indexed. Example: 201." })),
-      limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read. Example: 120." }))
+      limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read. Example: 120." })),
+      question: Type.Optional(Type.String({ description: "Optional focused question for image, video, audio, or document understanding. Use this when asking what a media/document file contains; omit for ordinary text reads." }))
     });
     const pathResolutionDescription = buildPathResolutionDescription(cwd, options);
     return {
       name: "read",
       label: "read",
-      description: `Read a file's contents. Use this before editing, and use offset/limit for large files. Example: read_file path='Scripts/PlayerController.cs' or read_file path='Data/config.json'. ${pathResolutionDescription} For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). When you need the full file, continue with a larger offset until complete.`,
+      description: `Read a file's contents. Use this before editing, and use offset/limit for large files. It can also directly understand image, video, audio, and document files when a file-understanding model is configured; pass question for a focused media/document question instead of preprocessing the file with shell tools. Example: read_file path='Scripts/PlayerController.cs' or read_file path='Data/config.json'. ${pathResolutionDescription} For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). When you need the full file, continue with a larger offset until complete.`,
       parameters: readSchema,
       execute: async (_toolCallId, params, signal) => {
-        const { path, root, offset, limit } = params;
+        const { path, root, offset, limit, question } = params;
         const absolutePath = resolveReadPath(path, cwd, options, root);
         return new Promise(
-          (resolve, reject) => {
+          (resolve2, reject) => {
             if (signal?.aborted) {
               reject(new Error("Operation aborted"));
               return;
@@ -15802,6 +18785,65 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
               try {
                 await fs.access(absolutePath);
                 if (aborted) return;
+                const imageInfo = await readImageInfo(absolutePath, fs);
+                if (imageInfo) {
+                  if (question && options?.understandFile) {
+                    resolve2(await options.understandFile({
+                      absolutePath,
+                      displayPath: path,
+                      mimeType: imageInfo.mimeType,
+                      kind: "image",
+                      question,
+                      signal,
+                      imageInfo
+                    }));
+                    return;
+                  }
+                  const dimensionText = imageInfo.width && imageInfo.height ? `, ${imageInfo.width}x${imageInfo.height}` : "";
+                  resolve2({
+                    content: [
+                      { type: "text", text: `Read image file [${imageInfo.mimeType}${dimensionText}]. Original image attached as an image block; for very large images, prefer a smaller crop or resized copy before rereading.` },
+                      { type: "image", data: imageInfo.base64, mimeType: imageInfo.mimeType }
+                    ],
+                    details: {
+                      image: {
+                        mimeType: imageInfo.mimeType,
+                        width: imageInfo.width,
+                        height: imageInfo.height
+                      }
+                    }
+                  });
+                  return;
+                }
+                const mediaInfo = detectUnderstandingKind(absolutePath);
+                if (mediaInfo && options?.understandFile) {
+                  resolve2(await options.understandFile({
+                    absolutePath,
+                    displayPath: path,
+                    mimeType: mediaInfo.mimeType,
+                    kind: mediaInfo.kind,
+                    question,
+                    signal
+                  }));
+                  return;
+                }
+                if (mediaInfo) {
+                  resolve2({
+                    content: [{
+                      type: "text",
+                      text: `Cannot read ${mediaInfo.kind} file ${path} semantically: no media understanding handler is configured for ${mediaInfo.mimeType}.`
+                    }],
+                    details: {
+                      understanding: {
+                        kind: mediaInfo.kind,
+                        mimeType: mediaInfo.mimeType,
+                        fallbackReason: "no media understanding handler configured"
+                      }
+                    },
+                    isError: true
+                  });
+                  return;
+                }
                 const content = String(await fs.readFile(absolutePath, "utf-8"));
                 const allLines = content.split("\n");
                 const totalFileLines = allLines.length;
@@ -15855,7 +18897,7 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
                 if (signal) {
                   signal.removeEventListener("abort", onAbort);
                 }
-                resolve({ content: textContent, details });
+                resolve2({ content: textContent, details });
               } catch (error) {
                 if (signal) {
                   signal.removeEventListener("abort", onAbort);
@@ -15869,6 +18911,123 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
         );
       }
     };
+  }
+  function detectUnderstandingKind(filePath) {
+    const lower = filePath.toLowerCase();
+    if (/\.(mp4|mov|m4v|webm|avi|mkv)$/.test(lower)) {
+      return { kind: "video", mimeType: lower.endsWith(".mov") ? "video/quicktime" : lower.endsWith(".webm") ? "video/webm" : "video/mp4" };
+    }
+    if (/\.(mp3|wav|m4a|aac|flac|ogg)$/.test(lower)) {
+      return { kind: "audio", mimeType: lower.endsWith(".wav") ? "audio/wav" : lower.endsWith(".m4a") ? "audio/mp4" : "audio/mpeg" };
+    }
+    if (/\.(pdf)$/.test(lower)) {
+      return { kind: "document", mimeType: "application/pdf" };
+    }
+    if (/\.(docx)$/.test(lower)) {
+      return { kind: "document", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
+    }
+    return void 0;
+  }
+  async function readImageInfo(path, fs) {
+    if (typeof Buffer === "undefined") {
+      return void 0;
+    }
+    try {
+      const base64 = await fs.readFile(path, "base64");
+      const bytes = Buffer.from(base64, "base64");
+      if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+        return { mimeType: "image/png", base64, ...parsePngDimensions(bytes) };
+      }
+      if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) {
+        return { mimeType: "image/jpeg", base64, ...parseJpegDimensions(bytes) };
+      }
+      if (bytes.length >= 6) {
+        const gifHeader = bytes.subarray(0, 6).toString("ascii");
+        if (gifHeader === "GIF87a" || gifHeader === "GIF89a") {
+          return { mimeType: "image/gif", base64, ...parseGifDimensions(bytes) };
+        }
+      }
+      if (bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP") {
+        return { mimeType: "image/webp", base64, ...parseWebpDimensions(bytes) };
+      }
+    } catch {
+      return void 0;
+    }
+    return void 0;
+  }
+  function parsePngDimensions(bytes) {
+    if (bytes.length < 24) {
+      return {};
+    }
+    return {
+      width: bytes.readUInt32BE(16),
+      height: bytes.readUInt32BE(20)
+    };
+  }
+  function parseGifDimensions(bytes) {
+    if (bytes.length < 10) {
+      return {};
+    }
+    return {
+      width: bytes.readUInt16LE(6),
+      height: bytes.readUInt16LE(8)
+    };
+  }
+  function parseJpegDimensions(bytes) {
+    let offset = 2;
+    while (offset + 9 < bytes.length) {
+      if (bytes[offset] !== 255) {
+        offset++;
+        continue;
+      }
+      const marker = bytes[offset + 1];
+      offset += 2;
+      if (marker === 216 || marker === 217) {
+        continue;
+      }
+      if (offset + 2 > bytes.length) {
+        break;
+      }
+      const segmentLength = bytes.readUInt16BE(offset);
+      if (segmentLength < 2 || offset + segmentLength > bytes.length) {
+        break;
+      }
+      const isStartOfFrame = marker >= 192 && marker <= 195 || marker >= 197 && marker <= 199 || marker >= 201 && marker <= 203 || marker >= 205 && marker <= 207;
+      if (isStartOfFrame && segmentLength >= 7) {
+        return {
+          height: bytes.readUInt16BE(offset + 3),
+          width: bytes.readUInt16BE(offset + 5)
+        };
+      }
+      offset += segmentLength;
+    }
+    return {};
+  }
+  function parseWebpDimensions(bytes) {
+    if (bytes.length < 30) {
+      return {};
+    }
+    const chunkType = bytes.subarray(12, 16).toString("ascii");
+    if (chunkType === "VP8X" && bytes.length >= 30) {
+      return {
+        width: 1 + bytes.readUIntLE(24, 3),
+        height: 1 + bytes.readUIntLE(27, 3)
+      };
+    }
+    if (chunkType === "VP8 " && bytes.length >= 30) {
+      return {
+        width: bytes.readUInt16LE(26) & 16383,
+        height: bytes.readUInt16LE(28) & 16383
+      };
+    }
+    if (chunkType === "VP8L" && bytes.length >= 25) {
+      const bits = bytes.readUInt32LE(21);
+      return {
+        width: (bits & 16383) + 1,
+        height: (bits >> 14 & 16383) + 1
+      };
+    }
+    return {};
   }
 
   // ../../packages/shared-headless-capabilities/src/builtin/fs/write.ts
@@ -15891,7 +19050,7 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
         const absolutePath = resolveToCwd(filePath, cwd, options, root);
         const dir = fs.dirname(absolutePath);
         return new Promise(
-          (resolve, reject) => {
+          (resolve2, reject) => {
             if (signal?.aborted) {
               reject(new Error("Operation aborted"));
               return;
@@ -15913,7 +19072,7 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
                 if (signal) {
                   signal.removeEventListener("abort", onAbort);
                 }
-                resolve({
+                resolve2({
                   content: [{ type: "text", text: `Successfully wrote ${content.length} bytes to ${filePath}` }],
                   details: void 0
                 });
@@ -16001,6 +19160,36 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
   }
 
   // ../../packages/shared-headless-capabilities/src/builtin/fs/edit.ts
+  function validateEditArgs(path, oldText, newText) {
+    const filePath = typeof path === "string" ? path.trim() : "";
+    if (!filePath) {
+      throw new Error("Invalid edit_file arguments: path cannot be empty. Pass the file path in path and the exact text to replace in oldText.");
+    }
+    if (typeof oldText !== "string" || oldText.length === 0) {
+      throw new Error("Invalid edit_file arguments: oldText cannot be empty. Read the file and pass the exact text to replace.");
+    }
+    if (typeof newText !== "string") {
+      throw new Error("Invalid edit_file arguments: newText must be a string.");
+    }
+    if (oldText === newText) {
+      throw new Error("Invalid edit_file arguments: oldText and newText are identical, so the edit would make no change.");
+    }
+    if (filePath.includes("<|tool") || oldText.includes("<|tool") || newText.includes("<|tool")) {
+      throw new Error("Invalid edit_file arguments: path, oldText, and newText must be real edit values, not tool-call markup.");
+    }
+  }
+  function countOccurrences(content, needle) {
+    if (needle.length === 0) return 0;
+    let count = 0;
+    let index = 0;
+    while (true) {
+      const nextIndex = content.indexOf(needle, index);
+      if (nextIndex === -1) break;
+      count++;
+      index = nextIndex + needle.length;
+    }
+    return count;
+  }
   function createEditTool(cwd, options) {
     const fs = getFileSystem();
     const rootSchema = buildRootParameterSchema(cwd, options);
@@ -16018,8 +19207,9 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
       parameters: editSchema,
       execute: async (_toolCallId, params, signal) => {
         const { path, root, oldText, newText } = params;
+        validateEditArgs(path, oldText, newText);
         const absolutePath = resolveToCwd(path, cwd, options, root);
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve2, reject) => {
           if (signal?.aborted) {
             reject(new Error("Operation aborted"));
             return;
@@ -16059,9 +19249,9 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
                 );
                 return;
               }
-              const fuzzyContent = normalizedContent.replace(/\s+/g, " ");
-              const fuzzyOldText = normalizedOldText.replace(/\s+/g, " ");
-              const occurrences = fuzzyContent.split(fuzzyOldText).length - 1;
+              const fuzzyContent = normalizeForFuzzyMatch(normalizedContent);
+              const fuzzyOldText = normalizeForFuzzyMatch(normalizedOldText);
+              const occurrences = countOccurrences(fuzzyContent, fuzzyOldText);
               if (occurrences > 1) {
                 if (signal) signal.removeEventListener("abort", onAbort);
                 reject(
@@ -16090,7 +19280,7 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
                 signal.removeEventListener("abort", onAbort);
               }
               const diffResult = generateDiffString(content, finalContent);
-              resolve({
+              resolve2({
                 content: [
                   {
                     type: "text",
@@ -16128,10 +19318,10 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
     return {
       name: "ls",
       label: "ls",
-      description: `List directory contents. Use this to inspect folders before reading or writing files. Example: list_directory path='Scripts' or list_directory path='Data'. ${pathResolutionDescription} Returns entries sorted alphabetically, with '/' suffix for directories. Includes dotfiles. Output is truncated to ${DEFAULT_LIMIT} entries or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
+      description: `List directory contents. Use this to inspect folders before reading or writing files. Example: list_dir path='Scripts' or list_dir path='Data'. ${pathResolutionDescription} Returns entries sorted alphabetically, with '/' suffix for directories. Includes dotfiles. Output is truncated to ${DEFAULT_LIMIT} entries or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
       parameters: lsSchema,
       execute: async (_toolCallId, params, signal) => {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve2, reject) => {
           if (signal?.aborted) {
             reject(new Error("Operation aborted"));
             return;
@@ -16181,7 +19371,7 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
               }
               signal?.removeEventListener("abort", onAbort);
               if (results.length === 0) {
-                resolve({ content: [{ type: "text", text: "(empty directory)" }], details: void 0 });
+                resolve2({ content: [{ type: "text", text: "(empty directory)" }], details: void 0 });
                 return;
               }
               const rawOutput = results.join("\n");
@@ -16202,7 +19392,7 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
 
 [${notices.join(". ")}]`;
               }
-              resolve({
+              resolve2({
                 content: [{ type: "text", text: output }],
                 details: Object.keys(details).length > 0 ? details : void 0
               });
@@ -16216,21 +19406,1245 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
     };
   }
 
-  // ../../packages/shared-headless-capabilities/src/index.ts
-  function getSharedCapabilityPromptAdditionsForToolNames(toolNames) {
-    const definitions = [
-      createManageTodoCapability(),
-      createAskUserCapability()
-    ];
-    return collectSharedCapabilityPromptAdditions(
-      definitions,
-      toolNames
-    );
+  // ../../packages/shared-headless-capabilities/src/system-prompt-tools.ts
+  function normalizeDescription(description) {
+    const text = String(description || "").replace(/\s+/g, " ").trim();
+    if (!text) return "";
+    return text.replace(/[.;:]\s*$/, "");
+  }
+  function buildToolLine(tool, mode) {
+    const decision = describeToolPolicyDecision(tool, mode);
+    if (!decision.allowed) return void 0;
+    const description = normalizeDescription(tool.description);
+    const metadata = getToolCapabilityMetadata(tool);
+    const policy = metadata ? [
+      metadata.readsFile ? "reads files" : void 0,
+      metadata.writesFile ? "writes files" : void 0,
+      metadata.readsNetwork ? "reads network" : void 0,
+      metadata.executesShell ? "executes shell" : void 0,
+      metadata.highRisk ? "high risk" : void 0,
+      metadata.availableInPlanMode ? "plan-mode available" : void 0
+    ].filter(Boolean).join("; ") : "";
+    const suffix = policy ? ` (${policy})` : "";
+    return description ? `- ${tool.name}: ${description}${suffix}` : `- ${tool.name}${suffix}`;
+  }
+  function buildToolsPromptSection(tools, options = {}) {
+    const mode = options.mode ?? "normal";
+    return `<tools>
+${tools.map((tool) => buildToolLine(tool, mode)).filter(Boolean).join("\n")}
+</tools>`;
+  }
+
+  // ../../packages/shared-headless-capabilities/src/web-search.ts
+  var webSearchSchema = Type.Object({
+    query: Type.String({
+      minLength: 2,
+      description: "The web search query to run. Use current year terms for recent information."
+    }),
+    allowed_domains: Type.Optional(Type.Array(Type.String({
+      description: "Only include results from these domains. Use only when the user explicitly asks to limit sources."
+    }))),
+    blocked_domains: Type.Optional(Type.Array(Type.String({
+      description: "Exclude results from these domains. Use only when the user explicitly asks to avoid sources."
+    })))
+  });
+  var DEFAULT_WEB_SEARCH_TIMEOUT_MS = 12e4;
+  var SEARCH_PROVIDER_QUEUE = /* @__PURE__ */ new Map();
+  function modelLabel(model) {
+    return model ? `${model.provider}/${model.id}` : void 0;
+  }
+  function uniqueSources(sources) {
+    const seen = /* @__PURE__ */ new Set();
+    const result = [];
+    for (const source of sources) {
+      if (!source.url || seen.has(source.url)) continue;
+      seen.add(source.url);
+      result.push(source);
+    }
+    return result;
+  }
+  function formatSources(sources) {
+    if (sources.length === 0) return "Sources: (none returned)";
+    return [
+      "Sources:",
+      ...sources.map((source) => `- [${source.title || source.url}](${source.url})`)
+    ].join("\n");
+  }
+  function sourceFromUrl(url, title) {
+    return { title: title || url, url };
+  }
+  function makeTextSegment(text) {
+    return { type: "text", text };
+  }
+  function formatDateContext(dateContext) {
+    const currentDate = dateContext?.currentDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const timeZone = dateContext?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || "local";
+    return `Current date: ${currentDate}, timezone: ${timeZone}. Treat this as the current date for current-events searches.`;
+  }
+  function unavailableResult(query, requestedMode, reason) {
+    return {
+      content: [{
+        type: "text",
+        text: [
+          `Web search is unavailable for "${query}".`,
+          reason,
+          "Do not use bash, curl, Python, or DuckDuckGo scraping as a fallback; report that web_search is unavailable or ask the user to configure a provider that supports native web search."
+        ].join("\n")
+      }],
+      details: {
+        query,
+        requestedMode,
+        providerMode: "unavailable",
+        durationSeconds: 0,
+        sourceCount: 0,
+        sources: [],
+        fallbackReason: reason
+      },
+      isError: true
+    };
+  }
+  function createAbortSignalWithTimeout(parentSignal, timeoutMs) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new Error(`Provider-native web search timed out after ${Math.ceil(timeoutMs / 1e3)} seconds`));
+    }, timeoutMs);
+    const onParentAbort = () => controller.abort(parentSignal?.reason);
+    if (parentSignal) {
+      if (parentSignal.aborted) {
+        onParentAbort();
+      } else {
+        parentSignal.addEventListener("abort", onParentAbort, { once: true });
+      }
+    }
+    return {
+      signal: controller.signal,
+      dispose: () => {
+        clearTimeout(timer);
+        parentSignal?.removeEventListener("abort", onParentAbort);
+      },
+      didTimeout: () => timedOut
+    };
+  }
+  function extractAnthropicContent(content, originalQuery) {
+    const blocks = Array.isArray(content) ? content : [];
+    const textChunks = [];
+    const sources = [];
+    const results = [];
+    const actualQueries = [];
+    for (const block of blocks) {
+      if (block?.type === "text" && typeof block.text === "string") {
+        textChunks.push(block.text);
+        results.push(makeTextSegment(block.text));
+      }
+      if (block?.type === "server_tool_use") {
+        const input = isRecord2(block.input) ? block.input : void 0;
+        if (typeof input?.query === "string" && input.query.trim()) {
+          actualQueries.push(input.query.trim());
+        }
+      }
+      if (block?.type === "web_search_tool_result") {
+        if (!Array.isArray(block.content)) {
+          const errorCode = isRecord2(block.content) && typeof block.content.error_code === "string" ? block.content.error_code : "unknown";
+          results.push({
+            type: "error",
+            toolUseId: typeof block.tool_use_id === "string" ? block.tool_use_id : void 0,
+            errorCode,
+            text: `Web search error: ${errorCode}`
+          });
+          continue;
+        }
+        const resultContent = block.content;
+        const segmentSources = [];
+        for (const hit of resultContent) {
+          if (typeof hit?.url === "string") {
+            const source = sourceFromUrl(hit.url, typeof hit.title === "string" ? hit.title : void 0);
+            sources.push(source);
+            segmentSources.push(source);
+          }
+        }
+        results.push({
+          type: "results",
+          toolUseId: typeof block.tool_use_id === "string" ? block.tool_use_id : void 0,
+          sources: uniqueSources(segmentSources)
+        });
+      }
+      if (block?.type === "tool_result" && typeof block.content === "string") {
+        collectUrlStrings(block.content, sources);
+      }
+    }
+    return {
+      text: textChunks.join("\n").trim(),
+      sources: uniqueSources(sources),
+      results,
+      actualQueries: [...new Set(actualQueries.length > 0 ? actualQueries : [originalQuery])]
+    };
+  }
+  function collectUrlStrings(text, sources) {
+    const matches = text.matchAll(/https?:\/\/[^\s)"'\]}>,，。；]+/g);
+    for (const match of matches) {
+      sources.push(sourceFromUrl(match[0]));
+    }
+  }
+  function resolveResponsesEndpoint(baseUrl) {
+    return `${baseUrl.replace(/\/+$/, "")}/responses`;
+  }
+  function isRecord2(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function collectUrlCitations(value, sources) {
+    if (Array.isArray(value)) {
+      for (const item of value) collectUrlCitations(item, sources);
+      return;
+    }
+    if (!isRecord2(value)) return;
+    if (value.type === "url_citation" && typeof value.url === "string") {
+      sources.push(sourceFromUrl(value.url, typeof value.title === "string" ? value.title : void 0));
+    }
+    if (typeof value.url === "string") {
+      sources.push(sourceFromUrl(value.url, typeof value.title === "string" ? value.title : void 0));
+    }
+    if (typeof value.link === "string") {
+      sources.push(sourceFromUrl(value.link, typeof value.title === "string" ? value.title : void 0));
+    }
+    for (const nested of Object.values(value)) {
+      collectUrlCitations(nested, sources);
+    }
+  }
+  function collectOutputText(value, chunks) {
+    if (Array.isArray(value)) {
+      for (const item of value) collectOutputText(item, chunks);
+      return;
+    }
+    if (!isRecord2(value)) return;
+    if (value.type === "output_text" && typeof value.text === "string") {
+      chunks.push(value.text);
+      return;
+    }
+    if (typeof value.content === "string" && value.type !== "tool_result") {
+      chunks.push(value.content);
+      return;
+    }
+    for (const nested of Object.values(value)) {
+      collectOutputText(nested, chunks);
+    }
+  }
+  function extractOpenAIResponsesContent(response, originalQuery) {
+    const body = isRecord2(response) ? response : {};
+    const sources = [];
+    collectUrlCitations(body.output, sources);
+    if (typeof body.output_text === "string" && body.output_text.trim()) {
+      return {
+        text: body.output_text.trim(),
+        sources: uniqueSources(sources),
+        results: [makeTextSegment(body.output_text.trim())],
+        actualQueries: [originalQuery]
+      };
+    }
+    const textChunks = [];
+    collectOutputText(body.output, textChunks);
+    const text = textChunks.join("\n").trim();
+    return { text, sources: uniqueSources(sources), results: text ? [makeTextSegment(text)] : [], actualQueries: [originalQuery] };
+  }
+  function extractChatCompletionsContent(response, originalQuery) {
+    const body = isRecord2(response) ? response : {};
+    const sources = [];
+    collectUrlCitations(body, sources);
+    const choices = Array.isArray(body.choices) ? body.choices : [];
+    const firstChoice = isRecord2(choices[0]) ? choices[0] : {};
+    const message = isRecord2(firstChoice.message) ? firstChoice.message : {};
+    const content = typeof message.content === "string" ? message.content : "";
+    if (content) {
+      collectUrlStrings(content, sources);
+    }
+    const textChunks = [];
+    collectOutputText(message, textChunks);
+    const text = (content || textChunks.join("\n")).trim();
+    return {
+      text,
+      sources: uniqueSources(sources),
+      results: text ? [makeTextSegment(text)] : [],
+      actualQueries: [originalQuery]
+    };
+  }
+  async function runOpenAIResponsesSearch(params) {
+    if (params.input.blocked_domains?.length) {
+      throw new Error("blocked_domains is not supported by this provider-native Responses web_search path; use allowed_domains or remove the block list.");
+    }
+    const webSearchTool2 = {
+      type: "web_search",
+      external_web_access: params.mode === "cached" ? false : true
+    };
+    if (params.input.allowed_domains?.length) {
+      webSearchTool2.filters = { allowed_domains: params.input.allowed_domains };
+    }
+    const response = await params.fetch(resolveResponsesEndpoint(params.model.baseUrl), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${params.apiKey}`,
+        ...params.model.headers || {}
+      },
+      body: JSON.stringify({
+        model: params.model.id,
+        input: [{
+          role: "user",
+          content: [{
+            type: "input_text",
+            text: `${formatDateContext(params.dateContext)}
+Perform a web search for this query and summarize the useful results with source links: ${params.input.query}`
+          }]
+        }],
+        tools: [webSearchTool2]
+      }),
+      signal: params.signal
+    });
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "");
+      throw new Error(`Responses API error ${response.status}: ${errorBody}`);
+    }
+    return extractOpenAIResponsesContent(await response.json(), params.input.query);
+  }
+  async function runAnthropicNativeSearch(params) {
+    const baseUrl = (params.model.baseUrl || "").replace(/\/+$/, "");
+    if (!baseUrl) {
+      throw new Error(`Model ${params.model.provider}/${params.model.id} has no baseUrl for anthropic_server_tool web_search.`);
+    }
+    const webSearchTool2 = {
+      type: "web_search_20250305",
+      name: "web_search",
+      max_uses: 8
+    };
+    if (params.input.allowed_domains?.length) {
+      webSearchTool2.allowed_domains = params.input.allowed_domains;
+    }
+    if (params.input.blocked_domains?.length) {
+      webSearchTool2.blocked_domains = params.input.blocked_domains;
+    }
+    const body = {
+      model: params.model.id,
+      max_tokens: Math.min(params.model.maxTokens || 4096, 4096),
+      system: "You are an assistant for performing a web search tool use",
+      messages: [{
+        role: "user",
+        content: `${formatDateContext(params.dateContext)}
+Perform a web search for the query: ${params.input.query}`
+      }],
+      tools: [webSearchTool2],
+      betas: ["web-search-2025-03-05"],
+      stream: false
+    };
+    if (params.capability.forceToolChoice) {
+      body.tool_choice = { type: "tool", name: "web_search" };
+    }
+    const endpoint = /\/v1$/i.test(baseUrl) ? `${baseUrl}/messages` : `${baseUrl}/v1/messages`;
+    const response = await params.fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        "x-api-key": params.apiKey,
+        Authorization: `Bearer ${params.apiKey}`,
+        "anthropic-dangerous-direct-browser-access": "true",
+        "anthropic-version": "2023-06-01",
+        ...params.model.headers || {}
+      },
+      body: JSON.stringify(body),
+      signal: params.signal
+    });
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "");
+      throw new Error(`Anthropic server web_search error ${response.status}: ${errorBody}`);
+    }
+    const json = await response.json();
+    return extractAnthropicContent(json?.content, params.input.query);
+  }
+  async function runChatCompletionsWebSearch(params) {
+    const domainGuidance = [
+      params.input.allowed_domains?.length ? `Prefer results from these allowed domains only: ${params.input.allowed_domains.join(", ")}.` : "",
+      params.input.blocked_domains?.length ? `Avoid results from these blocked domains: ${params.input.blocked_domains.join(", ")}.` : ""
+    ].filter(Boolean).join("\n");
+    const webSearchOptions = {
+      enable: true,
+      search_engine: params.capability.searchEngine || "search_std",
+      search_result: true,
+      count: params.capability.count ?? 5,
+      content_size: params.capability.contentSize || "medium"
+    };
+    const response = await params.fetch(`${params.model.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${params.apiKey}`,
+        ...params.model.headers || {}
+      },
+      body: JSON.stringify({
+        model: params.model.id,
+        messages: [{
+          role: "user",
+          content: [
+            formatDateContext(params.dateContext),
+            "Use web search to answer this query with useful source links.",
+            domainGuidance,
+            `Query: ${params.input.query}`
+          ].filter(Boolean).join("\n")
+        }],
+        tools: [{
+          type: "web_search",
+          web_search: webSearchOptions
+        }],
+        tool_choice: "auto",
+        stream: false
+      }),
+      signal: params.signal
+    });
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "");
+      throw new Error(`Chat Completions web_search error ${response.status}: ${errorBody}`);
+    }
+    return extractChatCompletionsContent(await response.json(), params.input.query);
+  }
+  function classifyProviderError(error, timedOut) {
+    if (timedOut) {
+      return { category: "timeout", reason: error instanceof Error ? error.message : "web search timed out" };
+    }
+    const reason = error instanceof Error ? error.message : String(error);
+    if (/\b429\b|rate.?limit|too many requests/i.test(reason)) return { category: "rate_limited", reason };
+    if (/\b1301\b|content.?filter|safety|policy/i.test(reason)) return { category: "content_filtered", reason };
+    if (/unsupported|does not support|not wired|not declare/i.test(reason)) return { category: "unsupported", reason };
+    return { category: "provider_error", reason };
+  }
+  function sourceHostAndPath(source) {
+    try {
+      const url = new URL(source.url);
+      return { host: url.hostname.toLowerCase(), path: url.pathname, search: url.search };
+    } catch {
+      return void 0;
+    }
+  }
+  function isSearchPageSource(source) {
+    const parsed = sourceHostAndPath(source);
+    if (!parsed) return false;
+    if (/(^|\.)news\.baidu\.com$/.test(parsed.host) && parsed.path === "/ns") return true;
+    if (/(^|\.)google\./.test(parsed.host) && /\/search|\/url/.test(parsed.path)) return true;
+    if (/(^|\.)bing\.com$/.test(parsed.host) && /\/search/.test(parsed.path)) return true;
+    if (/(^|\.)duckduckgo\.com$/.test(parsed.host)) return true;
+    return /[?&](q|query|word)=/.test(parsed.search) && /search|ns/.test(parsed.path);
+  }
+  function isHomepageSource(source) {
+    const parsed = sourceHostAndPath(source);
+    if (!parsed) return false;
+    const path = parsed.path.replace(/\/+$/, "");
+    return path === "" || path === "/news" || path === "/sections/news";
+  }
+  function evaluateSearchQuality(search) {
+    const warnings = [];
+    const normalizedText = search.text.toLowerCase();
+    if (search.sources.length === 0) warnings.push("no_sources");
+    if (/cannot perform live web searches|cannot access the internet|can't access the internet|i cannot browse|i don't have the ability to access/i.test(search.text) || /未来日期|尚未到来|future date|has not yet occurred|currently.*2025/i.test(search.text)) {
+      warnings.push("provider_claimed_no_live_search_or_stale_date");
+    }
+    if (search.sources.length > 0 && search.sources.every((source) => isHomepageSource(source) || isSearchPageSource(source))) {
+      warnings.push("only_homepage_or_search_page_sources");
+    }
+    if (normalizedText.includes("sources: (none returned)")) warnings.push("provider_returned_no_sources");
+    return [...new Set(warnings)];
+  }
+  function makeAttempt(params) {
+    return {
+      provider: params.model?.provider,
+      modelId: params.model?.id,
+      providerMode: params.providerMode,
+      routeSource: params.routeSource,
+      failureCategory: params.failureCategory,
+      fallbackReason: params.fallbackReason,
+      sourceCount: params.sourceCount ?? 0,
+      durationSeconds: params.durationSeconds,
+      qualityWarnings: params.qualityWarnings
+    };
+  }
+  async function runQueuedSearch(model, fn) {
+    const key = `${model.provider}/${model.id}`;
+    const previous = SEARCH_PROVIDER_QUEUE.get(key) ?? Promise.resolve();
+    let release;
+    const next = new Promise((resolve2) => {
+      release = resolve2;
+    });
+    const queued = previous.catch(() => void 0).then(() => next);
+    SEARCH_PROVIDER_QUEUE.set(key, queued);
+    await previous.catch(() => void 0);
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (SEARCH_PROVIDER_QUEUE.get(key) === queued) {
+        SEARCH_PROVIDER_QUEUE.delete(key);
+      }
+    }
+  }
+  function createSharedWebSearchTool(deps) {
+    return {
+      name: "web_search",
+      label: "web_search",
+      description: "Search the public web using a provider-native web search capability. Use for current information, online research, or documentation outside the local workspace. Results include sources. Do not use bash/curl/python as a web-search fallback. Only set domain filters when the user explicitly asks to limit sources.",
+      parameters: webSearchSchema,
+      execute: async (_toolCallId, rawParams, signal) => {
+        const input = rawParams;
+        const query = String(input.query || "").trim();
+        const requestedMode = deps.getMode?.() ?? "auto";
+        if (!query) {
+          return unavailableResult("", requestedMode, "Missing query.");
+        }
+        if (input.allowed_domains?.length && input.blocked_domains?.length) {
+          return unavailableResult(query, requestedMode, "allowed_domains and blocked_domains cannot be used in the same web_search call.");
+        }
+        if (requestedMode === "disabled") {
+          return unavailableResult(query, requestedMode, "tools.webSearch.mode is disabled.");
+        }
+        const model = deps.getModel();
+        const fetchImpl = deps.fetch ?? fetch;
+        const timeoutMs = Math.max(1, deps.timeoutMs ?? DEFAULT_WEB_SEARCH_TIMEOUT_MS);
+        const attempts = [];
+        const dateContext = deps.getCurrentDateContext?.();
+        const singleRoute = deps.resolveToolModel?.("web_search");
+        const routeCandidates = deps.resolveToolModelCandidates?.("web_search") ?? (singleRoute ? [singleRoute] : []);
+        const candidates = routeCandidates.length > 0 ? routeCandidates : model ? [{
+          purpose: "web_search",
+          requiredCapability: "webSearch",
+          routeSource: "current_model",
+          model,
+          apiKey: deps.getApiKey()
+        }] : [];
+        let lastFailureReason = "No active model is available for provider-native web search.";
+        let lastFailureCategory = "unsupported";
+        for (const route of candidates) {
+          const searchModel = route.model;
+          if (!searchModel) {
+            lastFailureReason = route.fallbackReason || lastFailureReason;
+            attempts.push(makeAttempt({
+              providerMode: "unavailable",
+              routeSource: route.routeSource,
+              failureCategory: "unsupported",
+              fallbackReason: lastFailureReason,
+              durationSeconds: 0
+            }));
+            continue;
+          }
+          const capability = searchModel.webSearch;
+          const apiKey = route.apiKey ?? deps.getApiKey();
+          if (!capability) {
+            lastFailureReason = route.fallbackReason || `Model ${searchModel.provider}/${searchModel.id} does not declare a webSearch capability in models.json.`;
+            attempts.push(makeAttempt({
+              model: searchModel,
+              providerMode: "unavailable",
+              routeSource: route.routeSource,
+              failureCategory: "unsupported",
+              fallbackReason: lastFailureReason,
+              durationSeconds: 0
+            }));
+            continue;
+          }
+          if (requestedMode === "cached" && capability.type !== "openai_responses") {
+            lastFailureReason = "Cached provider-native web search is only wired for openai_responses webSearch capability in Pie.";
+            attempts.push(makeAttempt({
+              model: searchModel,
+              providerMode: capability.type,
+              routeSource: route.routeSource,
+              failureCategory: "unsupported",
+              fallbackReason: lastFailureReason,
+              durationSeconds: 0
+            }));
+            continue;
+          }
+          if (!apiKey) {
+            lastFailureReason = `No API key is available for ${searchModel.provider}/${searchModel.id}.`;
+            attempts.push(makeAttempt({
+              model: searchModel,
+              providerMode: capability.type,
+              routeSource: route.routeSource,
+              failureCategory: "unsupported",
+              fallbackReason: lastFailureReason,
+              durationSeconds: 0
+            }));
+            continue;
+          }
+          const start = Date.now();
+          const timeout = createAbortSignalWithTimeout(signal, timeoutMs);
+          try {
+            const search = await runQueuedSearch(searchModel, async () => capability.type === "anthropic_server_tool" ? {
+              providerMode: "anthropic_server_tool",
+              ...await runAnthropicNativeSearch({ model: searchModel, apiKey, input: { ...input, query }, capability, dateContext, signal: timeout.signal, fetch: fetchImpl })
+            } : capability.type === "chat_completions_web_search" ? {
+              providerMode: "chat_completions_web_search",
+              ...await runChatCompletionsWebSearch({ model: searchModel, apiKey, input: { ...input, query }, capability, dateContext, signal: timeout.signal, fetch: fetchImpl })
+            } : capability.type === "openai_responses" ? {
+              providerMode: "openai_responses",
+              ...await runOpenAIResponsesSearch({
+                model: searchModel,
+                apiKey,
+                input: { ...input, query },
+                mode: requestedMode,
+                dateContext,
+                signal: timeout.signal,
+                fetch: fetchImpl
+              })
+            } : void 0);
+            if (!search) {
+              lastFailureReason = `Model ${searchModel.provider}/${searchModel.id} has unsupported webSearch capability: ${capability.type || "unknown"}.`;
+              lastFailureCategory = "unsupported";
+              attempts.push(makeAttempt({
+                model: searchModel,
+                providerMode: "unavailable",
+                routeSource: route.routeSource,
+                failureCategory: lastFailureCategory,
+                fallbackReason: lastFailureReason,
+                durationSeconds: (Date.now() - start) / 1e3
+              }));
+              continue;
+            }
+            const qualityWarnings = evaluateSearchQuality(search);
+            const durationSeconds = (Date.now() - start) / 1e3;
+            if (qualityWarnings.length > 0) {
+              lastFailureReason = `Provider returned low-quality web_search results: ${qualityWarnings.join(", ")}`;
+              lastFailureCategory = "low_quality_result";
+              attempts.push(makeAttempt({
+                model: searchModel,
+                providerMode: search.providerMode,
+                routeSource: route.routeSource,
+                failureCategory: lastFailureCategory,
+                fallbackReason: lastFailureReason,
+                sourceCount: search.sources.length,
+                durationSeconds,
+                qualityWarnings
+              }));
+              continue;
+            }
+            attempts.push(makeAttempt({
+              model: searchModel,
+              providerMode: search.providerMode,
+              routeSource: route.routeSource,
+              sourceCount: search.sources.length,
+              durationSeconds
+            }));
+            const output = [
+              `Web search results for query: "${query}"`,
+              search.text || "(provider returned no text summary)",
+              formatSources(search.sources)
+            ].join("\n\n");
+            return {
+              content: [{ type: "text", text: output }],
+              details: {
+                query,
+                requestedMode,
+                providerMode: search.providerMode,
+                provider: searchModel.provider,
+                modelId: searchModel.id,
+                agentModel: modelLabel(model),
+                toolModel: modelLabel(searchModel),
+                routeSource: route.routeSource ?? (searchModel === model ? "current_model" : void 0),
+                requiredCapability: route.requiredCapability ?? "webSearch",
+                durationSeconds,
+                timeoutSeconds: Math.ceil(timeoutMs / 1e3),
+                sourceCount: search.sources.length,
+                sources: search.sources,
+                actualQueries: search.actualQueries,
+                results: search.results,
+                attempts
+              },
+              isError: false
+            };
+          } catch (error) {
+            const classified = classifyProviderError(
+              timeout.didTimeout() ? new Error(`Provider-native web search timed out after ${Math.ceil(timeoutMs / 1e3)} seconds`) : error,
+              timeout.didTimeout()
+            );
+            lastFailureReason = classified.reason;
+            lastFailureCategory = classified.category;
+            attempts.push(makeAttempt({
+              model: searchModel,
+              providerMode: capability.type,
+              routeSource: route.routeSource,
+              failureCategory: classified.category,
+              fallbackReason: classified.reason,
+              durationSeconds: (Date.now() - start) / 1e3
+            }));
+          } finally {
+            timeout.dispose();
+          }
+        }
+        const result = unavailableResult(query, requestedMode, `Provider-native web search failed: ${lastFailureReason}`);
+        result.details.durationSeconds = attempts.reduce((total, attempt) => total + attempt.durationSeconds, 0);
+        result.details.timeoutSeconds = Math.ceil(timeoutMs / 1e3);
+        result.details.timedOut = lastFailureCategory === "timeout";
+        result.details.agentModel = modelLabel(model);
+        result.details.fallbackReason = lastFailureReason;
+        result.details.failureCategory = lastFailureCategory;
+        result.details.attempts = attempts;
+        const lastAttempt = attempts[attempts.length - 1];
+        result.details.provider = lastAttempt?.provider;
+        result.details.modelId = lastAttempt?.modelId;
+        result.details.toolModel = lastAttempt?.provider && lastAttempt.modelId ? `${lastAttempt.provider}/${lastAttempt.modelId}` : void 0;
+        result.details.routeSource = lastAttempt?.routeSource;
+        result.details.qualityWarnings = lastAttempt?.qualityWarnings;
+        return result;
+      }
+    };
+  }
+
+  // ../../packages/shared-headless-capabilities/src/web-fetch.ts
+  var webFetchSchema = Type.Object({
+    url: Type.String({ description: "The http(s) URL to fetch and read." }),
+    prompt: Type.Optional(Type.String({ description: "Optional extraction prompt to run on the fetched content." }))
+  });
+  var DEFAULT_TIMEOUT_MS = 45e3;
+  var DEFAULT_MAX_BYTES2 = 2e6;
+  var DEFAULT_MAX_CHARS = 1e5;
+  function modelLabel2(model) {
+    return model ? `${model.provider}/${model.id}` : void 0;
+  }
+  function isPrivateHostname(hostname) {
+    const host = hostname.toLowerCase();
+    if (host === "localhost" || host.endsWith(".localhost")) return true;
+    if (host === "0.0.0.0") return true;
+    if (host.startsWith("127.")) return true;
+    if (host.startsWith("10.")) return true;
+    if (host.startsWith("192.168.")) return true;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+    if (host === "::1" || host === "[::1]") return true;
+    if (host === "169.254.169.254") return true;
+    return false;
+  }
+  function charsetFromContentType(contentType) {
+    return contentType.match(/charset=([^;\s]+)/i)?.[1]?.trim().replace(/^"|"$/g, "") || "utf-8";
+  }
+  function decodeUtf8Manually(bytes) {
+    const view = new Uint8Array(bytes);
+    let output = "";
+    for (let i = 0; i < view.length; i++) {
+      const first = view[i];
+      if (first <= 127) {
+        output += String.fromCharCode(first);
+        continue;
+      }
+      if (first >= 192 && first <= 223 && i + 1 < view.length) {
+        const second = view[++i] & 63;
+        output += String.fromCharCode((first & 31) << 6 | second);
+        continue;
+      }
+      if (first >= 224 && first <= 239 && i + 2 < view.length) {
+        const second = view[++i] & 63;
+        const third = view[++i] & 63;
+        output += String.fromCharCode((first & 15) << 12 | second << 6 | third);
+        continue;
+      }
+      if (first >= 240 && first <= 247 && i + 3 < view.length) {
+        const second = view[++i] & 63;
+        const third = view[++i] & 63;
+        const fourth = view[++i] & 63;
+        const codePoint = (first & 7) << 18 | second << 12 | third << 6 | fourth;
+        output += String.fromCodePoint(codePoint);
+        continue;
+      }
+      output += "\uFFFD";
+    }
+    return output;
+  }
+  function decodeBytes(bytes, contentType = "") {
+    const charset = charsetFromContentType(contentType);
+    try {
+      const decoded = new TextDecoder(charset, { fatal: false }).decode(bytes);
+      if (decoded !== "[object ArrayBuffer]") {
+        return {
+          text: decoded,
+          charset,
+          decodeWarning: decoded.includes("\uFFFD") ? "replacement_chars_detected" : void 0
+        };
+      }
+    } catch {
+    }
+    try {
+      return {
+        text: decodeUtf8Manually(bytes),
+        charset,
+        decodeWarning: charset.toLowerCase() === "utf-8" ? "manual_utf8_fallback" : "unsupported_charset_fallback"
+      };
+    } catch {
+      return {
+        text: Buffer.from(bytes).toString("utf8"),
+        charset,
+        decodeWarning: charset.toLowerCase() === "utf-8" ? "manual_utf8_fallback" : "unsupported_charset_fallback"
+      };
+    }
+  }
+  function extractTitle2(html) {
+    const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    return match?.[1]?.replace(/\s+/g, " ").trim();
+  }
+  function decodeHtmlEntities(input) {
+    return input.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  }
+  function htmlToReadableMarkdown(input) {
+    const body = input.match(/<article[\s\S]*?<\/article>/i)?.[0] ?? input.match(/<main[\s\S]*?<\/main>/i)?.[0] ?? input.match(/<body[\s\S]*?<\/body>/i)?.[0] ?? input;
+    const markdown = body.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<noscript[\s\S]*?<\/noscript>/gi, " ").replace(/<(nav|footer|aside|form|svg|canvas)[\s\S]*?<\/\1>/gi, " ").replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (_match, level, text2) => `${"#".repeat(Number(level))} ${decodeHtmlEntities(String(text2).replace(/<[^>]+>/g, " "))}
+
+`).replace(/<li[^>]*>/gi, "- ").replace(/<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_match, href, text2) => `${decodeHtmlEntities(String(text2).replace(/<[^>]+>/g, " ").trim())} (${href})`).replace(/<\/(p|div|section|article|li|h[1-6]|tr)>/gi, "\n").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/[ \t]+/g, " ").replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    const text = decodeHtmlEntities(markdown);
+    const rawText = decodeHtmlEntities(input.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+    const readabilityScore = rawText.length === 0 ? 0 : Math.min(1, Math.max(0, text.length / rawText.length));
+    return { text, readabilityScore };
+  }
+  function compactPdfText(raw) {
+    const literalStrings = [...raw.matchAll(/\(([^()]{2,})\)\s*Tj/g)].map((match) => match[1]).join(" ");
+    return (literalStrings.length > 64 ? literalStrings : raw).replace(/[^\x09\x0a\x0d\x20-\x7e\u00a0-\uffff]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function looksJavaScriptHeavy(raw, text) {
+    const lower = raw.slice(0, 1e5).toLowerCase();
+    if (/enable javascript|requires javascript|please enable js/.test(lower)) return true;
+    if (/<script\b/gi.test(raw) && text.length < 500) return true;
+    if (/(id=["']root["']|id=["']__next["']|__next_data__|data-reactroot|vite)/i.test(raw) && text.length < 1500) return true;
+    return false;
+  }
+  function buildCitationAnchors(url, title, text) {
+    const anchors = [];
+    const chunkSize = Math.max(1200, Math.min(5e3, Math.ceil(text.length / 5)));
+    for (let start = 0; start < text.length && anchors.length < 5; start += chunkSize) {
+      anchors.push({ url, title, startOffset: start, endOffset: Math.min(text.length, start + chunkSize) });
+    }
+    return anchors;
+  }
+  function createTimeoutSignal(parentSignal, timeoutMs) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new Error(`web_fetch timed out after ${Math.ceil(timeoutMs / 1e3)} seconds`));
+    }, timeoutMs);
+    const onAbort = () => controller.abort(parentSignal?.reason);
+    if (parentSignal) {
+      if (parentSignal.aborted) onAbort();
+      else parentSignal.addEventListener("abort", onAbort, { once: true });
+    }
+    return {
+      signal: controller.signal,
+      dispose: () => {
+        clearTimeout(timer);
+        parentSignal?.removeEventListener("abort", onAbort);
+      },
+      didTimeout: () => timedOut
+    };
+  }
+  function assistantText(message) {
+    return message.content.filter((block) => block.type === "text").map((block) => block.text).join("\n").trim();
+  }
+  async function applyPromptWithModel(deps, prompt, url, content, signal) {
+    const model = deps.getModel?.();
+    const apiKey = deps.getApiKey?.();
+    if (!model || !apiKey) {
+      return {
+        text: [
+          `Fetched ${url}.`,
+          "",
+          "Model-routed extraction was unavailable, so returning fetched content excerpt:",
+          content
+        ].join("\n"),
+        model: modelLabel2(model)
+      };
+    }
+    try {
+      const response = await completeSimple(
+        model,
+        {
+          systemPrompt: "You are a web_fetch extraction tool. Answer only from the fetched page content. Include uncertainty if the page does not contain the requested information.",
+          messages: [{
+            role: "user",
+            timestamp: Date.now(),
+            content: [{
+              type: "text",
+              text: [`URL: ${url}`, `Task: ${prompt}`, "", "Fetched content:", content].join("\n")
+            }]
+          }]
+        },
+        {
+          apiKey,
+          maxTokens: Math.min(model.maxTokens || 4096, 4096),
+          signal
+        }
+      );
+      const text = assistantText(response) || response.errorMessage || "(web_fetch extraction model returned no text)";
+      return { text, model: modelLabel2(model), isError: response.stopReason === "error" || response.stopReason === "aborted" };
+    } catch (error) {
+      return {
+        text: `web_fetch extraction failed: ${error instanceof Error ? error.message : String(error)}`,
+        model: modelLabel2(model),
+        isError: true
+      };
+    }
+  }
+  function createSharedWebFetchTool(deps = {}) {
+    return {
+      name: "web_fetch",
+      label: "web_fetch",
+      description: "Fetch and read a specific public web URL. Use web_search to discover sources, then web_fetch to inspect a chosen URL. Do not use bash/curl/Python as a fallback for web page fetching.",
+      parameters: webFetchSchema,
+      capabilityMetadata: {
+        riskClass: "network",
+        concurrencySafe: true,
+        permissionScope: "network",
+        readsNetwork: true,
+        availableInPlanMode: true,
+        allowedForSubagentByDefault: true,
+        maxOutputChars: DEFAULT_MAX_CHARS
+      },
+      execute: async (_toolCallId, params, signal) => {
+        const start = Date.now();
+        const { url, prompt } = params;
+        let parsed;
+        try {
+          parsed = new URL(url);
+        } catch {
+          return {
+            content: [{ type: "text", text: `Invalid URL: ${url}` }],
+            details: { url: String(url || ""), sourceUrl: String(url || ""), durationMs: Date.now() - start, failureCategory: "invalid_url" },
+            isError: true
+          };
+        }
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          return {
+            content: [{ type: "text", text: `web_fetch only supports http(s) URLs: ${url}` }],
+            details: { url, sourceUrl: url, durationMs: Date.now() - start, failureCategory: "invalid_url" },
+            isError: true
+          };
+        }
+        if (!deps.allowPrivateHosts?.() && isPrivateHostname(parsed.hostname)) {
+          return {
+            content: [{ type: "text", text: `Blocked private or local URL: ${url}` }],
+            details: { url, sourceUrl: url, durationMs: Date.now() - start, failureCategory: "blocked_private_host" },
+            isError: true
+          };
+        }
+        const timeout = createTimeoutSignal(signal, deps.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+        try {
+          const response = await (deps.fetch ?? fetch)(url, {
+            method: "GET",
+            redirect: "follow",
+            signal: timeout.signal,
+            headers: {
+              "user-agent": "Pie web_fetch/1.0",
+              accept: "text/html,application/xhtml+xml,text/plain,application/pdf,*/*;q=0.8"
+            }
+          });
+          const contentType = response.headers.get("content-type") || "";
+          const bytes = await response.arrayBuffer();
+          const maxBytes = deps.maxBytes ?? DEFAULT_MAX_BYTES2;
+          if (bytes.byteLength > maxBytes) {
+            return {
+              content: [{ type: "text", text: `Fetched content is too large (${bytes.byteLength} bytes; max ${maxBytes}).` }],
+              details: { url, sourceUrl: url, finalUrl: response.url || url, status: response.status, contentType, bytes: bytes.byteLength, truncated: true, truncationReason: "max_bytes", durationMs: Date.now() - start, failureCategory: "too_large" },
+              isError: true
+            };
+          }
+          if (!response.ok) {
+            return {
+              content: [{ type: "text", text: `web_fetch failed with HTTP ${response.status} for ${url}` }],
+              details: { url, sourceUrl: url, finalUrl: response.url || url, status: response.status, contentType, bytes: bytes.byteLength, durationMs: Date.now() - start, failureCategory: "http_error" },
+              isError: true
+            };
+          }
+          const decoded = decodeBytes(bytes, contentType);
+          const raw = decoded.text;
+          const isHtml = /html/i.test(contentType) || /<\/?[a-z][\s\S]*>/i.test(raw.slice(0, 2e3));
+          const isPdf = /pdf/i.test(contentType) || raw.startsWith("%PDF");
+          const title = isHtml ? extractTitle2(raw) : void 0;
+          const htmlExtraction = isHtml ? htmlToReadableMarkdown(raw) : void 0;
+          let text = htmlExtraction?.text ?? (isPdf ? compactPdfText(raw) : raw.trim());
+          const extractionMethod = isHtml ? "html_readability" : isPdf ? "pdf_text" : "plain_text";
+          if (isHtml && looksJavaScriptHeavy(raw, text)) {
+            return {
+              content: [{ type: "text", text: `web_fetch could not read meaningful content from ${url}; this page appears to require JavaScript. Use Playwright browser tools for browser-rendered content.` }],
+              details: {
+                url,
+                sourceUrl: url,
+                finalUrl: response.url || url,
+                status: response.status,
+                contentType,
+                charset: decoded.charset,
+                decodeWarning: decoded.decodeWarning,
+                bytes: bytes.byteLength,
+                title,
+                requiresBrowser: true,
+                extractionMethod,
+                readabilityScore: htmlExtraction?.readabilityScore,
+                durationMs: Date.now() - start,
+                failureCategory: "requires_browser"
+              },
+              isError: true
+            };
+          }
+          if (!text) {
+            return {
+              content: [{ type: "text", text: `web_fetch could not extract readable text from ${url}` }],
+              details: { url, sourceUrl: url, finalUrl: response.url || url, status: response.status, contentType, charset: decoded.charset, decodeWarning: decoded.decodeWarning, bytes: bytes.byteLength, extractionMethod, durationMs: Date.now() - start, failureCategory: "unsupported_content" },
+              isError: true
+            };
+          }
+          const maxChars = deps.maxChars ?? DEFAULT_MAX_CHARS;
+          const truncated = text.length > maxChars;
+          if (truncated) text = text.slice(0, maxChars) + "\n\n[web_fetch content truncated]";
+          const extraction = prompt?.trim() ? await applyPromptWithModel(deps, prompt.trim(), response.url || url, text, timeout.signal) : { text, model: modelLabel2(deps.getModel?.()) };
+          const finalUrl = response.url || url;
+          return {
+            content: [{ type: "text", text: extraction.text }],
+            details: {
+              url,
+              sourceUrl: url,
+              finalUrl,
+              status: response.status,
+              contentType,
+              charset: decoded.charset,
+              decodeWarning: decoded.decodeWarning,
+              bytes: bytes.byteLength,
+              title,
+              truncated,
+              redirectChain: finalUrl !== url ? [url, finalUrl] : [url],
+              extractionMethod: prompt?.trim() ? "model_extraction" : extractionMethod,
+              readabilityScore: htmlExtraction?.readabilityScore,
+              citationAnchors: buildCitationAnchors(finalUrl, title, text),
+              truncationReason: truncated ? "max_chars" : void 0,
+              requiresBrowser: false,
+              routeModel: extraction.model,
+              routeSource: extraction.model ? "current_model" : "none",
+              durationMs: Date.now() - start,
+              failureCategory: extraction.isError ? "provider_error" : void 0
+            },
+            isError: extraction.isError
+          };
+        } catch (error) {
+          return {
+            content: [{ type: "text", text: `web_fetch failed: ${error instanceof Error ? error.message : String(error)}` }],
+            details: { url, sourceUrl: url, durationMs: Date.now() - start, failureCategory: timeout.didTimeout() ? "timeout" : "provider_error" },
+            isError: true
+          };
+        } finally {
+          timeout.dispose();
+        }
+      }
+    };
+  }
+
+  // node-stub:node:fs
+  var existsSync = () => false;
+  var readFileSync = () => "";
+  var readdirSync = () => [];
+  var statSync = () => ({ isFile: () => false, isDirectory: () => false, size: 0 });
+
+  // ../../packages/shared-headless-capabilities/src/code-intel.ts
+  var codeIntelSchema = Type.Object({
+    operation: Type.Union([
+      Type.Literal("diagnostics"),
+      Type.Literal("definition"),
+      Type.Literal("references"),
+      Type.Literal("symbols"),
+      Type.Literal("hover")
+    ]),
+    path: Type.Optional(Type.String({ description: "File path for file-scoped operations." })),
+    line: Type.Optional(Type.Number({ description: "1-based line number for position-scoped operations." })),
+    character: Type.Optional(Type.Number({ description: "1-based character offset for position-scoped operations." })),
+    query: Type.Optional(Type.String({ description: "Symbol query for symbols operation." }))
+  });
+  var DEFAULT_MAX_OUTPUT_CHARS = 1e5;
+  var nodeFileSystem = {
+    exists(filePath) {
+      return existsSync(filePath);
+    },
+    isDirectory(filePath) {
+      return existsSync(filePath) && statSync(filePath).isDirectory();
+    },
+    readFile(filePath) {
+      return readFileSync(filePath, "utf8");
+    },
+    readDir(dirPath) {
+      return readdirSync(dirPath, { withFileTypes: true }).map((entry) => ({
+        name: entry.name,
+        path: join(dirPath, entry.name),
+        isDirectory: entry.isDirectory()
+      }));
+    }
+  };
+  function normalizePath2(projectRoot2, inputPath) {
+    if (!inputPath) return void 0;
+    if (!isAbsolute(inputPath)) {
+      const normalizedRelative = normalize(inputPath);
+      if (normalizedRelative === ".." || normalizedRelative.startsWith(`..${sep}`) || isAbsolute(normalizedRelative)) {
+        throw new Error(`Path is outside project root: ${inputPath}`);
+      }
+      return join(projectRoot2, normalizedRelative);
+    }
+    const resolved = inputPath;
+    const relative2 = relative(projectRoot2, resolved);
+    if (relative2.startsWith("..") || isAbsolute(relative2)) {
+      throw new Error(`Path is outside project root: ${inputPath}`);
+    }
+    return resolved;
+  }
+  function walkJsTsFiles(fileSystem, root, limit = 1e3) {
+    const results = [];
+    const skip = /* @__PURE__ */ new Set(["node_modules", "dist", "build", ".git", "Library", "Temp", "obj"]);
+    const visit = (dir) => {
+      if (results.length >= limit) return;
+      for (const entry of fileSystem.readDir(dir)) {
+        if (skip.has(entry.name)) continue;
+        if (entry.isDirectory) visit(entry.path);
+        else if (/\.[cm]?[jt]sx?$/.test(entry.name)) results.push(entry.path);
+        if (results.length >= limit) return;
+      }
+    };
+    if (fileSystem.exists(root) && fileSystem.isDirectory(root)) visit(root);
+    return results;
+  }
+  function symbolRegex(query) {
+    const name = query ? query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "[A-Za-z_$][\\w$]*";
+    return new RegExp(`\\b(?:export\\s+)?(?:async\\s+)?(?:function|class|interface|type|const|let|var)\\s+(${name})\\b`, "g");
+  }
+  function positionWord(fileSystem, filePath, line, character) {
+    if (!line || !character) return void 0;
+    const lines = fileSystem.readFile(filePath).split(/\r?\n/);
+    const text = lines[line - 1] || "";
+    const index = Math.max(0, character - 1);
+    const left = text.slice(0, index).match(/[A-Za-z_$][\w$]*$/)?.[0] || "";
+    const right = text.slice(index).match(/^[A-Za-z_$][\w$]*/)?.[0] || "";
+    return `${left}${right}` || void 0;
+  }
+  function lineCol(fileSystem, filePath, offset) {
+    const text = fileSystem.readFile(filePath).slice(0, offset);
+    const lines = text.split(/\r?\n/);
+    return `${filePath}:${lines.length}:${lines[lines.length - 1].length + 1}`;
+  }
+  function truncate(text, max) {
+    return text.length > max ? text.slice(0, max) + "\n\n[code_intel output truncated]" : text;
+  }
+  function createLightweightCodeIntelProvider(fileSystem = nodeFileSystem) {
+    return {
+      async run(input, context) {
+        const filePath = context.resolvePath(input.path);
+        if (filePath && !fileSystem.exists(filePath)) {
+          return {
+            text: `File does not exist: ${input.path}`,
+            details: { operation: input.operation, projectRoot: context.projectRoot, path: filePath, provider: "lightweight" },
+            isError: true
+          };
+        }
+        const files = filePath ? [filePath] : walkJsTsFiles(fileSystem, context.projectRoot);
+        if (input.operation === "diagnostics") {
+          const diagnostics = [];
+          for (const file of files) {
+            const text = fileSystem.readFile(file);
+            if (/:\s*string\s*=\s*\d+\b/.test(text)) {
+              diagnostics.push(`${file}: possible type mismatch assigning number to string`);
+            }
+          }
+          return {
+            text: diagnostics.length ? diagnostics.join("\n") : "No lightweight JS/TS diagnostics found.",
+            details: { operation: input.operation, projectRoot: context.projectRoot, path: filePath, provider: "lightweight", diagnosticCount: diagnostics.length, resultCount: diagnostics.length }
+          };
+        }
+        if (input.operation === "symbols") {
+          const matches = [];
+          const regex = symbolRegex(input.query);
+          for (const file of files) {
+            const text = fileSystem.readFile(file);
+            for (const match of text.matchAll(regex)) {
+              matches.push(`${match[1]} ${lineCol(fileSystem, file, match.index || 0)}`);
+            }
+          }
+          return {
+            text: matches.length ? matches.join("\n") : "No symbols found.",
+            details: { operation: input.operation, projectRoot: context.projectRoot, path: filePath, provider: "lightweight", resultCount: matches.length }
+          };
+        }
+        const word = positionWord(fileSystem, filePath || "", input.line, input.character);
+        if (!filePath || !word) {
+          return {
+            text: `${input.operation} requires path, line, and character.`,
+            details: { operation: input.operation, projectRoot: context.projectRoot, path: filePath, provider: "lightweight" },
+            isError: true
+          };
+        }
+        if (input.operation === "definition") {
+          const matches = [];
+          const regex = symbolRegex(word);
+          for (const file of walkJsTsFiles(fileSystem, context.projectRoot)) {
+            const text = fileSystem.readFile(file);
+            for (const match of text.matchAll(regex)) matches.push(`${word} ${lineCol(fileSystem, file, match.index || 0)}`);
+          }
+          return {
+            text: matches.length ? matches.join("\n") : "No definition found.",
+            details: { operation: input.operation, projectRoot: context.projectRoot, path: filePath, provider: "lightweight", resultCount: matches.length }
+          };
+        }
+        if (input.operation === "references") {
+          const matches = [];
+          const regex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
+          for (const file of walkJsTsFiles(fileSystem, context.projectRoot)) {
+            const text = fileSystem.readFile(file);
+            for (const match of text.matchAll(regex)) matches.push(lineCol(fileSystem, file, match.index || 0));
+          }
+          return {
+            text: matches.length ? matches.join("\n") : "No references found.",
+            details: { operation: input.operation, projectRoot: context.projectRoot, path: filePath, provider: "lightweight", resultCount: matches.length }
+          };
+        }
+        return {
+          text: word,
+          details: { operation: input.operation, projectRoot: context.projectRoot, path: filePath, provider: "lightweight", resultCount: 1 }
+        };
+      }
+    };
+  }
+  function createCodeIntelTool(options) {
+    const projectRoot2 = resolve(options.projectRoot);
+    const provider = options.provider ?? createLightweightCodeIntelProvider(options.fileSystem);
+    const maxOutputChars = options.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS;
+    return {
+      name: "code_intel",
+      label: "code_intel",
+      description: "Read-only JS/TS code intelligence: diagnostics, definition, references, symbols, and hover. Use this before broad edits when type or symbol information matters.",
+      parameters: codeIntelSchema,
+      capabilityMetadata: {
+        riskClass: "read_only",
+        concurrencySafe: true,
+        permissionScope: "filesystem",
+        readsFile: true,
+        availableInPlanMode: true,
+        allowedForSubagentByDefault: true,
+        maxOutputChars
+      },
+      execute: async (_toolCallId, params) => {
+        const input = params;
+        try {
+          const result = await provider.run(input, {
+            projectRoot: projectRoot2,
+            resolvePath: (inputPath) => normalizePath2(projectRoot2, inputPath)
+          });
+          return {
+            content: [{ type: "text", text: truncate(result.text, maxOutputChars) }],
+            details: result.details,
+            isError: result.isError
+          };
+        } catch (error) {
+          return {
+            content: [{ type: "text", text: `code_intel failed: ${error instanceof Error ? error.message : String(error)}` }],
+            details: { operation: input.operation, projectRoot: projectRoot2, path: input.path, provider: "lightweight" },
+            isError: true
+          };
+        }
+      }
+    };
   }
 
   // src/unity-http-client.ts
   function sleep2(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   var sseBuffers = /* @__PURE__ */ new Map();
   globalThis._pieSSEPush = (requestId, line) => {
@@ -16239,7 +20653,11 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
       buf = { lines: [] };
       sseBuffers.set(requestId, buf);
     }
-    buf.lines.push(line);
+    if (line === null) {
+      buf.done = true;
+    } else {
+      buf.lines.push(line);
+    }
     if (buf.resolve) {
       const r = buf.resolve;
       buf.resolve = void 0;
@@ -16254,6 +20672,10 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
     }
     buf.httpStatus = status;
     buf.httpError = error;
+    if (status >= 400) {
+      buf.error = new Error(error || `HTTP ${status}`);
+      buf.done = true;
+    }
     if (buf.resolve) {
       const r = buf.resolve;
       buf.resolve = void 0;
@@ -16263,23 +20685,37 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
   function waitForData(requestId) {
     const buf = sseBuffers.get(requestId);
     if (!buf) return Promise.resolve();
-    if (buf.lines.length > 0) return Promise.resolve();
-    return new Promise((resolve) => {
-      buf.resolve = resolve;
+    if (buf.lines.length > 0 || buf.done || buf.error) return Promise.resolve();
+    return new Promise((resolve2) => {
+      buf.resolve = resolve2;
     });
   }
   function waitForStatus(requestId) {
     const buf = sseBuffers.get(requestId);
     if (!buf) return Promise.resolve();
     if (buf.httpStatus !== void 0) return Promise.resolve();
-    return new Promise((resolve) => {
-      buf.resolve = resolve;
+    return new Promise((resolve2) => {
+      buf.resolve = resolve2;
     });
   }
   var UnityHttpClient = class _UnityHttpClient {
+    static TRANSPORT_MODE = "managed_stream";
     static MAX_RETRIES = 5;
     static RETRYABLE_STATUS = /* @__PURE__ */ new Set([429, 500, 502, 503, 504]);
     async request(url, options = {}) {
+      if (_UnityHttpClient.TRANSPORT_MODE === "buffered_fallback") {
+        const buffered = this.tryBuildBufferedCompletionRequest(url, options);
+        if (buffered) {
+          return this.requestViaUnityWebRequestBufferedFallback(url, buffered.options, buffered.mode);
+        }
+      }
+      const requestedMethod = (options.method || "GET").toUpperCase();
+      if ((requestedMethod === "GET" || requestedMethod === "HEAD") && !options.body) {
+        return this.requestViaManagedTextFetch(url, options);
+      }
+      if (_UnityHttpClient.TRANSPORT_MODE !== "managed_stream") {
+        return this.requestViaUnityWebRequestBufferedFallback(url, options, "plain");
+      }
       const method = options.method || "POST";
       const body = options.body || "";
       const headers = options.headers || {};
@@ -16292,6 +20728,7 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
         extraHeaders[k] = v;
       }
       const headersJson = Object.keys(extraHeaders).length > 0 ? JSON.stringify(extraHeaders) : null;
+      const endOnOpenAIStreamDone = shouldEndOnOpenAIStreamDone(url, options);
       let requestId = -1;
       let httpStatus = -1;
       for (let attempt = 0; attempt <= _UnityHttpClient.MAX_RETRIES; attempt++) {
@@ -16327,7 +20764,7 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
           const retryMatch = errorBody2.match(/"retry.after":\s*(\d+)/i);
           if (retryMatch) retryAfterMs = parseInt(retryMatch[1], 10) * 1e3;
           const backoffMs = Math.max(retryAfterMs, 2 ** attempt * 1e3 + Math.random() * 500);
-          globalThis.pieBridge?.log("warn", `[UnityHttpClient] ${httpStatus} \u2013 retrying in ${Math.round(backoffMs)}ms (attempt ${attempt + 1}/${_UnityHttpClient.MAX_RETRIES})`);
+          globalThis.pieBridge?.log?.("warn", `[UnityHttpClient] ${httpStatus} \u2013 retrying in ${Math.round(backoffMs)}ms (attempt ${attempt + 1}/${_UnityHttpClient.MAX_RETRIES})`);
           await sleep2(backoffMs);
           continue;
         }
@@ -16347,7 +20784,7 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
         headers: { "content-type": "application/json" },
         async text() {
           const lines = [];
-          for await (const line of response.readSSELines()) {
+          for await (const line of response.readSSELines?.() ?? []) {
             lines.push(line);
           }
           return lines.join("\n");
@@ -16372,40 +20809,291 @@ ${errors.map((error) => `  - ${error}`).join("\n")}` }],
               if (!buf) return;
               while (buf.lines.length > 0) {
                 const line = buf.lines.shift();
-                if (line === null) return;
                 yield line;
+                if (endOnOpenAIStreamDone && line.trim() === "data: [DONE]") {
+                  return;
+                }
+              }
+              if (buf.done) {
+                if (buf.error) throw buf.error;
+                return;
               }
               await waitForData(capturedRequestId);
             }
           } finally {
+            try {
+              CS.Pie.PieHttpBridge.CancelRequest(capturedRequestId);
+            } catch {
+            }
             sseBuffers.delete(capturedRequestId);
           }
         }
       };
       return response;
     }
+    tryBuildBufferedCompletionRequest(url, options) {
+      if (!/\/chat\/completions\/?$/.test(url)) return null;
+      if (!options.body || typeof options.body !== "string") return null;
+      let parsed;
+      try {
+        parsed = JSON.parse(options.body);
+      } catch {
+        return null;
+      }
+      if (!parsed || parsed.stream !== true) return null;
+      const cloned = { ...parsed, stream: false };
+      delete cloned.stream_options;
+      return {
+        options: {
+          ...options,
+          body: JSON.stringify(cloned)
+        },
+        mode: "openai-buffered-sse"
+      };
+    }
+    /**
+     * Legacy buffered provider fallback only. Ordinary GET/HEAD fetches, including
+     * shared web_fetch, must use FetchTextAsync through requestViaManagedTextFetch
+     * so they do not depend on UnityWebRequest polling or line-oriented SSE paths.
+     */
+    requestViaUnityWebRequestBufferedFallback(url, options = {}, mode = "plain") {
+      if (typeof CS === "undefined" || !CS?.UnityEngine?.Networking) {
+        throw new Error("UnityWebRequest is not available in this environment");
+      }
+      const { UnityEngine } = CS;
+      const method = options.method || "GET";
+      const headers = options.headers || {};
+      const body = options.body;
+      return new Promise((resolve2, reject) => {
+        const request = new UnityEngine.Networking.UnityWebRequest(url, method);
+        for (const [key, value] of Object.entries(headers)) {
+          request.SetRequestHeader(key, value);
+        }
+        if (body && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
+          request.uploadHandler = CS.Pie.PieHttpBridge.CreateUtf8UploadHandler(String(body));
+        }
+        request.downloadHandler = new UnityEngine.Networking.DownloadHandlerBuffer();
+        let aborted = false;
+        if (options.signal) {
+          const onAbort = () => {
+            aborted = true;
+            request.Abort();
+            reject(new Error("Request was aborted"));
+          };
+          options.signal.addEventListener("abort", onAbort, { once: true });
+        }
+        const asyncOp = request.SendWebRequest();
+        const checkComplete = () => {
+          try {
+            if (aborted) return;
+            if (asyncOp.isDone) {
+              const status = request.responseCode;
+              const responseHeaders = {};
+              const contentType = request.GetResponseHeader?.("content-type") || request.GetResponseHeader?.("Content-Type");
+              if (contentType) responseHeaders["content-type"] = String(contentType);
+              const responseText = request.downloadHandler?.text || "";
+              resolve2({
+                status,
+                statusText: request.error || "",
+                ok: status >= 200 && status < 300,
+                headers: responseHeaders,
+                text() {
+                  return Promise.resolve(responseText);
+                },
+                async json() {
+                  return JSON.parse(responseText);
+                },
+                async *readSSELines(signal) {
+                  const lines = mode === "openai-buffered-sse" ? buildOpenAICompatibleSseLines(responseText) : responseText.split("\n");
+                  for (const line of lines) {
+                    if (signal?.aborted) {
+                      throw new Error("Request was aborted");
+                    }
+                    yield line;
+                  }
+                }
+              });
+              return;
+            }
+            setTimeout(checkComplete, 16);
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
+        };
+        checkComplete();
+      });
+    }
+    async requestViaManagedTextFetch(url, options = {}) {
+      if (typeof puer === "undefined" || typeof puer.$promise !== "function") {
+        throw new Error("PuerTS promise bridge is not available for Unity text fetch");
+      }
+      const method = options.method || "GET";
+      const headers = options.headers || {};
+      const authHeader = headers["Authorization"] || headers["authorization"] || "";
+      const bearer = authHeader.replace(/^Bearer\s+/i, "");
+      const extraHeaders = {};
+      for (const [key, value] of Object.entries(headers)) {
+        if (key.toLowerCase() === "authorization") continue;
+        extraHeaders[key] = value;
+      }
+      const headersJson = Object.keys(extraHeaders).length > 0 ? JSON.stringify(extraHeaders) : null;
+      const raw = await puer.$promise(CS.Pie.PieHttpBridge.FetchTextAsync(
+        method,
+        url,
+        options.body || "",
+        bearer,
+        headersJson
+      ));
+      const parsed = JSON.parse(String(raw || "{}"));
+      const responseText = String(parsed.body || "");
+      const status = Number(parsed.status || 0);
+      return {
+        status,
+        statusText: String(parsed.statusText || ""),
+        ok: typeof parsed.ok === "boolean" ? parsed.ok : status >= 200 && status < 300,
+        headers: parsed.headers || {},
+        text() {
+          return Promise.resolve(responseText);
+        },
+        async json() {
+          return JSON.parse(responseText);
+        },
+        async *readSSELines(signal) {
+          for (const line of responseText.split("\n")) {
+            if (signal?.aborted) {
+              throw new Error("Request was aborted");
+            }
+            yield line;
+          }
+        }
+      };
+    }
   };
+  function shouldEndOnOpenAIStreamDone(url, options) {
+    if (!/\/chat\/completions\/?$/.test(url)) return false;
+    if (!options.body || typeof options.body !== "string") return false;
+    try {
+      const parsed = JSON.parse(options.body);
+      return parsed?.stream === true;
+    } catch {
+      return false;
+    }
+  }
+  function buildOpenAICompatibleSseLines(responseText) {
+    const parsed = JSON.parse(responseText || "{}");
+    const choice = parsed?.choices?.[0] || {};
+    const message = choice?.message || {};
+    const lines = [];
+    lines.push(`data: ${JSON.stringify({
+      id: parsed?.id || "",
+      object: "chat.completion.chunk",
+      created: parsed?.created || Math.floor(Date.now() / 1e3),
+      model: parsed?.model || "",
+      choices: [{ index: 0, delta: { role: message?.role || "assistant" }, finish_reason: null }]
+    })}`);
+    if (typeof message?.content === "string" && message.content.length > 0) {
+      lines.push(`data: ${JSON.stringify({
+        id: parsed?.id || "",
+        object: "chat.completion.chunk",
+        created: parsed?.created || Math.floor(Date.now() / 1e3),
+        model: parsed?.model || "",
+        choices: [{ index: 0, delta: { content: message.content }, finish_reason: null }]
+      })}`);
+    }
+    if (Array.isArray(message?.tool_calls)) {
+      for (const toolCall of message.tool_calls) {
+        lines.push(`data: ${JSON.stringify({
+          id: parsed?.id || "",
+          object: "chat.completion.chunk",
+          created: parsed?.created || Math.floor(Date.now() / 1e3),
+          model: parsed?.model || "",
+          choices: [{
+            index: 0,
+            delta: {
+              tool_calls: [{
+                id: toolCall?.id || "",
+                type: toolCall?.type || "function",
+                function: {
+                  name: toolCall?.function?.name || "",
+                  arguments: toolCall?.function?.arguments || ""
+                }
+              }]
+            },
+            finish_reason: null
+          }]
+        })}`);
+      }
+    }
+    lines.push(`data: ${JSON.stringify({
+      id: parsed?.id || "",
+      object: "chat.completion.chunk",
+      created: parsed?.created || Math.floor(Date.now() / 1e3),
+      model: parsed?.model || "",
+      choices: [{ index: 0, delta: {}, finish_reason: choice?.finish_reason || "stop" }],
+      usage: parsed?.usage
+    })}`);
+    lines.push("data: [DONE]");
+    return lines;
+  }
+
+  // src/unity-logger.ts
+  var UnityBridgeSink = class {
+    constructor(bridge2) {
+      this.bridge = bridge2;
+    }
+    bridge;
+    log(entry) {
+      const moduleName = String(entry.context?.module || "unity");
+      const payload = entry.context ? ` ${JSON.stringify(entry.context)}` : "";
+      const line = `[${entry.level.toUpperCase()}] [${moduleName}] ${entry.message}${payload}`;
+      if (entry.level === "error" || entry.level === "fatal") {
+        this.bridge.log("error", line);
+      } else if (entry.level === "warn") {
+        this.bridge.log("warn", line);
+      } else {
+        this.bridge.log("info", line);
+      }
+    }
+  };
+  function initializeUnityLogger(bridge2) {
+    const logger = createLogger({
+      mode: "unity_host",
+      sinks: [new UnityBridgeSink(bridge2)],
+      minLevel: "info"
+    });
+    setLogger(logger);
+    return logger;
+  }
 
   // src/tools/manage-todo-list.ts
-  var TOOL_DESCRIPTION = `Manage a structured todo list for multi-step work.
-
-Use this tool when a task benefits from planning, progress tracking, or step-by-step execution.
-Always write the full list when updating it.
-
-Preferred status values:
-- not-started
-- in-progress
-- completed`;
+  var TOOL_DESCRIPTION = `Manage a session-local todo list. Use when the user explicitly asks to use the todo tool, create/manage todos, track tasks, follow a todo list, show tasks, or mark a task done.
+NEVER use for: internal planning, tracking your own progress, remembering subtasks, or creating checklists for yourself.
+Use action=create with items to create a list; provide todo titles and optional descriptions only. The tool assigns ids and starts item 1 automatically.
+Use action=complete_current after finishing the current item; the tool advances to the next item or clears the list after the final item.
+When a todo list exists, keep executing from the current in-progress item until it is cleared. If the work cannot continue, explain the failure and use action=clear with a reason.
+Actions: create, read, complete_current, clear.`;
   function createManageTodoListTool() {
     const store = createTodoStore();
+    let executionState = null;
     const tool = {
       name: "manage_todo_list",
       label: "manage_todo_list",
       description: TOOL_DESCRIPTION,
       parameters: ManageTodoListParamsSchema,
       execute: async (_toolCallId, args) => {
+        if (!value_exports2.Check(ManageTodoListParamsSchema, args)) {
+          const firstError = Array.from(value_exports2.Errors(ManageTodoListParamsSchema, args))[0];
+          const path = firstError?.path || "/";
+          const message = firstError ? `Invalid todo arguments at ${path}: ${firstError.message}` : "Invalid todo arguments.";
+          return {
+            content: [{ type: "text", text: `Todo action failed: ${message}` }],
+            details: { action: "read", todos: store.read(), error: message },
+            isError: true
+          };
+        }
         const execution = executeManageTodoList(args, store.read());
         store.restore(execution.nextTodos);
+        executionState = createExecutionStateFromTodos(execution.nextTodos, "todo", "user_todo");
         return execution.result;
       }
     };
@@ -16414,11 +21102,19 @@ Preferred status values:
       getState() {
         return store.read();
       },
+      getExecutionState() {
+        return executionState;
+      },
+      getReminder() {
+        return executionState ? buildExecutionReminder(executionState) : null;
+      },
       restore(state) {
         store.restore(state);
+        executionState = createExecutionStateFromTodos(store.read(), "todo", "user_todo");
       },
       reset() {
         store.clear();
+        executionState = null;
       }
     };
   }
@@ -16506,75 +21202,6 @@ Preferred status values:
     return lines;
   }
 
-  // src/tools/eval-js.ts
-  function createEvalJsTool() {
-    return {
-      name: "eval_js",
-      label: "eval_js",
-      description: `Execute JavaScript code in the Unity PuerTS runtime (V8 engine).
-The code can access Unity C# APIs via the global \`CS\` object.
-
-Common patterns:
-  // Create GameObject
-  new CS.UnityEngine.GameObject("MyObject")
-
-  // Add component
-  const go = CS.UnityEngine.GameObject.Find("MyObject");
-  go.AddComponent(puer.$typeof(CS.UnityEngine.BoxCollider));
-
-  // Transform
-  go.transform.position = new CS.UnityEngine.Vector3(1, 2, 3);
-
-  // Find objects
-  CS.UnityEngine.Object.FindObjectsOfType(puer.$typeof(CS.UnityEngine.Camera));
-
-  // Materials
-  const renderer = go.GetComponent(puer.$typeof(CS.UnityEngine.MeshRenderer));
-  renderer.sharedMaterial.color = new CS.UnityEngine.Color(1, 0, 0, 1);
-
-  // Primitives
-  CS.UnityEngine.GameObject.CreatePrimitive(CS.UnityEngine.PrimitiveType.Cube);
-
-  // Editor-only API (Editor mode only)
-  CS.UnityEditor.Selection.activeGameObject = go;
-
-The last expression value is returned as the tool result.
-Use JSON.stringify() for complex data.`,
-      parameters: Type.Object({
-        code: Type.String({ description: "JavaScript code to execute in Unity PuerTS runtime" })
-      }),
-      execute: async (_toolCallId, params) => {
-        try {
-          const result = (0, eval)(params.code);
-          const finalResult = result instanceof Promise ? await result : result;
-          let text;
-          if (finalResult === void 0 || finalResult === null) {
-            text = "OK (no return value)";
-          } else if (typeof finalResult === "object") {
-            try {
-              text = JSON.stringify(finalResult, null, 2);
-            } catch {
-              text = String(finalResult);
-            }
-          } else {
-            text = String(finalResult);
-          }
-          return {
-            content: [{ type: "text", text }],
-            details: {}
-          };
-        } catch (e) {
-          return {
-            content: [{ type: "text", text: `Error: ${e?.message ?? e}
-${e?.stack ?? ""}` }],
-            details: {},
-            isError: true
-          };
-        }
-      }
-    };
-  }
-
   // src/tools/inspect-unity-context.ts
   function getRenderPipelineInfo() {
     const graphicsSettings = CS.UnityEngine.Rendering.GraphicsSettings;
@@ -16640,8 +21267,8 @@ ${e?.stack ?? ""}` }],
   }
   function createInspectUnityContextTool(projectRoot2, isEditor2) {
     return {
-      name: "inspect_unity_context",
-      label: "inspect_unity_context",
+      name: "unity_project_inspect",
+      label: "unity_project_inspect",
       description: "Inspect the current Unity environment, including render pipeline, scene, selection, and project memory status.",
       parameters: Type.Object({}),
       execute: async () => {
@@ -16654,7 +21281,7 @@ ${e?.stack ?? ""}` }],
     };
   }
 
-  // src/tools/native-find.ts
+  // src/tools/native-find-files.ts
   var DEFAULT_LIMIT2 = 1e3;
   function awaitTask(task) {
     if (!puer?.$promise) {
@@ -16692,7 +21319,7 @@ ${e?.stack ?? ""}` }],
     }
     return pattern;
   }
-  function createNativeFindTool(cwd, options) {
+  function createNativeFindFilesTool(cwd, options) {
     const rootSchema = buildRootParameterSchema(cwd, options);
     const findSchema = Type.Object({
       pattern: Type.Optional(Type.String({
@@ -16707,32 +21334,34 @@ ${e?.stack ?? ""}` }],
     });
     const pathResolutionDescription = buildPathResolutionDescription(cwd, options);
     return {
-      name: "find",
-      label: "find",
+      name: "find_files",
+      label: "find_files",
       description: `Search for files by filename fragment or glob pattern. Best practice: use a simple filename fragment like 'PlayerController' or a direct filename like 'PlayerController.cs'. Glob examples: '*.cs', '*.json', '**/*.prefab'. Pass only the pattern string, not a shell command. ${pathResolutionDescription} Returns matching paths relative to the search directory. Output is truncated to ${DEFAULT_LIMIT2} results or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
       parameters: findSchema,
-      execute: async (_toolCallId, { pattern, query, name, file_name, path: searchDir, root, limit }) => {
+      execute: async (_toolCallId, params) => {
+        const { pattern, query, name, file_name, path: searchDir, root, limit } = params ?? {};
         const resolvedPattern = pattern || query || name || file_name || "";
         const normalizedPattern = normalizeFindPattern(resolvedPattern);
         if (!normalizedPattern) {
           return {
-            content: [{ type: "text", text: "search_files requires a pattern, query, name, or file_name argument." }],
+            content: [{ type: "text", text: "find_files requires a pattern, query, name, or file_name argument." }],
             details: { rawPattern: resolvedPattern, effectivePattern: normalizedPattern },
             isError: true
           };
         }
         const searchPath = resolveToCwd(searchDir || ".", cwd, options, root);
         const effectiveLimit = limit ?? DEFAULT_LIMIT2;
-        if (globalThis.__pieVerboseLogs) {
-          globalThis.pieBridge?.log?.("info", `[native find] path=${searchPath} pattern=${normalizedPattern} raw=${resolvedPattern} limit=${effectiveLimit}`);
+        const pieGlobal = globalThis;
+        if (pieGlobal.__pieVerboseLogs) {
+          pieGlobal.pieBridge?.log?.("info", `[native find_files] path=${searchPath} pattern=${normalizedPattern} raw=${resolvedPattern} limit=${effectiveLimit}`);
         }
         const json = await awaitTask(CS.Pie.PieFileBridge.FindAsync(searchPath, normalizedPattern, effectiveLimit));
         const nativeResult = json ? JSON.parse(json) : {};
         const results = nativeResult.Results ?? [];
-        if (globalThis.__pieVerboseLogs) {
-          globalThis.pieBridge?.log?.(
+        if (pieGlobal.__pieVerboseLogs) {
+          pieGlobal.pieBridge?.log?.(
             "info",
-            `[native find] done path=${searchPath} pattern=${normalizedPattern} matches=${results.length} dirs=${nativeResult.ScannedDirectories ?? 0} files=${nativeResult.ScannedFiles ?? 0}`
+            `[native find_files] done path=${searchPath} pattern=${normalizedPattern} matches=${results.length} dirs=${nativeResult.ScannedDirectories ?? 0} files=${nativeResult.ScannedFiles ?? 0}`
           );
         }
         if (results.length === 0) {
@@ -16780,7 +21409,7 @@ ${e?.stack ?? ""}` }],
     };
   }
 
-  // src/tools/native-grep.ts
+  // src/tools/native-grep-text.ts
   var DEFAULT_LIMIT3 = 100;
   function awaitTask2(task) {
     if (!puer?.$promise) {
@@ -16788,7 +21417,7 @@ ${e?.stack ?? ""}` }],
     }
     return puer.$promise(task);
   }
-  function createNativeGrepTool(cwd, options) {
+  function createNativeGrepTextTool(cwd, options) {
     const rootSchema = buildRootParameterSchema(cwd, options);
     const grepSchema = Type.Object({
       pattern: Type.String({ description: "The text or regex pattern to search for inside files. Example literal patterns: 'MonoBehaviour', 'Hello from Pie'. Example regex: 'class\\s+DemoScript'." }),
@@ -16802,18 +21431,20 @@ ${e?.stack ?? ""}` }],
     });
     const pathResolutionDescription = buildPathResolutionDescription(cwd, options);
     return {
-      name: "grep",
-      label: "grep",
+      name: "grep_text",
+      label: "grep_text",
       description: `Search inside file contents. Use this when you know some text that should appear in the file. Common usage: pattern='MonoBehaviour', glob='*.cs', literal=true. Prefer targeted folders like 'Scripts' or 'Data' over scanning the whole project. ${pathResolutionDescription} Returns matching lines with file paths and line numbers. Output is truncated to ${DEFAULT_LIMIT3} matches or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Long lines are truncated to ${GREP_MAX_LINE_LENGTH} chars.`,
       parameters: grepSchema,
-      execute: async (_toolCallId, { pattern, path: searchDir, root, glob, ignoreCase, literal, context, limit }) => {
+      execute: async (_toolCallId, params) => {
+        const { pattern, path: searchDir, root, glob, ignoreCase, literal, context, limit } = params ?? {};
         const searchPath = resolveToCwd(searchDir || ".", cwd, options, root);
         const effectiveLimit = Math.max(1, limit ?? DEFAULT_LIMIT3);
         const ctx = context && context > 0 ? context : 0;
-        if (globalThis.__pieVerboseLogs) {
-          globalThis.pieBridge?.log?.(
+        const pieGlobal = globalThis;
+        if (pieGlobal.__pieVerboseLogs) {
+          pieGlobal.pieBridge?.log?.(
             "info",
-            `[native grep] path=${searchPath} pattern=${pattern} glob=${glob ?? ""} limit=${effectiveLimit}`
+            `[native grep_text] path=${searchPath} pattern=${pattern} glob=${glob ?? ""} limit=${effectiveLimit}`
           );
         }
         const json = await awaitTask2(
@@ -16830,10 +21461,10 @@ ${e?.stack ?? ""}` }],
         const nativeResult = json ? JSON.parse(json) : {};
         const outputLines = nativeResult.Lines ?? [];
         const matchCount = nativeResult.MatchCount ?? 0;
-        if (globalThis.__pieVerboseLogs) {
-          globalThis.pieBridge?.log?.(
+        if (pieGlobal.__pieVerboseLogs) {
+          pieGlobal.pieBridge?.log?.(
             "info",
-            `[native grep] done path=${searchPath} pattern=${pattern} matches=${matchCount} files=${nativeResult.FilesScanned ?? 0}`
+            `[native grep_text] done path=${searchPath} pattern=${pattern} matches=${matchCount} files=${nativeResult.FilesScanned ?? 0}`
           );
         }
         if (matchCount === 0) {
@@ -16895,6 +21526,9 @@ ${e?.stack ?? ""}` }],
     }
     return CS.System.IO.Path.Combine(projectRoot2, "Assets", "Pie", "AGENTS.md");
   }
+  function getProjectMemoryPath(projectRoot2) {
+    return getAgentsPath(projectRoot2);
+  }
   function ensureProjectMemoryDir(projectRoot2) {
     const agentsPath = getAgentsPath(projectRoot2);
     const dir = CS.System.IO.Path.GetDirectoryName(agentsPath);
@@ -16904,23 +21538,18 @@ ${e?.stack ?? ""}` }],
   }
   function createUnityProjectMemoryAdapter(projectRoot2) {
     return defineProjectMemoryAdapter({
-      getPath: () => getAgentsPath(projectRoot2),
+      getPath: () => getProjectMemoryPath(projectRoot2),
       read: () => readProjectMemory(projectRoot2),
       write: (content) => {
         ensureProjectMemoryDir(projectRoot2);
-        CS.System.IO.File.WriteAllText(getAgentsPath(projectRoot2), content || "");
+        CS.System.IO.File.WriteAllText(getProjectMemoryPath(projectRoot2), content || "");
       }
     });
   }
   function readProjectMemory(projectRoot2) {
-    const agentsPath = getAgentsPath(projectRoot2);
+    const agentsPath = getProjectMemoryPath(projectRoot2);
     if (!CS.System.IO.File.Exists(agentsPath)) return "";
     return CS.System.IO.File.ReadAllText(agentsPath);
-  }
-  function getProjectMemoryExcerpt(projectRoot2, maxChars = 8e3) {
-    const content = readProjectMemory(projectRoot2);
-    if (!content) return "";
-    return content.length > maxChars ? content.slice(0, maxChars) + "\n\n... (truncated)" : content;
   }
   function createReadProjectMemoryTool(projectRoot2) {
     const adapter = createUnityProjectMemoryAdapter(projectRoot2);
@@ -16941,7 +21570,7 @@ ${e?.stack ?? ""}` }],
       }
     };
   }
-  function createWriteProjectMemoryTool2(projectRoot2) {
+  function createWriteProjectMemoryTool(projectRoot2) {
     const adapter = createUnityProjectMemoryAdapter(projectRoot2);
     return {
       name: "write_project_memory",
@@ -16998,24 +21627,542 @@ ${rootObjectLines}
 `;
   }
 
+  // src/unity-script-host.ts
+  var DEFAULT_TOTAL_TIMEOUT_MS = 3e4;
+  var DEFAULT_PER_STEP_TIMEOUT_MS = 100;
+  var DEFAULT_MAX_FRAMES = 1800;
+  var MAX_LOG_LINES = 200;
+  var STEP_TIMEOUT_ERROR_CODE = "STEP_TIMEOUT";
+  var installedBridge = null;
+  function getRunStore() {
+    const key = "__pieUnityScriptRuns";
+    const unityGlobal = globalThis;
+    const existing = unityGlobal[key];
+    if (!existing || typeof existing.get !== "function" || typeof existing.set !== "function") {
+      const created = /* @__PURE__ */ new Map();
+      unityGlobal[key] = created;
+      return created;
+    }
+    return existing;
+  }
+  function nowIso3() {
+    return (/* @__PURE__ */ new Date()).toISOString();
+  }
+  function createRunId() {
+    return `unity_script_run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+  function toPositiveNumber(value, fallback) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
+  }
+  function summarizeValue(value) {
+    if (value === null) return "null";
+    if (value === void 0) return "undefined";
+    if (Array.isArray(value)) return `Array(${value.length})`;
+    if (typeof value === "object") {
+      const keys = Object.keys(value);
+      return `Object(${keys.slice(0, 6).join(", ")})`;
+    }
+    return String(value);
+  }
+  function toSerializable(value) {
+    if (value === null || value === void 0) return value ?? null;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+    if (Array.isArray(value)) return value.map((item) => toSerializable(item));
+    if (typeof value === "object") {
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch {
+        return { text: String(value) };
+      }
+    }
+    return String(value);
+  }
+  function isRecord3(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  function extractRefs(value) {
+    if (!isRecord3(value)) return [];
+    if (Array.isArray(value.results)) return value.results;
+    if (Array.isArray(value.createdRefs)) return value.createdRefs;
+    if (value.target) return [value.target];
+    return [];
+  }
+  function normalizeModuleSource(source) {
+    return String(source || "").replace(/\bexport\s+default\s+function\s*\*/g, "function* run").replace(/\bexport\s+default\s+function/g, "function run").replace(/\bexport\s+/g, "");
+  }
+  function injectStepGuards(source) {
+    return String(source || "").replace(/\b(for|while)\s*\(([^)]*)\)\s*\{/g, (_match, keyword, header) => `${keyword} (${header}) { __pieStepGuard(); `).replace(/\bdo\s*\{/g, "do { __pieStepGuard(); ").replace(/\b(for|while)\s*\(([^)]*)\)\s*([^\s{][\s\S]*?;)/g, (_match, keyword, header, statement) => `${keyword} (${header}) { __pieStepGuard(); ${statement} }`).replace(/\bdo\s*([^\s{][\s\S]*?;)\s*while\s*\(([^)]*)\)/g, (_match, statement, header) => `do { __pieStepGuard(); ${statement} } while (${header})`);
+  }
+  function isStepTimeoutError(error) {
+    return isRecord3(error) && (error.code === STEP_TIMEOUT_ERROR_CODE || error.name === "PieStepTimeoutError");
+  }
+  function buildStatus(task) {
+    const done = task.status === "completed" || task.status === "failed" || task.status === "cancelled";
+    const hardStepTermination = false;
+    return {
+      taskId: task.id,
+      name: task.name,
+      mode: task.mode,
+      status: task.status,
+      done,
+      ok: task.status === "completed",
+      summary: task.status === "completed" ? summarizeValue(task.result) : task.errorMessage || task.status,
+      result: task.status === "completed" ? toSerializable(task.result) : null,
+      errorCode: task.errorCode,
+      errorMessage: task.errorMessage,
+      logs: task.logs.slice(-MAX_LOG_LINES),
+      refs: toSerializable(task.createdRefs || []),
+      frames: task.frames,
+      durationMs: Math.max(0, Date.now() - task.startMs),
+      totalTimeoutMs: task.totalTimeoutMs,
+      perStepTimeoutMs: task.perStepTimeoutMs,
+      maxFrames: task.maxFrames,
+      updatedAt: task.updatedAt,
+      protection: {
+        model: "cooperative-yield",
+        hardStepTermination,
+        note: "The task is frame-scheduled and guarded by a script-level step deadline on common loop shapes. Native PuerTS termination is disabled by default because it can crash PuerTS 3.0.2 while unwinding terminated execution."
+      }
+    };
+  }
+  function notifyWaiters(task) {
+    if (task.waiters.length === 0) return;
+    const result = buildStatus(task);
+    const waiters = task.waiters.splice(0, task.waiters.length);
+    for (const waiter of waiters) {
+      try {
+        waiter(result);
+      } catch {
+      }
+    }
+  }
+  function completeTask(task, result) {
+    if (task.status !== "running") return;
+    task.status = "completed";
+    task.result = result;
+    task.updatedAt = nowIso3();
+    notifyWaiters(task);
+  }
+  function failTask(task, code, message) {
+    if (task.status !== "running") return;
+    task.status = "failed";
+    task.errorCode = code;
+    task.errorMessage = message;
+    task.updatedAt = nowIso3();
+    notifyWaiters(task);
+  }
+  function cancelTask(task, reason) {
+    if (task.status !== "running") return;
+    task.status = "cancelled";
+    task.errorCode = "CANCELLED";
+    task.errorMessage = reason || "Unity script run cancelled.";
+    task.updatedAt = nowIso3();
+    notifyWaiters(task);
+  }
+  function getUnityHostApi(bridge2, task) {
+    const call = (method, args = {}) => {
+      if (!bridge2.devRpc?.call) {
+        throw new Error("bridge.devRpc is not available.");
+      }
+      const result = bridge2.devRpc.call(method, args);
+      const refs = extractRefs(result);
+      if (refs.length > 0) {
+        task.createdRefs = refs;
+      }
+      return result;
+    };
+    return {
+      query(args = {}) {
+        return call("unity_scene_query", args);
+      },
+      inspect(args = {}) {
+        return call("unity_scene_object_inspect", args);
+      },
+      edit(args = {}) {
+        return call("unity_scene_object_edit", args);
+      },
+      refresh() {
+        return call("unity_refresh", {});
+      }
+    };
+  }
+  function createTaskContext(bridge2, task, args) {
+    const unity = getUnityHostApi(bridge2, task);
+    return {
+      args,
+      log(...parts) {
+        const text = parts.map((part) => String(part)).join(" ");
+        task.logs.push(text);
+        if (task.logs.length > MAX_LOG_LINES) task.logs.splice(0, task.logs.length - MAX_LOG_LINES);
+        bridge2.log?.("info", `[unity.script.run:${task.id}] ${text}`);
+        return text;
+      },
+      nextFrame() {
+        return { type: "nextFrame" };
+      },
+      waitFrames(frames) {
+        return { type: "waitFrames", frames: Math.max(1, Math.floor(Number(frames) || 1)) };
+      },
+      waitSeconds(seconds) {
+        return { type: "waitSeconds", seconds: Math.max(0, Number(seconds) || 0) };
+      },
+      query: unity.query,
+      inspect: unity.inspect,
+      edit: unity.edit,
+      refresh: unity.refresh,
+      get frame() {
+        return task.frames;
+      },
+      get elapsedMs() {
+        return Date.now() - task.startMs;
+      }
+    };
+  }
+  function compileRunIterator(script, entryName, ctx, args, task) {
+    const normalized = injectStepGuards(normalizeModuleSource(script));
+    const module = { exports: {} };
+    const exports = module.exports;
+    const stepGuard = () => {
+      if (task.stepDeadlineMs > 0 && Date.now() > task.stepDeadlineMs) {
+        const error = new Error(`Unity script step exceeded ${task.perStepTimeoutMs}ms.`);
+        error.name = "PieStepTimeoutError";
+        error.code = STEP_TIMEOUT_ERROR_CODE;
+        throw error;
+      }
+    };
+    const executor = new Function(
+      "module",
+      "exports",
+      "console",
+      "__pieStepGuard",
+      `"use strict";
+const CS = undefined;
+const puer = undefined;
+${normalized}
+return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports.run)), default: (module.exports.default || exports.default) };`
+    );
+    const exported = executor(module, exports, console, stepGuard);
+    const entry = exported?.[entryName] || (entryName === "run" ? exported?.default : null);
+    if (typeof entry !== "function") {
+      throw new Error(`Script must define export function* ${entryName}(ctx, args).`);
+    }
+    const iterator = entry(ctx, args);
+    if (!isRecord3(iterator) || typeof iterator.next !== "function") {
+      throw new Error(`Script entry ${entryName} must be a generator function. Use export function* ${entryName}(ctx, args) and yield ctx.nextFrame() for long work.`);
+    }
+    return iterator;
+  }
+  function interpretYield(task, value) {
+    task.waitFrames = 1;
+    task.waitUntilMs = 0;
+    if (!isRecord3(value)) return;
+    if (value.type === "waitFrames") {
+      task.waitFrames = Math.max(1, Math.floor(Number(value.frames) || 1));
+      return;
+    }
+    if (value.type === "waitSeconds") {
+      task.waitFrames = 0;
+      task.waitUntilMs = Date.now() + Math.max(0, Number(value.seconds) || 0) * 1e3;
+      return;
+    }
+    task.waitFrames = 0;
+    task.hasPendingInput = true;
+    task.pendingInput = value;
+  }
+  function stepTask(task) {
+    if (task.status !== "running") return;
+    const now = Date.now();
+    if (now - task.startMs > task.totalTimeoutMs) {
+      failTask(task, "TOTAL_TIMEOUT", `Unity script run exceeded ${task.totalTimeoutMs}ms.`);
+      return;
+    }
+    if (task.frames >= task.maxFrames) {
+      failTask(task, "MAX_FRAMES", `Unity script run exceeded ${task.maxFrames} frames.`);
+      return;
+    }
+    if (task.waitUntilMs > 0 && now < task.waitUntilMs) {
+      return;
+    }
+    if (task.waitFrames > 0) {
+      task.waitFrames -= 1;
+      return;
+    }
+    task.frames += 1;
+    const stepStart = Date.now();
+    try {
+      const iterator = task.iterator;
+      if (!iterator) {
+        failTask(task, "SCRIPT_ERROR", "Unity script iterator was not initialized.");
+        return;
+      }
+      task.stepDeadlineMs = stepStart + task.perStepTimeoutMs;
+      const input = task.hasPendingInput ? task.pendingInput : void 0;
+      task.hasPendingInput = false;
+      task.pendingInput = null;
+      const next = iterator.next(input);
+      const elapsed = Date.now() - stepStart;
+      task.updatedAt = nowIso3();
+      if (elapsed > task.perStepTimeoutMs) {
+        failTask(task, "STEP_TIMEOUT", `Unity script step exceeded ${task.perStepTimeoutMs}ms after returning.`);
+        return;
+      }
+      if (next?.done) {
+        completeTask(task, next.value);
+        return;
+      }
+      interpretYield(task, next?.value);
+    } catch (error) {
+      const stepTimeout = isStepTimeoutError(error);
+      failTask(task, stepTimeout ? "STEP_TIMEOUT" : "SCRIPT_ERROR", stepTimeout ? `Unity script step exceeded ${task.perStepTimeoutMs}ms.` : error instanceof Error ? error.message : String(error));
+    } finally {
+      task.stepDeadlineMs = 0;
+    }
+  }
+  function createScriptRun(bridge2, payload) {
+    const script = String(payload.script || "");
+    if (!script.trim()) {
+      throw new Error("script is required");
+    }
+    const task = {
+      id: createRunId(),
+      mode: bridge2.isEditor ? "editor" : "runtime",
+      name: String(payload.name || "unity-script-run"),
+      iterator: null,
+      status: "running",
+      result: null,
+      errorCode: "",
+      errorMessage: "",
+      logs: [],
+      createdRefs: [],
+      frames: 0,
+      startMs: Date.now(),
+      updatedAt: nowIso3(),
+      totalTimeoutMs: toPositiveNumber(payload.totalTimeoutMs, DEFAULT_TOTAL_TIMEOUT_MS),
+      perStepTimeoutMs: toPositiveNumber(payload.perStepTimeoutMs, DEFAULT_PER_STEP_TIMEOUT_MS),
+      maxFrames: Math.floor(toPositiveNumber(payload.maxFrames, DEFAULT_MAX_FRAMES)),
+      waitFrames: 0,
+      waitUntilMs: 0,
+      stepDeadlineMs: 0,
+      hasPendingInput: false,
+      pendingInput: null,
+      waiters: []
+    };
+    const args = isRecord3(payload.args) ? payload.args : {};
+    const ctx = createTaskContext(bridge2, task, args);
+    task.iterator = compileRunIterator(script, String(payload.entry || "run"), ctx, args, task);
+    getRunStore().set(task.id, task);
+    return task;
+  }
+  function getTaskOrThrow(taskId) {
+    const task = getRunStore().get(String(taskId || ""));
+    if (!task) {
+      throw new Error(`Unity script run not found: ${taskId}`);
+    }
+    return task;
+  }
+  function tickUnityScriptHost() {
+    const tasks = Array.from(getRunStore().values());
+    for (const task of tasks) {
+      stepTask(task);
+    }
+  }
+  function runUnityScriptTask(bridge2, payload) {
+    const task = createScriptRun(bridge2, payload);
+    if (task.status !== "running") {
+      return Promise.resolve(buildStatus(task));
+    }
+    return new Promise((resolve2) => {
+      task.waiters.push(resolve2);
+    });
+  }
+  function installUnityScriptHost(bridge2) {
+    installedBridge = bridge2;
+    globalThis.__pieUnityScriptHost = {
+      invoke(method, argsJson) {
+        const parsedPayload = argsJson ? JSON.parse(String(argsJson)) : {};
+        const payload = isRecord3(parsedPayload) ? parsedPayload : {};
+        switch (String(method || "")) {
+          case "run_start": {
+            if (!installedBridge) throw new Error("Unity script host bridge is not installed.");
+            const task = createScriptRun(installedBridge, payload);
+            return JSON.stringify(buildStatus(task));
+          }
+          case "run_status": {
+            return JSON.stringify(buildStatus(getTaskOrThrow(String(payload.taskId || ""))));
+          }
+          case "run_cancel": {
+            const task = getTaskOrThrow(String(payload.taskId || ""));
+            cancelTask(task, String(payload.reason || "Unity script run cancelled."));
+            return JSON.stringify(buildStatus(task));
+          }
+          default:
+            throw new Error(`Unknown unity script host method: ${method}`);
+        }
+      },
+      tick() {
+        tickUnityScriptHost();
+      }
+    };
+  }
+
+  // src/tools/unity-dev-rpc.ts
+  function requireBridge() {
+    const bridge2 = globalThis.pieBridge;
+    if (!bridge2?.devRpc?.call) {
+      throw new Error("pieBridge.devRpc is not available.");
+    }
+    return bridge2;
+  }
+  function asRecord(value) {
+    return value && typeof value === "object" ? value : {};
+  }
+  function createDevRpcTool(name, description, method, parameters) {
+    return {
+      name,
+      label: name,
+      description,
+      parameters,
+      execute: async (_toolCallId, params) => {
+        try {
+          const result = requireBridge().devRpc.call(method, asRecord(params));
+          const text = JSON.stringify(result, null, 2);
+          return {
+            content: [{ type: "text", text }],
+            details: result
+          };
+        } catch (error) {
+          return {
+            content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+            details: {},
+            isError: true
+          };
+        }
+      }
+    };
+  }
+  function createUnityRuntimeTools() {
+    return [
+      createDevRpcTool(
+        "unity_scene_query",
+        "Query Unity scene objects and return explicit refs.",
+        "unity_scene_query",
+        Type.Object({
+          scope: Type.Optional(Type.String()),
+          name: Type.Optional(Type.String()),
+          path: Type.Optional(Type.String()),
+          type: Type.Optional(Type.String()),
+          limit: Type.Optional(Type.Number())
+        })
+      ),
+      createDevRpcTool(
+        "unity_scene_object_inspect",
+        "Inspect one explicit Unity scene object ref returned by unity_scene_query or unity_scene_object_edit.",
+        "unity_scene_object_inspect",
+        Type.Object({
+          target: Type.Any()
+        })
+      ),
+      createDevRpcTool(
+        "unity_scene_object_edit",
+        "Edit one Unity scene object with an explicit mutation patch. Supported actions: create_scene_object, destroy_scene_object, set_transform, set_active, set_parent, set_name, set_tag_layer, add_component, remove_component, set_component_enabled, set_component_property. Existing-object actions require an explicit target ref. Use unity_scene_query/unity_scene_object_inspect for reads.",
+        "unity_scene_object_edit",
+        Type.Object({
+          action: Type.String(),
+          target: Type.Optional(Type.Any()),
+          name: Type.Optional(Type.String()),
+          primitiveType: Type.Optional(Type.String()),
+          parentRef: Type.Optional(Type.Any()),
+          parentName: Type.Optional(Type.String()),
+          active: Type.Optional(Type.Boolean()),
+          tag: Type.Optional(Type.String()),
+          layer: Type.Optional(Type.Number()),
+          componentType: Type.Optional(Type.String()),
+          enabled: Type.Optional(Type.Boolean()),
+          propertyName: Type.Optional(Type.String()),
+          value: Type.Optional(Type.Any()),
+          x: Type.Optional(Type.Number()),
+          y: Type.Optional(Type.Number()),
+          z: Type.Optional(Type.Number()),
+          applyPosition: Type.Optional(Type.Boolean()),
+          applyRotation: Type.Optional(Type.Boolean()),
+          applyScale: Type.Optional(Type.Boolean()),
+          rotX: Type.Optional(Type.Number()),
+          rotY: Type.Optional(Type.Number()),
+          rotZ: Type.Optional(Type.Number()),
+          scaleX: Type.Optional(Type.Number()),
+          scaleY: Type.Optional(Type.Number()),
+          scaleZ: Type.Optional(Type.Number())
+        })
+      ),
+      createDevRpcTool(
+        "unity_log_read",
+        "Read Unity/Pie logs for diagnostics. source may be active, editor, player, or pie. Use after compile/runtime errors instead of guessing.",
+        "unity_log_read",
+        Type.Object({
+          source: Type.Optional(Type.Union([
+            Type.Literal("active"),
+            Type.Literal("editor"),
+            Type.Literal("player"),
+            Type.Literal("pie")
+          ])),
+          tailLines: Type.Optional(Type.Number()),
+          maxBytes: Type.Optional(Type.Number()),
+          contains: Type.Optional(Type.String())
+        })
+      ),
+      createDevRpcTool(
+        "unity_refresh",
+        "Refresh Unity host state after project file changes. In the editor this refreshes assets; in runtime it is a no-op.",
+        "unity_refresh",
+        Type.Object({})
+      ),
+      {
+        name: "unity_script_run",
+        label: "unity_script_run",
+        description: 'Run a JavaScript Unity script task as a short-step generator inside the Unity script host. The script must define export function* run(ctx, args); use yield ctx.nextFrame(), ctx.waitFrames(n), or ctx.waitSeconds(s) for multi-frame work. Host-call helpers can be yielded, e.g. const result = yield ctx.edit({ action: "create_scene_object", name: "Player" });. Do not pass C#, shader source, or plain file contents to this tool, and do not use it to create project files. Long synchronous loops fail with STEP_TIMEOUT; this tool does not promise arbitrary synchronous JS preemption. It returns only after the task completes, fails, or times out.',
+        parameters: Type.Object({
+          script: Type.String(),
+          name: Type.Optional(Type.String()),
+          entry: Type.Optional(Type.String()),
+          args: Type.Optional(Type.Record(Type.String(), Type.Any())),
+          totalTimeoutMs: Type.Optional(Type.Number()),
+          perStepTimeoutMs: Type.Optional(Type.Number()),
+          maxFrames: Type.Optional(Type.Number())
+        }),
+        execute: async (_toolCallId, params) => {
+          try {
+            const result = await runUnityScriptTask(requireBridge(), asRecord(params));
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: result,
+              isError: result?.status === "failed" || result?.status === "cancelled"
+            };
+          } catch (error) {
+            return {
+              content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+              details: {},
+              isError: true
+            };
+          }
+        }
+      }
+    ];
+  }
+
   // src/capabilities/index.ts
   function createUnityHostCapabilities(projectRoot2, isEditor2, options) {
-    const evalJsTool = createEvalJsTool();
     const inspectUnityContextTool = createInspectUnityContextTool(projectRoot2, isEditor2);
     const readProjectMemoryTool = createReadProjectMemoryTool(projectRoot2);
-    const writeProjectMemoryTool = createWriteProjectMemoryTool2(projectRoot2);
-    const nativeFindTool = createNativeFindTool(options.filesystemSearchRoot, options.filesystemPathOptions);
-    const nativeGrepTool = createNativeGrepTool(options.filesystemSearchRoot, options.filesystemPathOptions);
+    const writeProjectMemoryTool = createWriteProjectMemoryTool(projectRoot2);
+    const nativeFindTool = createNativeFindFilesTool(options.filesystemSearchRoot, options.filesystemPathOptions);
+    const nativeGrepTool = createNativeGrepTextTool(options.filesystemSearchRoot, options.filesystemPathOptions);
+    const unityRuntimeTools = createUnityRuntimeTools();
     const capabilities = [
-      {
-        id: "eval-js",
-        description: "Unity host capability for executing JavaScript inside the PuerTS/V8 runtime.",
-        tools: [evalJsTool]
-      },
       {
         id: "inspect-unity-context",
         description: "Unity host capability for inspecting the live editor/runtime context.",
-        tools: [inspectUnityContextTool]
+        tools: [inspectUnityContextTool, ...unityRuntimeTools]
       },
       {
         id: "project-memory-adapter",
@@ -17024,7 +22171,7 @@ ${rootObjectLines}
       },
       {
         id: "filesystem-search-executor",
-        description: "Unity host executor for shared filesystem search semantics (`find` / `grep`) backed by native file bridge calls.",
+        description: "Unity host executor for shared filesystem search semantics (`find_files` / `grep_text`) backed by native file bridge calls.",
         tools: [nativeFindTool, nativeGrepTool]
       }
     ];
@@ -17036,17 +22183,18 @@ ${rootObjectLines}
 
   // src/skills.ts
   var hasLoggedEmptySkillScan = false;
-  function normalizePath2(path) {
+  function normalizePath3(path) {
     return String(path ?? "").replace(/\\/g, "/");
   }
   function parseBridgePathArray(methodName) {
-    const raw = globalThis.pieBridge?.[methodName]?.();
+    const bridge2 = globalThis.pieBridge;
+    const raw = bridge2?.[methodName]?.();
     if (typeof raw !== "string" || raw.trim().length === 0) {
       return [];
     }
     try {
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.map((entry) => normalizePath2(String(entry ?? ""))).filter((entry) => entry.length > 0) : [];
+      return Array.isArray(parsed) ? parsed.map((entry) => normalizePath3(String(entry ?? ""))).filter((entry) => entry.length > 0) : [];
     } catch {
       return [];
     }
@@ -17064,14 +22212,14 @@ ${rootObjectLines}
       const diagnostics = skillDirs.length === 0 ? ["(no skill search paths configured)"] : skillDirs.map((skillsDir) => {
         const exists = CS.System.IO.Directory.Exists(skillsDir);
         if (!exists) {
-          return `${normalizePath2(String(skillsDir))} [missing]`;
+          return `${normalizePath3(String(skillsDir))} [missing]`;
         }
         const directories = CS.System.IO.Directory.GetDirectories(skillsDir);
         const files = CS.System.IO.Directory.GetFiles(skillsDir, "*.md");
-        return `${normalizePath2(String(skillsDir))} [dirs=${directories.Length}, md=${files.Length}]`;
+        return `${normalizePath3(String(skillsDir))} [dirs=${directories.Length}, md=${files.Length}]`;
       });
       CS.Pie.PieDiagnostics.Verbose(
-        `[pie/skills] No project skills found. projectRoot=${normalizePath2(projectRoot2)} searchPaths=${diagnostics.join("; ")}`
+        `[pie/skills] No project skills found. projectRoot=${normalizePath3(projectRoot2)} searchPaths=${diagnostics.join("; ")}`
       );
     } catch {
     }
@@ -17082,11 +22230,11 @@ ${rootObjectLines}
     }
     try {
       const content = String(CS.System.IO.File.ReadAllText(skillPath) ?? "");
-      const parsed = parseSkill(content, fileName, normalizePath2(skillPath));
+      const parsed = parseSkill(content, fileName, normalizePath3(skillPath));
       loader.registerSkill({
         ...parsed,
         source: "project",
-        baseDir: normalizePath2(baseDir)
+        baseDir: normalizePath3(baseDir)
       });
     } catch {
     }
@@ -17123,22 +22271,364 @@ ${rootObjectLines}
       description: skill.description,
       source: "project",
       content: skill.prompt,
-      path: skill.filePath ? normalizePath2(skill.filePath) : void 0
+      path: skill.filePath ? normalizePath3(skill.filePath) : void 0,
+      baseDir: skill.baseDir ? normalizePath3(skill.baseDir) : void 0,
+      resourceRefs: skill.resourceRefs
     };
   }
   function getAvailableSkills(projectRoot2) {
     return createUnitySkillLoader(projectRoot2).getAllSkills().map(toLoadedSkill);
   }
   function formatSkillsForPrompt2(skills) {
-    return formatSkillsForPrompt(
-      skills.map((skill) => ({
-        name: skill.name,
-        displayName: skill.name,
-        description: skill.description,
-        prompt: skill.content || "",
-        filePath: skill.path
-      }))
+    return formatSkillSummariesForPrompt(skills);
+  }
+  function readSkillContent(projectRoot2, name) {
+    const loader = createUnitySkillLoader(projectRoot2);
+    const skill = loader.getSkill(name) || loader.loadSkill(name);
+    if (!skill) {
+      return null;
+    }
+    return toLoadedSkill(skill);
+  }
+  function readSkillResource(projectRoot2, owner, resourcePath) {
+    const skill = readSkillContent(projectRoot2, owner);
+    const baseDir = normalizePath3(skill?.baseDir || "");
+    const trimmed = normalizePath3(String(resourcePath || "").trim()).replace(/^\.\/+/, "");
+    if (!skill || !baseDir || !trimmed || trimmed.startsWith("/") || /^[A-Za-z]:\//.test(trimmed)) {
+      return null;
+    }
+    const segments = trimmed.split("/").filter((segment) => segment.length > 0);
+    if (segments.some((segment) => segment === "..")) {
+      return null;
+    }
+    let combined = baseDir;
+    for (const segment of segments) {
+      combined = normalizePath3(String(CS.System.IO.Path.Combine(combined, segment)));
+    }
+    if (!(combined === baseDir || combined.startsWith(`${baseDir}/`))) {
+      return null;
+    }
+    if (!CS.System.IO.File.Exists(combined)) {
+      return null;
+    }
+    return {
+      owner: skill.name,
+      path: trimmed,
+      content: String(CS.System.IO.File.ReadAllText(combined) ?? ""),
+      .../\.(js|mjs|sh|py)$/i.test(trimmed) ? { resolvedPath: combined } : {}
+    };
+  }
+
+  // src/extensions/registry.ts
+  var registry = createRuntimeExtensionRegistry();
+  function resetExtensionRegistry() {
+    registry.reset();
+  }
+  function getExtensionTools() {
+    return registry.getTools();
+  }
+  function getLoadedExtensions() {
+    return registry.getLoadedExtensions();
+  }
+  function getSystemPromptPatches() {
+    return registry.getSystemPromptPatches();
+  }
+  function buildRegisteredHooks() {
+    return registry.buildHooks();
+  }
+  function createExtensionApi(context, filePath) {
+    const normalizedPath = String(filePath ?? "").replace(/\\/g, "/");
+    const fileName = normalizedPath.split("/").pop() || "extension.js";
+    const name = fileName.replace(/\.js$/i, "");
+    const dir = normalizedPath.slice(0, Math.max(0, normalizedPath.length - fileName.length)).replace(/\/$/, "") || ".";
+    return registry.createContext({
+      manifest: {
+        name,
+        version: "0.0.0",
+        main: fileName
+      },
+      dir,
+      config: {}
+    }, {
+      ...context,
+      callHost: async (name2, args) => {
+        const json = JSON.stringify(args ?? {});
+        return globalThis.pieBridge?.callHost?.(name2, json);
+      }
+    });
+  }
+  function registerLoadedExtension(path) {
+    registry.registerLoadedExtension(path);
+  }
+
+  // src/tools/read-skill.ts
+  function createReadSkillTool(projectRoot2) {
+    const loader = createUnitySkillLoader(projectRoot2);
+    const capability = createReadSkillCapability({
+      skillLoader: loader
+    });
+    return capability.tool;
+  }
+  function createReadResourceTool(projectRoot2) {
+    return createReadResourceCapability({
+      resolveResource(owner, resourcePath) {
+        return readSkillResource(projectRoot2, owner, resourcePath);
+      }
+    }).tool;
+  }
+  function createResolveResourceTool(projectRoot2) {
+    return createResolveResourceCapability({
+      resolveResource(owner, resourcePath) {
+        const resource = readSkillResource(projectRoot2, owner, resourcePath);
+        if (!resource?.resolvedPath) {
+          return null;
+        }
+        return {
+          owner: resource.owner,
+          path: resource.path,
+          resolvedPath: resource.resolvedPath
+        };
+      }
+    }).tool;
+  }
+
+  // src/unity-code-intel.ts
+  function toArray(values) {
+    const result = [];
+    for (let i = 0; i < values.Length; i++) {
+      result.push(String(values[i]));
+    }
+    return result;
+  }
+  function createUnityCodeIntelFileSystem() {
+    return {
+      exists(filePath) {
+        return CS.System.IO.File.Exists(filePath) || CS.System.IO.Directory.Exists(filePath);
+      },
+      isDirectory(filePath) {
+        return CS.System.IO.Directory.Exists(filePath);
+      },
+      readFile(filePath) {
+        return String(CS.System.IO.File.ReadAllText(filePath) ?? "");
+      },
+      readDir(dirPath) {
+        const directories = toArray(CS.System.IO.Directory.GetDirectories(dirPath)).map((entryPath) => ({
+          name: String(CS.System.IO.Path.GetFileName(entryPath) ?? ""),
+          path: entryPath,
+          isDirectory: true
+        }));
+        const files = toArray(CS.System.IO.Directory.GetFiles(dirPath)).map((entryPath) => ({
+          name: String(CS.System.IO.Path.GetFileName(entryPath) ?? ""),
+          path: entryPath,
+          isDirectory: false
+        }));
+        return [...directories, ...files];
+      }
+    };
+  }
+  function createUnityCodeIntelTool(projectRoot2) {
+    const fileSystem = createUnityCodeIntelFileSystem();
+    const fallback = createLightweightCodeIntelProvider(fileSystem);
+    const provider = {
+      async run(input, context) {
+        const result = await fallback.run(input, context);
+        return {
+          ...result,
+          details: {
+            ...result.details,
+            provider: "lightweight_fallback",
+            fallbackReason: "Unity code_intel intentionally uses lightweight JS/TS inspection; full TypeScript service is available in Pie CLI only."
+          }
+        };
+      }
+    };
+    return createCodeIntelTool({
+      projectRoot: projectRoot2,
+      fileSystem,
+      provider
+    });
+  }
+
+  // src/agent-surface.ts
+  function aliasTool(tool, name, label, description) {
+    return {
+      ...tool,
+      name,
+      label,
+      description: description ?? tool.description
+    };
+  }
+  function toDisplayPath(projectRoot2, absolutePath) {
+    const normalizedRoot = String(projectRoot2 || "").replace(/\\/g, "/").replace(/\/+$/, "");
+    const normalizedPath = String(absolutePath || "").replace(/\\/g, "/");
+    if (normalizedRoot && normalizedPath.startsWith(`${normalizedRoot}/`)) {
+      return normalizedPath.slice(normalizedRoot.length + 1);
+    }
+    return normalizedPath;
+  }
+  function buildUnitySystemPrompt(params) {
+    const skillsSection = formatSkillsForPrompt2(getAvailableSkills(params.root));
+    const projectMemoryEntry = buildKnowledgeIndexEntry(
+      toDisplayPath(params.root, getProjectMemoryPath(params.root)),
+      readProjectMemory(params.root)
     );
+    const knowledgeSection = buildKnowledgeIndexSection(projectMemoryEntry ? [projectMemoryEntry] : []);
+    const extensionSection = getSystemPromptPatches();
+    const fileToolPromptLines = buildFileToolPromptLines();
+    const toolsSection = buildToolsPromptSection(params.tools);
+    const extensionsPromptSection = extensionSection.length > 0 ? `
+
+[Project Extensions]
+${extensionSection.join("\n\n---\n\n")}
+---` : "";
+    if (params.editorMode) {
+      return [
+        "You are Pie, an expert AI coding assistant embedded in Unity Editor.",
+        `The Unity project is located at: ${params.root}`,
+        `Default filesystem root is Application.persistentDataPath: ${params.persistentDataPath || "(unavailable)"}`,
+        toolsSection,
+        "When the user explicitly names an available tool, call that exact tool instead of answering from memory.",
+        ...fileToolPromptLines,
+        "Use read-only Unity tools for inspection, edit tools only for requested changes, and unity_log_read after compile/runtime errors. Keep filesystem exploration scoped to the Unity project unless the user asks otherwise.",
+        "Prefer making small, targeted edits. Always read a file before writing it.",
+        "Be concise and helpful.",
+        skillsSection,
+        knowledgeSection,
+        extensionsPromptSection
+      ].join("\n");
+    }
+    return [
+      "You are Pie, an AI agent running inside a Unity runtime application.",
+      `Your primary working directory is Application.persistentDataPath: ${params.persistentDataPath || params.root}`,
+      toolsSection,
+      "When the user explicitly names an available tool, call that exact tool instead of answering from memory.",
+      ...fileToolPromptLines,
+      "Use read-only Unity tools for inspection, edit tools only for requested changes, and unity_log_read after runtime errors. Keep filesystem exploration scoped to the Unity project.",
+      "You are intended for runtime automation, NPC behaviors, and voice-to-action control.",
+      "Be concise and helpful.",
+      skillsSection,
+      knowledgeSection,
+      extensionsPromptSection
+    ].join("\n");
+  }
+  function createUnityBuiltinTools(params) {
+    const askUserCapability = createAskUserCapability();
+    const activeFileToolRoots = getActiveFileToolRootsConfig();
+    const fileToolRoot = activeFileToolRoots.roots.find((root) => root.name === activeFileToolRoots.defaultRoot)?.path || params.persistentDataPath || params.projectRoot;
+    const builtinFileTools = [
+      aliasTool(
+        createReadTool(fileToolRoot, {
+          ...params.fileToolPathOptions,
+          understandFile: params.understandFile
+        }),
+        "read_file",
+        "read_file"
+      ),
+      aliasTool(
+        createWriteTool(fileToolRoot, params.fileToolPathOptions),
+        "write_file",
+        "write_file"
+      ),
+      aliasTool(
+        createEditTool(fileToolRoot, params.fileToolPathOptions),
+        "edit_file",
+        "edit_file",
+        "Edit an existing file by replacing exact oldText with newText. Read the file first so oldText matches exactly."
+      ),
+      aliasTool(
+        createLsTool(fileToolRoot, params.fileToolPathOptions),
+        "list_dir",
+        "list_dir"
+      )
+    ];
+    const unityHostCapabilities = createUnityHostCapabilities(params.projectRoot, params.isEditor, {
+      filesystemSearchRoot: fileToolRoot,
+      filesystemPathOptions: params.fileToolPathOptions
+    });
+    const unityFilesystemSearchCapability = unityHostCapabilities.capabilities.find((capability) => capability.id === "filesystem-search-executor");
+    const unitySearchFileContentTool = unityFilesystemSearchCapability?.tools.find((tool) => tool.name === "grep_text");
+    const unitySearchFilesTool = unityFilesystemSearchCapability?.tools.find((tool) => tool.name === "find_files");
+    const unityNonSearchHostTools = unityHostCapabilities.tools.filter(
+      (tool) => tool.name !== "find_files" && tool.name !== "grep_text"
+    );
+    return [
+      ...builtinFileTools,
+      ...unitySearchFileContentTool ? [aliasTool(unitySearchFileContentTool, "grep_text", "grep_text")] : [],
+      ...unitySearchFilesTool ? [aliasTool(unitySearchFilesTool, "find_files", "find_files")] : [],
+      ...unityNonSearchHostTools,
+      ...askUserCapability.tools,
+      ...params.webSearchTool ? [params.webSearchTool] : [],
+      ...params.webFetchTool ? [params.webFetchTool] : [],
+      createUnityCodeIntelTool(params.projectRoot),
+      ...params.subagentTool ? [params.subagentTool] : [],
+      params.todoTool.tool,
+      createReadSkillTool(params.projectRoot),
+      createReadResourceTool(params.projectRoot),
+      createResolveResourceTool(params.projectRoot)
+    ];
+  }
+  function createUnityAgentSurface(params) {
+    const builtinTools = createUnityBuiltinTools(params);
+    const extensionTools = getExtensionTools();
+    const tools = createPolicyEnforcedTools([
+      ...builtinTools,
+      ...extensionTools
+    ], {
+      getContext: () => ({ mode: "normal", confirmationPolicy: "allow" })
+    });
+    const toolNames = tools.map((tool) => tool.name);
+    const hooks = buildRegisteredHooks();
+    const systemPrompt = buildUnitySystemPrompt({
+      root: params.projectRoot,
+      editorMode: params.isEditor,
+      persistentDataPath: params.persistentDataPath,
+      tools
+    });
+    return {
+      tools,
+      toolNames,
+      hooks,
+      systemPrompt
+    };
+  }
+
+  // src/interaction-binding.ts
+  function asInteractionState(value) {
+    return value && typeof value === "object" ? value : {};
+  }
+  function asInteractionResponse(value) {
+    return value && typeof value === "object" ? value : {};
+  }
+  function registerUnityInteractionBinding(params) {
+    registerInteractionHandler(async (request) => {
+      if (params.isEditor && params.bridge.devRpc?.call) {
+        params.bridge.devRpc.call("interaction.begin", request);
+        while (true) {
+          const state = asInteractionState(params.bridge.devRpc.call("interaction.get_state", { id: request.id }));
+          if (state?.completed) {
+            const response2 = asInteractionResponse(state.responseJson ? JSON.parse(state.responseJson) : null);
+            params.bridge.devRpc.call("interaction.consume_completed", { id: request.id });
+            if (response2?.unavailable) {
+              throw new InteractionUnavailableError(
+                String(response2.message || `Host does not support interaction request: ${request.type}`),
+                request
+              );
+            }
+            return response2;
+          }
+          await new Promise((resolve2) => setTimeout(resolve2, 50));
+        }
+      }
+      const raw = params.bridge.callHost?.("pie.interaction", request);
+      const response = asInteractionResponse(typeof raw === "string" ? JSON.parse(raw || "null") : raw);
+      if (response?.unavailable) {
+        throw new InteractionUnavailableError(
+          String(response.message || `Host does not support interaction request: ${request.type}`),
+          request
+        );
+      }
+      return response;
+    });
   }
 
   // src/session-store.ts
@@ -17174,9 +22664,14 @@ ${rootObjectLines}
     return `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   }
   function deriveTitle(messages) {
-    const firstUser = messages.find((message) => message?.role === "user");
+    const firstUser = messages.find((message) => {
+      return typeof message === "object" && message !== null && "role" in message && message.role === "user";
+    });
     if (!firstUser) return "New Session";
-    const content = Array.isArray(firstUser.content) ? firstUser.content.filter((block) => block?.type === "text").map((block) => block.text || "").join(" ") : "";
+    const contentValue = typeof firstUser === "object" && firstUser !== null && "content" in firstUser ? firstUser.content : void 0;
+    const content = Array.isArray(contentValue) ? contentValue.filter((block) => {
+      return !!block && typeof block === "object" && block.type === "text" && typeof block.text === "string";
+    }).map((block) => block.text).join(" ") : "";
     const compact = String(content || "New Session").replace(/\s+/g, " ").trim();
     return compact.slice(0, 48) || "New Session";
   }
@@ -17408,46 +22903,169 @@ ${rootObjectLines}
     return lines.join("\n");
   }
 
-  // src/extensions/registry.ts
-  var registry = createRuntimeExtensionRegistry();
-  function resetExtensionRegistry() {
-    registry.reset();
-  }
-  function getExtensionTools() {
-    return registry.getTools();
-  }
-  function getLoadedExtensions() {
-    return registry.getLoadedExtensions();
-  }
-  function getSystemPromptPatches() {
-    return registry.getSystemPromptPatches();
-  }
-  function buildRegisteredHooks() {
-    return registry.buildHooks();
-  }
-  function createExtensionApi(context, filePath) {
-    const normalizedPath = String(filePath ?? "").replace(/\\/g, "/");
-    const fileName = normalizedPath.split("/").pop() || "extension.js";
-    const name = fileName.replace(/\.js$/i, "");
-    const dir = normalizedPath.slice(0, Math.max(0, normalizedPath.length - fileName.length)).replace(/\/$/, "") || ".";
-    return registry.createContext({
-      manifest: {
-        name,
-        version: "0.0.0",
-        main: fileName
-      },
-      dir,
-      config: {}
-    }, {
-      ...context,
-      callHost: async (name2, args) => {
-        const json = JSON.stringify(args ?? {});
-        return globalThis.pieBridge?.callHost?.(name2, json);
+  // src/session-runtime.ts
+  function createSessionRuntime(deps) {
+    function syncSessionInfo() {
+      deps.agent.sessionId = deps.getCurrentSession().id;
+    }
+    async function persistCurrentSession2() {
+      const currentSession = deps.getCurrentSession();
+      const nextRecord = {
+        ...currentSession,
+        provider: deps.getProvider(),
+        modelId: deps.getModelId(),
+        messages: deps.agent.state.messages.slice(),
+        todoState: deps.getTodoState()
+      };
+      if (isSessionEmpty(nextRecord)) {
+        await deleteSession(deps.projectRoot, nextRecord.id);
+        deps.setCurrentSession({
+          ...nextRecord,
+          title: "New Session",
+          messageCount: 0
+        });
+        syncSessionInfo();
+        return;
       }
-    });
+      deps.setCurrentSession(await saveSession(deps.projectRoot, nextRecord));
+      syncSessionInfo();
+    }
+    async function persistCurrentSessionForRecovery2() {
+      const nextRecord = {
+        ...deps.getCurrentSession(),
+        provider: deps.getProvider(),
+        modelId: deps.getModelId(),
+        messages: deps.agent.state.messages.slice(),
+        todoState: deps.getTodoState()
+      };
+      deps.setCurrentSession(await saveSession(deps.projectRoot, nextRecord));
+      syncSessionInfo();
+    }
+    async function persistCurrentSessionForRecoveryWithPendingUserMessage2(content) {
+      const pendingMessage = {
+        role: "user",
+        content: [{ type: "text", text: content }],
+        timestamp: Date.now()
+      };
+      const nextRecord = {
+        ...deps.getCurrentSession(),
+        provider: deps.getProvider(),
+        modelId: deps.getModelId(),
+        messages: [...deps.agent.state.messages.slice(), pendingMessage],
+        todoState: deps.getTodoState()
+      };
+      deps.setCurrentSession(await saveSession(deps.projectRoot, nextRecord));
+      syncSessionInfo();
+    }
+    function startFreshSession2(parentSessionId) {
+      deps.resetAgentForSessionSwitch();
+      deps.setCurrentSession(createSessionRecord({
+        parentSessionId,
+        provider: deps.getProvider(),
+        modelId: deps.getModelId(),
+        messages: [],
+        todoState: []
+      }));
+      deps.agent.reset();
+      deps.setAgentModel();
+      deps.rebuildAgentSurface();
+      syncSessionInfo();
+      deps.emitSessionSync();
+    }
+    function restoreSessionRecord2(record) {
+      deps.resetAgentForSessionSwitch();
+      deps.setCurrentSession(record);
+      deps.agent.replaceMessages(record.messages || []);
+      deps.setAgentModel();
+      deps.rebuildAgentSurface();
+      syncSessionInfo();
+      deps.emitSessionSync();
+    }
+    async function forkFromRecord2(record) {
+      const forked = createSessionRecord({
+        parentSessionId: record.id,
+        provider: record.provider || deps.getProvider(),
+        modelId: record.modelId || deps.getModelId(),
+        messages: (record.messages || []).slice(),
+        todoState: (record.todoState || []).slice()
+      });
+      restoreSessionRecord2(forked);
+      await persistCurrentSession2();
+    }
+    return {
+      syncSessionInfo,
+      persistCurrentSession: persistCurrentSession2,
+      persistCurrentSessionForRecovery: persistCurrentSessionForRecovery2,
+      persistCurrentSessionForRecoveryWithPendingUserMessage: persistCurrentSessionForRecoveryWithPendingUserMessage2,
+      startFreshSession: startFreshSession2,
+      restoreSessionRecord: restoreSessionRecord2,
+      forkFromRecord: forkFromRecord2
+    };
   }
-  function registerLoadedExtension(path) {
-    registry.registerLoadedExtension(path);
+
+  // src/session-controller-adapter.ts
+  function withMessages(record, messages) {
+    return {
+      ...record,
+      messages,
+      messageCount: messages.length
+    };
+  }
+  function createUnityAgentSessionController(options) {
+    const sessionManagerAdapter = {
+      getActiveSession() {
+        const current = options.getCurrentSession();
+        return {
+          id: current.id,
+          metadata: {
+            id: current.id,
+            name: current.title,
+            createdAt: current.createdAt,
+            updatedAt: current.updatedAt,
+            activeEntryId: null,
+            todoState: current.todoState,
+            provider: current.provider,
+            modelId: current.modelId,
+            parentSessionId: current.parentSessionId
+          },
+          isDirty: false
+        };
+      },
+      getMessages() {
+        return (options.getCurrentSession().messages || []).slice();
+      },
+      addMessage(message) {
+        const current = options.getCurrentSession();
+        const messages = (current.messages || []).slice();
+        const last = messages[messages.length - 1];
+        if (message.role === "user" && last?.role === "user") {
+          messages[messages.length - 1] = message;
+        } else {
+          messages.push(message);
+        }
+        options.setCurrentSession(withMessages(current, messages));
+      },
+      updateMessages(messages) {
+        options.setCurrentSession(withMessages(options.getCurrentSession(), messages.slice()));
+      },
+      async save() {
+        await options.saveCurrentSession();
+      },
+      appendCompaction() {
+      },
+      getActiveEntryId() {
+        return void 0;
+      },
+      getPathToEntry() {
+        return [];
+      }
+    };
+    return new AgentSessionController({
+      agent: options.agent,
+      sessionManager: sessionManagerAdapter,
+      cwd: options.projectRoot,
+      baseSystemPrompt: options.agent.state.systemPrompt
+    });
   }
 
   // src/extensions/load-project-extensions.ts
@@ -17457,7 +23075,7 @@ ${rootObjectLines}
     }
     return CS.System.IO;
   }
-  function normalizePath3(path) {
+  function normalizePath4(path) {
     return path.replace(/\\/g, "/");
   }
   function compileExtensionModule(code, sourceUrl) {
@@ -17493,7 +23111,7 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
     for (const filePath of files) {
       try {
         const code = String(IO.File.ReadAllText(filePath) ?? "");
-        const sourceUrl = normalizePath3(filePath);
+        const sourceUrl = normalizePath4(filePath);
         const api = createExtensionApi(context, sourceUrl);
         const factory = compileExtensionModule(code, sourceUrl);
         const result = factory(api);
@@ -17504,7 +23122,7 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
         loaded.push(sourceUrl);
         context.log(`[extension] loaded ${sourceUrl}`);
       } catch (error) {
-        const message = `[extension] failed ${filePath}: ${error?.message || String(error)}`;
+        const message = `[extension] failed ${filePath}: ${error instanceof Error ? error.message : String(error)}`;
         errors.push(message);
         context.log(message);
       }
@@ -17512,139 +23130,1295 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
     return { loaded, errors };
   }
 
-  // src/tools/read-skill.ts
-  function createReadSkillTool(projectRoot2) {
-    const loader = createUnitySkillLoader(projectRoot2);
-    const capability = createReadSkillCapability({
-      skillLoader: loader
+  // src/session-trace.ts
+  function normalizePath5(value) {
+    return String(value || "").replace(/\\/g, "/");
+  }
+  var UnitySessionTraceWriter = class extends SessionTraceSnapshotWriter {
+    constructor(projectRoot2, getSessionId) {
+      super({
+        getSessionId: () => getSessionId(),
+        loadTrace: (sessionId) => {
+          const tracePath = normalizePath5(CS.System.IO.Path.Combine(getSessionsDir(projectRoot2), `${sessionId}.trace.json`));
+          if (!CS.System.IO.File.Exists(tracePath)) return null;
+          try {
+            return JSON.parse(String(CS.System.IO.File.ReadAllText(tracePath) ?? ""));
+          } catch {
+            return null;
+          }
+        },
+        saveTrace: (trace) => {
+          const sessionsDir = getSessionsDir(projectRoot2);
+          CS.System.IO.Directory.CreateDirectory(sessionsDir);
+          const tracePath = normalizePath5(CS.System.IO.Path.Combine(sessionsDir, `${trace.sessionId}.trace.json`));
+          CS.System.IO.File.WriteAllText(tracePath, JSON.stringify(trace, null, 2));
+        }
+      });
+      this.projectRoot = projectRoot2;
+      this.getSessionId = getSessionId;
+    }
+    projectRoot;
+    getSessionId;
+  };
+
+  // src/pie-bridge.ts
+  function parseDevRpcResponse(raw) {
+    const parsed = typeof raw === "string" ? JSON.parse(raw || "null") : raw;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  }
+  function getPieBridge() {
+    const bridge2 = globalThis.pieBridge;
+    if (!bridge2) {
+      throw new Error("[pie] globalThis.pieBridge not found \u2014 was PieBridge.cs initialized?");
+    }
+    return bridge2;
+  }
+  function installDevRpcBridge(bridge2) {
+    bridge2.devRpc = {
+      call(method, args = {}) {
+        const raw = bridge2.callHost?.("pie.dev_rpc", {
+          method,
+          argsJson: JSON.stringify(args ?? {})
+        });
+        const response = parseDevRpcResponse(raw);
+        if (!response?.ok) {
+          throw new Error(String(response?.error || `pie.dev_rpc failed: ${method}`));
+        }
+        return response.resultJson ? JSON.parse(response.resultJson) : null;
+      }
+    };
+  }
+
+  // src/model-profiles.ts
+  function validateEndpointProfile(profileId, profile) {
+    const missing = [];
+    if (!profile.api) missing.push("api");
+    if (!profile.baseUrl) missing.push("baseUrl");
+    if (!Array.isArray(profile.models) || profile.models.length === 0) missing.push("models");
+    const hasProfileKeySource = !!(profile.apiKey || profile.apiKeyEnv);
+    const hasModelKeySource = !!(profile.models || []).some((model) => !!model.apiKeyEnv);
+    if (!hasProfileKeySource && !hasModelKeySource) missing.push("apiKey or apiKeyEnv");
+    if (missing.length > 0) {
+      return `Profile "${profileId}" is missing required field${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.`;
+    }
+    for (let index = 0; index < (profile.models || []).length; index += 1) {
+      const model = profile.models[index];
+      const modelMissing = [];
+      if (!model.id) modelMissing.push("id");
+      if (!Array.isArray(model.input) || model.input.length === 0) modelMissing.push("input");
+      if (!model.cost) modelMissing.push("cost");
+      if (!model.contextWindow) modelMissing.push("contextWindow");
+      if (!model.maxTokens) modelMissing.push("maxTokens");
+      if (modelMissing.length > 0) {
+        const label = model.id || `#${index}`;
+        return `Profile "${profileId}" model "${label}" is missing required field${modelMissing.length > 1 ? "s" : ""}: ${modelMissing.join(", ")}.`;
+      }
+    }
+    return null;
+  }
+  function getModelsConfigPath() {
+    return CS.System.IO.Path.Combine(
+      CS.System.Environment.GetFolderPath(CS.System.Environment.SpecialFolder.UserProfile),
+      ".pie",
+      "models.json"
+    );
+  }
+  function readModelsConfig(bridge2) {
+    const modelsPath = getModelsConfigPath();
+    if (!CS.System.IO.File.Exists(modelsPath)) return null;
+    try {
+      const raw = String(CS.System.IO.File.ReadAllText(modelsPath) || "");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && "providers" in parsed) {
+        bridge2.log("warn", `[pie/index] Legacy models.json format is not supported in Unity. Use top-level "profiles". Path: ${modelsPath}`);
+        return null;
+      }
+      return parsed;
+    } catch (error) {
+      bridge2.log("error", `[pie/index] Failed to read models.json: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  }
+  function getEndpointProfiles(bridge2) {
+    const profiles = readModelsConfig(bridge2)?.profiles || {};
+    for (const [profileId, profile] of Object.entries(profiles)) {
+      const validationError = validateEndpointProfile(profileId, profile);
+      if (validationError) {
+        bridge2.log("warn", `[pie/index] ${validationError}`);
+      }
+    }
+    return profiles;
+  }
+  function getDefaultSelection(bridge2, profiles) {
+    const defaults = readModelsConfig(bridge2)?.defaults;
+    if (defaults?.provider && defaults?.modelId && profiles[defaults.provider]?.models?.some((model) => model.id === defaults.modelId)) {
+      return {
+        provider: defaults.provider,
+        modelId: defaults.modelId
+      };
+    }
+    return null;
+  }
+  function createUnconfiguredModel() {
+    return {
+      id: "unconfigured",
+      name: "Unconfigured Model",
+      api: "openai-completions",
+      provider: "unconfigured",
+      baseUrl: "",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 0,
+      maxTokens: 0
+    };
+  }
+  function resolveConfiguredModel(bridge2, provider, modelId) {
+    if (!provider || !modelId) return null;
+    const profiles = getEndpointProfiles(bridge2);
+    const profile = profiles[provider];
+    if (!profile || validateEndpointProfile(provider, profile)) return null;
+    const modelDef = (profile.models || []).find((candidate) => candidate.id === modelId);
+    if (!modelDef) return null;
+    return {
+      model: {
+        id: modelDef.id,
+        name: modelDef.name || modelDef.id,
+        api: profile.api,
+        provider,
+        baseUrl: profile.baseUrl,
+        reasoning: modelDef.reasoning ?? false,
+        input: modelDef.input || ["text"],
+        cost: modelDef.cost || { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: modelDef.contextWindow || 128e3,
+        maxTokens: modelDef.maxTokens || 8192,
+        apiKeyEnv: modelDef.apiKeyEnv || profile.apiKeyEnv,
+        displayName: modelDef.displayName || profile.displayName,
+        filePlatform: modelDef.filePlatform || profile.filePlatform,
+        attachmentPlatform: modelDef.attachmentPlatform || profile.attachmentPlatform,
+        headers: profile.headers ? { ...profile.headers, ...modelDef.headers } : modelDef.headers,
+        compat: modelDef.compat || profile.compat,
+        cacheCapability: modelDef.cacheCapability || profile.cacheCapability,
+        webSearch: modelDef.webSearch || profile.webSearch,
+        fileCapabilities: modelDef.fileCapabilities || profile.fileCapabilities
+      },
+      apiKey: profile.apiKey
+    };
+  }
+  function resolveRoute(bridge2, route) {
+    if (!route?.provider || !route?.modelId) return null;
+    return resolveConfiguredModel(bridge2, route.provider, route.modelId);
+  }
+  function runtimeCredentialForModel(model, options) {
+    const credential = options?.runtimeCredential;
+    if (!model || !credential?.apiKey) return void 0;
+    return credential.provider === model.provider && credential.modelId === model.id ? credential.apiKey : void 0;
+  }
+  function resolveCandidateApiKey(resolved, options) {
+    return resolved?.apiKey || runtimeCredentialForModel(resolved?.model, options);
+  }
+  function missingApiKeyReason(model, purpose) {
+    return `${model.provider}/${model.id} declares ${requiredCapabilityForToolPurpose(purpose)} for ${purpose}, but no API key is available from models.json or the matching Unity runtime model selection.`;
+  }
+  function getAllResolvedModels(bridge2) {
+    const profiles = getEndpointProfiles(bridge2);
+    const resolved = [];
+    for (const [provider, profile] of Object.entries(profiles)) {
+      for (const model of profile.models || []) {
+        const item = resolveConfiguredModel(bridge2, provider, model.id);
+        if (item) resolved.push(item);
+      }
+    }
+    return resolved;
+  }
+  function resolveUnityToolModelCandidates(bridge2, purpose, currentModel, options) {
+    const defaults = readModelsConfig(bridge2)?.defaults;
+    const requiredCapability = requiredCapabilityForToolPurpose(purpose);
+    const candidates = [];
+    const seen = /* @__PURE__ */ new Set();
+    const add = (decision) => {
+      if (!decision) return;
+      if (!decision.model) {
+        if (decision.routeSource === "unavailable") candidates.push(decision);
+        return;
+      }
+      const key = `${decision.model.provider}/${decision.model.id}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      candidates.push(decision);
+    };
+    const explicitRoute = defaults?.toolModels?.[purpose];
+    if (explicitRoute?.provider && explicitRoute.modelId) {
+      const explicit = resolveRoute(bridge2, explicitRoute);
+      const explicitApiKey = resolveCandidateApiKey(explicit, options);
+      if (explicit?.model && modelSupportsToolPurpose(explicit.model, purpose)) {
+        add({
+          purpose,
+          requiredCapability,
+          routeSource: "explicit",
+          model: explicit.model,
+          apiKey: explicitApiKey,
+          fallbackReason: explicitApiKey ? void 0 : missingApiKeyReason(explicit.model, purpose)
+        });
+      } else {
+        add({
+          purpose,
+          requiredCapability,
+          routeSource: "unavailable",
+          model: explicit?.model,
+          fallbackReason: `models.json defaults.toolModels.${purpose} is unavailable or does not declare ${requiredCapability}`
+        });
+      }
+    }
+    if (currentModel && modelSupportsToolPurpose(currentModel, purpose)) {
+      const current = resolveConfiguredModel(bridge2, currentModel.provider, currentModel.id);
+      const currentApiKey = resolveCandidateApiKey(current, options) || runtimeCredentialForModel(currentModel, options);
+      const model = current?.model || currentModel;
+      if (model) {
+        add({
+          purpose,
+          requiredCapability,
+          routeSource: "current_model",
+          model,
+          apiKey: currentApiKey,
+          fallbackReason: currentApiKey ? void 0 : missingApiKeyReason(model, purpose)
+        });
+      }
+    }
+    const classCandidates = [];
+    for (const modelClass of MODEL_CLASS_FALLBACK_ORDER) {
+      const resolved = resolveRoute(bridge2, defaults?.modelClasses?.[modelClass]);
+      const apiKey = resolveCandidateApiKey(resolved, options);
+      if (resolved?.model && modelSupportsToolPurpose(resolved.model, purpose)) {
+        classCandidates.push({
+          purpose,
+          requiredCapability,
+          routeSource: "model_class",
+          model: resolved.model,
+          apiKey,
+          fallbackReason: apiKey ? void 0 : missingApiKeyReason(resolved.model, purpose)
+        });
+      }
+    }
+    for (const decision of sortToolModelCandidatesByCapability(purpose, classCandidates)) add(decision);
+    const configuredCandidates = getAllResolvedModels(bridge2).filter((resolved) => modelSupportsToolPurpose(resolved.model, purpose)).map((resolved) => ({
+      purpose,
+      requiredCapability,
+      routeSource: "configured_model",
+      model: resolved.model,
+      apiKey: resolveCandidateApiKey(resolved, options),
+      fallbackReason: resolveCandidateApiKey(resolved, options) ? void 0 : missingApiKeyReason(resolved.model, purpose)
+    }));
+    for (const decision of sortToolModelCandidatesByCapability(purpose, configuredCandidates)) add(decision);
+    if (candidates.some((candidate) => candidate.model)) {
+      return candidates.filter((candidate) => candidate.model);
+    }
+    return candidates.length > 0 ? candidates : [{
+      purpose,
+      requiredCapability,
+      routeSource: "unavailable",
+      fallbackReason: `No configured model declares ${requiredCapability} capability for ${purpose}.`
+    }];
+  }
+  function describeUnityToolModelRoute(bridge2, purpose, currentModel, options) {
+    const candidates = resolveUnityToolModelCandidates(bridge2, purpose, currentModel, options);
+    const preferred = candidates.find((candidate) => candidate.model && candidate.apiKey) || candidates.find((candidate) => candidate.model);
+    if (!preferred?.model) {
+      const unavailable = candidates.find((candidate) => candidate.routeSource === "unavailable");
+      return `${purpose}: unavailable (${unavailable?.fallbackReason || `missing ${requiredCapabilityForToolPurpose(purpose)} capability`})`;
+    }
+    const candidateCount = candidates.filter((candidate) => candidate.model && candidate.apiKey).length;
+    const capability = purpose === "web_search" ? preferred.model.webSearch?.type || "webSearch" : requiredCapabilityForToolPurpose(purpose);
+    return [
+      `${purpose}: ${preferred.model.provider}/${preferred.model.id}`,
+      `route=${preferred.routeSource}`,
+      `capability=${capability}`,
+      `candidates=${candidateCount}`,
+      ...preferred.apiKey ? [] : [`status=${preferred.fallbackReason || "missing API key"}`]
+    ].join(" ");
+  }
+  function describeUnityToolModelRoutes(bridge2, currentModel, options) {
+    return [
+      "web_search",
+      "read_file.image",
+      "read_file.video",
+      "read_file.audio",
+      "read_file.document"
+    ].map((purpose) => describeUnityToolModelRoute(bridge2, purpose, currentModel, options));
+  }
+
+  // src/agent-event-forwarding.ts
+  function messageRole(message) {
+    return typeof message === "object" && message !== null && "role" in message ? String(message.role ?? "assistant") : "assistant";
+  }
+  function messageStopReason(message, fallback) {
+    return typeof message === "object" && message !== null && "stopReason" in message ? String(message.stopReason ?? fallback) : fallback;
+  }
+  function messageErrorText(message) {
+    return typeof message === "object" && message !== null && "errorMessage" in message ? String(message.errorMessage ?? "Request failed") : "Request failed";
+  }
+  function textContentFromMessage(message) {
+    const content = typeof message === "object" && message !== null && "content" in message ? message.content : void 0;
+    if (!Array.isArray(content)) return "";
+    return content.filter((block) => {
+      return !!block && typeof block === "object" && block.type === "text";
+    }).map((block) => block.text || "").join("");
+  }
+  function assistantEventField(event, field) {
+    return event && typeof event === "object" && field in event ? String(event[field] ?? "") : "";
+  }
+  function isRecord4(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  function routeMetaFromToolResult(toolName, result) {
+    const details = isRecord4(result) && isRecord4(result.details) ? result.details : void 0;
+    if (!details) return null;
+    if (toolName === "web_search") {
+      return {
+        toolName,
+        purpose: "web_search",
+        providerMode: details.providerMode,
+        agentModel: details.agentModel,
+        toolModel: details.toolModel,
+        routeSource: details.routeSource,
+        sourceCount: details.sourceCount,
+        failureCategory: details.failureCategory,
+        attempts: Array.isArray(details.attempts) ? details.attempts.length : void 0
+      };
+    }
+    if (toolName === "read_file" && isRecord4(details.understanding)) {
+      const understanding = details.understanding;
+      return {
+        toolName,
+        purpose: understanding.purpose,
+        requiredCapability: understanding.requiredCapability,
+        agentModel: understanding.agentModel,
+        toolModel: understanding.toolModel,
+        routeSource: understanding.routeSource,
+        kind: understanding.kind,
+        mimeType: understanding.mimeType,
+        fallbackReason: understanding.fallbackReason
+      };
+    }
+    return null;
+  }
+  function bindUnityAgentEventForwarding(host) {
+    const {
+      agent: agent2,
+      bridge: bridge2,
+      sessionTrace: sessionTrace2,
+      todoTool: todoTool2
+    } = host;
+    attachAgentEventsToSessionTrace({ agent: agent2, trace: sessionTrace2 });
+    agent2.subscribe((event) => {
+      try {
+        switch (event.type) {
+          case "agent_start":
+            bridge2.sendToUnity("state_event", { name: "agent_start", detail: "agent loop started" });
+            break;
+          case "turn_start":
+            bridge2.sendToUnity("state_event", { name: "turn_start", detail: "turn started" });
+            break;
+          case "message_start":
+            bridge2.sendToUnity("state_event", { name: "message_start", detail: `role=${messageRole(event.message)}` });
+            break;
+          case "message_update": {
+            const msg = event.message;
+            const text = textContentFromMessage(msg);
+            if (event.assistantMessageEvent?.type === "thinking_start") {
+              bridge2.sendToUnity("thinking_event", { type: "start" });
+            } else if (event.assistantMessageEvent?.type === "thinking_delta") {
+              bridge2.sendToUnity("thinking_event", {
+                type: "delta",
+                delta: assistantEventField(event.assistantMessageEvent, "delta")
+              });
+            } else if (event.assistantMessageEvent?.type === "thinking_end") {
+              bridge2.sendToUnity("thinking_event", {
+                type: "end",
+                text: assistantEventField(event.assistantMessageEvent, "content")
+              });
+            }
+            bridge2.sendToUnity("state_event", {
+              name: "message_update",
+              detail: `type=${event.assistantMessageEvent?.type ?? "text"} chars=${text.length}`
+            });
+            if (text) bridge2.sendToUnity("message_update", { type: "text_full", text });
+            break;
+          }
+          case "message_end":
+            if (messageRole(event.message) === "assistant") {
+              bridge2.sendToUnity("message_metrics", {
+                role: "assistant",
+                usage: host.buildUsagePayload(agent2.state.messages || [], event.message)
+              });
+            }
+            bridge2.sendToUnity("state_event", { name: "message_end", detail: `role=${messageRole(event.message)}` });
+            break;
+          case "tool_execution_start":
+            host.verboseLog(`[tool_start payload] ${JSON.stringify({
+              name: event.toolName,
+              callId: event.toolCallId,
+              argsJson: JSON.stringify(event.args ?? {}).substring(0, 4e3)
+            })}`);
+            bridge2.sendToUnity("tool_start", {
+              name: event.toolName,
+              callId: event.toolCallId,
+              argsJson: JSON.stringify(event.args ?? {}).substring(0, 4e3)
+            });
+            break;
+          case "tool_execution_end": {
+            const effectiveArgs = host.extractEffectiveArgs(event.toolName, event.args, event.result?.details);
+            const resultText = host.extractToolText(event.result).substring(0, 4e3);
+            const routeMeta = routeMetaFromToolResult(event.toolName, event.result);
+            if (routeMeta) {
+              sessionTrace2.noteRuntimeEvent("tool_model_route_selected", routeMeta);
+              if (event.toolName === "web_search") {
+                sessionTrace2.noteRuntimeEvent("web_search_attempts", routeMeta);
+              } else if (event.toolName === "read_file") {
+                sessionTrace2.noteRuntimeEvent("read_file_understanding", routeMeta);
+              }
+            }
+            bridge2.sendToUnity("tool_end", {
+              name: event.toolName,
+              callId: event.toolCallId,
+              argsJson: JSON.stringify(event.args ?? {}).substring(0, 4e3),
+              effectiveArgsJson: JSON.stringify(effectiveArgs ?? {}).substring(0, 4e3),
+              isError: event.isError,
+              resultText,
+              resultJson: JSON.stringify(event.result ?? "").substring(0, 4e3),
+              detailsJson: event.result?.details !== void 0 ? JSON.stringify(event.result.details).substring(0, 4e3) : "",
+              error: event.isError ? resultText || "Tool returned an error result." : void 0
+            });
+            break;
+          }
+          case "agent_end":
+            bridge2.sendToUnity("state_event", { name: "agent_end", detail: "agent loop finished" });
+            bridge2.sendToUnity("agent_end", {});
+            break;
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        bridge2.log("error", `[pie/index] Event forwarding error: ${message}`);
+      }
     });
-    return capability.tool;
+    agent2.subscribeSemantic((event) => {
+      try {
+        switch (event.type) {
+          case "status_snapshot_changed":
+            bridge2.sendToUnity("status_snapshot", event.snapshot);
+            break;
+          case "turn_continues":
+            host.persistCurrentSessionSafely();
+            host.refreshTodoLoopState();
+            bridge2.sendToUnity("state_event", {
+              name: "turn_continues",
+              detail: `stopReason=${messageStopReason(event.message, "toolUse")}`
+            });
+            break;
+          case "turn_completed": {
+            host.persistCurrentSessionSafely();
+            host.refreshTodoLoopState();
+            bridge2.sendToUnity("turn_end", {
+              role: messageRole(event.message),
+              stopReason: messageStopReason(event.message, "stop")
+            });
+            bridge2.sendToUnity("state_event", {
+              name: "turn_completed",
+              detail: `stopReason=${messageStopReason(event.message, "stop")}`
+            });
+            const executionState = todoTool2.getExecutionState();
+            const todoLoopState2 = host.getTodoLoopState();
+            if (executionState && todoLoopState2) {
+              const assistantText2 = host.collectMessageText(event.message);
+              const decision = evaluateTodoClosureAfterCompletedTurn(executionState, todoLoopState2, {
+                completedCount: executionState.steps.filter((step) => step.status === "completed").length,
+                remainingCount: executionState.steps.filter((step) => step.status !== "completed").length,
+                currentStepId: executionState.currentStepId,
+                hasSuccessfulToolResult: (event.toolResults || []).some((result) => !result?.isError),
+                hasAssistantText: assistantText2.trim().length > 0,
+                hasCompletionText: /完成|已完成|done|finished|completed|wrap[\s-]?up|all set|success/i.test(assistantText2)
+              });
+              host.setTodoLoopState(decision.loop);
+              if (decision.action === "continue" && decision.followUpPrompt) {
+                agent2.followUp({ role: "user", content: decision.followUpPrompt, timestamp: Date.now() });
+                bridge2.sendToUnity("state_event", { name: "todo_follow_up_queued", detail: "queued todo closure follow-up" });
+              } else if (decision.action === "clear_completed") {
+                todoTool2.reset();
+                host.setTodoLoopState(null);
+                host.persistCurrentSessionSafely();
+                host.emitSessionSync();
+              } else if (decision.action === "clear_failed" || decision.action === "clear_stalled") {
+                todoTool2.reset();
+                host.setTodoLoopState(null);
+                host.persistCurrentSessionSafely();
+                host.emitSessionSync();
+                bridge2.sendToUnity("error", {
+                  message: decision.action === "clear_stalled" ? "Todo run stalled and was cleared." : "Todo run failed and was cleared."
+                });
+              }
+            }
+            break;
+          }
+          case "turn_failed": {
+            const stopReason = messageStopReason(event.message, "error");
+            const errMsg = messageErrorText(event.message);
+            host.persistCurrentSessionSafely();
+            const decision = evaluateTodoClosureAfterFailedTurn(host.getTodoLoopState());
+            host.setTodoLoopState(decision.loop);
+            if (decision.action === "clear_failed") {
+              todoTool2.reset();
+              host.setTodoLoopState(null);
+              host.persistCurrentSessionSafely();
+              host.emitSessionSync();
+            }
+            bridge2.sendToUnity("turn_end", { role: messageRole(event.message), stopReason });
+            bridge2.sendToUnity("state_event", { name: "turn_failed", detail: `stopReason=${stopReason}` });
+            bridge2.sendToUnity("error", { message: errMsg });
+            break;
+          }
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        bridge2.log("error", `[pie/index] Semantic event forwarding error: ${message}`);
+      }
+    });
+  }
+  function clearTodoAfterAbort(host) {
+    const decision = evaluateTodoClosureAfterAbort(host.getTodoLoopState());
+    if (decision.action === "clear_aborted") {
+      host.todoTool.reset();
+      host.setTodoLoopState(null);
+      host.persistCurrentSessionSafely();
+      host.emitSessionSync();
+    }
+  }
+
+  // src/unity-public-api.ts
+  function isRecord5(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function stringField(value, key) {
+    return isRecord5(value) && typeof value[key] === "string" ? value[key] : void 0;
+  }
+  function installUnityPublicApi(host) {
+    globalThis.pie = {
+      handleCSharpMessage: async function(action, data) {
+        try {
+          switch (action) {
+            case "send_message": {
+              if (!host.hasConfiguredModelSelection()) {
+                host.bridge.sendToUnity("error", { message: host.getModelSelectionWarning() });
+                break;
+              }
+              const content = stringField(data, "content") ?? String(data);
+              host.sessionTrace.notePendingUserText(content);
+              const reminder = host.todoTool.getReminder?.();
+              const finalContent = reminder ? `${reminder}${content}` : content;
+              if (await host.handleLocalCommand(content)) break;
+              await host.persistCurrentSessionForRecoveryWithPendingUserMessage(content);
+              host.emitSessionSync();
+              host.sessionTrace.noteDispatchStart({ mode: "unity" });
+              host.promptAgentWithRecovery(finalContent).catch((err) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                host.bridge.log("error", `[pie/index] agent.prompt rejected: ${msg}`);
+                host.bridge.sendToUnity("error", { message: msg });
+                host.sessionTrace.noteStalled(msg, { mode: "unity" });
+                host.sessionTrace.abortTurn(msg);
+              }).finally(() => {
+                host.sessionTrace.noteDispatchSettled({ mode: "unity" });
+              });
+              break;
+            }
+            case "set_config": {
+              const apiKey = stringField(data, "apiKey");
+              const provider = stringField(data, "provider") || "";
+              const model = stringField(data, "model") || "";
+              const verboseLogs = isRecord5(data) && data.verboseLogs === true;
+              if (isRecord5(data) && data.verboseLogs !== void 0) host.setVerboseLogs(verboseLogs);
+              host.setModelSelection(provider, model, apiKey);
+              host.applyModelSelectionSync(provider, model);
+              host.bridge.sendToUnity("config_applied", host.getModelStatus());
+              host.persistCurrentSessionSafely();
+              break;
+            }
+            case "new_session":
+              await host.persistCurrentSession();
+              host.startFreshSession();
+              await host.persistCurrentSessionForRecovery();
+              break;
+            case "resume_session": {
+              const sessionId = stringField(data, "sessionId")?.trim() || "";
+              if (!sessionId) {
+                host.bridge.log("warn", "[pie/index] resume_session called without sessionId");
+                break;
+              }
+              host.bridge.log("info", `[pie/index] resume_session ${sessionId}`);
+              const loaded = await host.loadSession(host.projectRoot, sessionId);
+              if (loaded) {
+                const recoverInterrupted = isRecord5(data) && data.recoverInterrupted === true;
+                const lastUserText = stringField(data, "lastUserText") || "";
+                host.restoreSessionRecord(recoverInterrupted ? host.trimInterruptedTail(loaded, lastUserText) : loaded);
+              } else {
+                host.bridge.log("warn", `[pie/index] resume_session could not load ${sessionId}`);
+              }
+              break;
+            }
+            case "list_skills":
+              host.emitSkillsList();
+              break;
+            case "reload_skills":
+              host.rebuildAgentSurface();
+              host.emitSkillsList();
+              break;
+            case "abort":
+              host.bridge.log("info", `[pie/index] abort reason=${stringField(data, "reason") || "user"}`);
+              host.agentSessionController.abort();
+              clearTodoAfterAbort({
+                todoTool: host.todoTool,
+                getTodoLoopState: host.getTodoLoopState,
+                setTodoLoopState: host.setTodoLoopState,
+                persistCurrentSessionSafely: host.persistCurrentSessionSafely,
+                emitSessionSync: host.emitSessionSync
+              });
+              break;
+            default:
+              host.bridge.log("warn", `[pie/index] Unknown action: ${action}`);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          host.bridge.log("error", `[pie/index] Error in ${action}: ${msg}`);
+          host.bridge.sendToUnity("error", { message: msg });
+        }
+      }
+    };
+  }
+
+  // src/unity-self-check.ts
+  async function runUnitySelfCheck(host) {
+    const lines = [];
+    lines.push("Pie Unity self-check");
+    lines.push(`Project root: ${host.projectRoot}`);
+    lines.push(`Mode: ${host.isEditor ? "Editor" : "Runtime"}`);
+    lines.push(`Model: ${host.modelLabel}`);
+    const probeMessages = host.agent.state.messages.length > 0 ? host.agent.state.messages.slice() : [{ role: "user", content: [{ type: "text", text: "self-check probe" }], timestamp: Date.now() }];
+    const probe = createSessionRecord({
+      sessionId: `probe_${Date.now().toString(36)}`,
+      provider: "",
+      modelId: "",
+      messages: probeMessages,
+      todoState: host.todoTool.getState()
+    });
+    const saved = await saveSession(host.projectRoot, probe);
+    const loaded = await loadSession(host.projectRoot, saved.id);
+    const sessionOk = !!loaded && loaded.id === saved.id && (loaded.messages?.length || 0) === saved.messages.length && (loaded.todoState?.length || 0) === saved.todoState.length;
+    lines.push(`Session store: ${sessionOk ? "OK" : "FAIL"}`);
+    const skills = getAvailableSkills(host.projectRoot);
+    lines.push(`Skills: ${skills.length}`);
+    if (skills.length > 0) lines.push(`- First skill: ${skills[0].name}`);
+    const extensionResult = host.reloadProjectExtensions();
+    const loadedExtensions = getLoadedExtensions();
+    lines.push(`Extensions: ${loadedExtensions.length} loaded`);
+    if (extensionResult.errors.length > 0) {
+      lines.push(`- Extension errors: ${extensionResult.errors.length}`);
+      for (const error of extensionResult.errors.slice(0, 3)) lines.push(`  ${error}`);
+    }
+    const activeTools = host.agent.state.tools.map((tool) => tool.name);
+    const requiredTools = [
+      "ask_user_multi",
+      "manage_todo_list",
+      "web_search",
+      "read_skill",
+      "read_resource",
+      "resolve_resource",
+      "read_file",
+      "write_file",
+      "edit_file",
+      "list_dir",
+      "grep_text",
+      "find_files"
+    ];
+    const missingTools = requiredTools.filter((name) => !activeTools.includes(name));
+    lines.push(`Shared capability wiring: ${missingTools.length === 0 ? "OK" : `MISSING ${missingTools.join(", ")}`}`);
+    lines.push(`File understanding: ${activeTools.includes("read_file") ? "configured through read_file" : "missing read_file"}`);
+    lines.push(`Code intelligence: ${activeTools.includes("code_intel") ? "lightweight JS/TS inspection (CLI owns full TypeScript service)" : "unavailable"}`);
+    lines.push("Policy snapshot:");
+    lines.push(formatCapabilityPolicySummary(host.agent.state.tools, { mode: "normal", confirmationPolicy: "allow" }));
+    const routeSummaries = host.getToolRouteSummaries?.() || [];
+    if (routeSummaries.length > 0) {
+      lines.push("Tool model routes:");
+      for (const summary of routeSummaries) lines.push(`- ${summary}`);
+    }
+    lines.push(`Project memory: ${readProjectMemory(host.projectRoot) ? "present" : "missing"}`);
+    return lines.join("\n");
+  }
+
+  // src/unity-local-commands.ts
+  function isRecord6(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  function tryExplainExternalSessionId(host, sessionId) {
+    const trimmed = String(sessionId || "").trim();
+    if (!trimmed) return null;
+    const registryPath = CS.System.IO.Path.Combine(
+      CS.System.Environment.GetFolderPath(CS.System.Environment.SpecialFolder.UserProfile),
+      ".unity_skills",
+      "registry.json"
+    );
+    if (!CS.System.IO.File.Exists(registryPath)) {
+      return null;
+    }
+    try {
+      const registry2 = JSON.parse(String(CS.System.IO.File.ReadAllText(registryPath) || "{}"));
+      const entries = Object.values(isRecord6(registry2) ? registry2 : {});
+      const matched = entries.find((entry) => String(entry.id || "") === trimmed);
+      if (!matched) {
+        return null;
+      }
+      const sessionsDir = host.bridge.getSessionsDirectory?.();
+      const availableSessions = [];
+      if (typeof sessionsDir === "string" && sessionsDir.length > 0 && CS.System.IO.Directory.Exists(sessionsDir)) {
+        const files = CS.System.IO.Directory.GetFiles(sessionsDir, "*.json");
+        for (let index = 0; index < Math.min(files.Length, 8); index += 1) {
+          try {
+            const parsed = JSON.parse(String(CS.System.IO.File.ReadAllText(files[index]) || "{}"));
+            const metadata = isRecord6(parsed) && isRecord6(parsed.metadata) ? parsed.metadata : parsed;
+            const id = String(metadata.id || "").trim();
+            if (!id) continue;
+            const title = String(metadata.name || metadata.title || "Untitled Session");
+            const updatedAtRaw = metadata.updatedAt ?? "";
+            const updatedAt = typeof updatedAtRaw === "number" ? new Date(updatedAtRaw).toISOString() : String(updatedAtRaw || "");
+            availableSessions.push(`- ${id} | ${title} | ${updatedAt}`);
+          } catch {
+          }
+        }
+      }
+      const availableText = availableSessions.length > 0 ? `
+
+Available Pie sessions:
+${availableSessions.join("\n")}` : "\n\nNo Pie chat sessions have been saved yet.";
+      return [
+        `\`${trimmed}\` is a UnitySkills instance ID for project \`${matched.name || matched.path || "unknown"}\`, not a pie-unity chat session ID.`,
+        "pie-unity chat sessions use IDs like `sess_xxx` and are stored separately under Application.persistentDataPath/Pie/sessions.",
+        "Use `/resume` with one of the Pie session IDs shown in the Sessions panel or returned by `/resume` with no arguments.",
+        availableText
+      ].join("\n");
+    } catch {
+      return null;
+    }
+  }
+  function createUnityLocalCommandHandler(host) {
+    return async function handleLocalCommand2(content) {
+      const trimmed = content.trim();
+      if (!trimmed.startsWith("/")) return false;
+      const [command, ...rest] = trimmed.split(/\s+/);
+      if (command === "/new") {
+        await host.persistCurrentSession();
+        host.startFreshSession();
+        await host.persistCurrentSessionForRecovery();
+        host.emitLocalAssistantMessage(`Started new session: ${host.getCurrentSession().id}`);
+        return true;
+      }
+      if (command === "/resume") {
+        const silent = rest.includes("--silent");
+        const args = rest.filter((arg) => arg !== "--silent");
+        const sessionId = args[0];
+        if (!sessionId) {
+          const sessions = await listSessions(host.projectRoot);
+          const text = sessions.length === 0 ? "No saved sessions." : sessions.map((session) => `${session.id} | ${session.title} | ${session.modelId} | ${session.updatedAt}`).join("\n");
+          host.emitLocalAssistantMessage(text);
+          return true;
+        }
+        const loaded = await loadSession(host.projectRoot, sessionId);
+        if (!loaded) {
+          const explanation = tryExplainExternalSessionId(host, sessionId);
+          host.emitLocalAssistantMessage(explanation || `Session not found: ${sessionId}`);
+          return true;
+        }
+        host.restoreSessionRecord(loaded);
+        if (!silent) {
+          host.emitLocalAssistantMessage(`Resumed session ${loaded.id}
+Title: ${loaded.title}
+Messages: ${loaded.messageCount}`);
+        }
+        return true;
+      }
+      if (command === "/tree") {
+        host.emitLocalAssistantMessage(await formatSessionTree(host.projectRoot));
+        return true;
+      }
+      if (command === "/session-check") {
+        const probeMessages = host.agent.state.messages.length > 0 ? host.agent.state.messages.slice() : [{ role: "user", content: [{ type: "text", text: "session-check probe" }], timestamp: Date.now() }];
+        const probe = createSessionRecord({
+          sessionId: `probe_${Date.now().toString(36)}`,
+          provider: host.getProvider(),
+          modelId: host.getModelId(),
+          messages: probeMessages,
+          todoState: host.todoTool.getState()
+        });
+        const saved = await saveSession(host.projectRoot, probe);
+        const loaded = await loadSession(host.projectRoot, saved.id);
+        const ok = !!loaded && loaded.id === saved.id && loaded.provider === saved.provider && loaded.modelId === saved.modelId && (loaded.messages?.length || 0) === saved.messages.length && (loaded.todoState?.length || 0) === saved.todoState.length;
+        host.emitLocalAssistantMessage(
+          ok ? `Session self-check passed.
+Session: ${saved.id}
+Messages: ${saved.messages.length}
+Todos: ${saved.todoState.length}` : `Session self-check failed.
+Saved: ${saved.id}
+Loaded: ${loaded ? loaded.id : "(missing)"}`
+        );
+        return true;
+      }
+      if (command === "/self-check") {
+        host.emitLocalAssistantMessage(await host.runUnitySelfCheck());
+        return true;
+      }
+      if (command === "/debug-stream") {
+        const promptText = rest.length > 0 ? rest.join(" ") : "Count to ten, one per line.";
+        host.runDebugLocalStream(trimmed, promptText).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          host.bridge.sendToUnity("error", { message: `debug local stream failed: ${msg}` });
+        });
+        return true;
+      }
+      if (command === "/fork") {
+        const sessionId = rest[0];
+        if (sessionId) {
+          const source2 = await loadSession(host.projectRoot, sessionId);
+          if (!source2) {
+            const explanation = tryExplainExternalSessionId(host, sessionId);
+            host.emitLocalAssistantMessage(explanation || `Session not found: ${sessionId}`);
+            return true;
+          }
+          await host.forkFromRecord(source2);
+          host.emitLocalAssistantMessage(`Forked new session ${host.getCurrentSession().id} from ${source2.id}`);
+          return true;
+        }
+        await host.persistCurrentSession();
+        const source = await loadSession(host.projectRoot, host.getCurrentSession().id) || host.getCurrentSession();
+        await host.forkFromRecord(source);
+        host.emitLocalAssistantMessage(`Forked new session ${host.getCurrentSession().id} from ${source.id}`);
+        return true;
+      }
+      if (command === "/memory") {
+        const memory = readProjectMemory(host.projectRoot);
+        host.emitLocalAssistantMessage(memory ? `Project memory loaded from Assets/Pie/AGENTS.md
+
+${memory}` : "No project memory found. Use /init to create an initial AGENTS.md.");
+        return true;
+      }
+      if (command === "/model") {
+        if (rest.length === 0) {
+          const configured = Object.entries(getEndpointProfiles(host.bridge)).flatMap(
+            ([provider2, profile]) => (profile.models || []).map((model) => `${provider2}/${model.id}`)
+          );
+          const current = host.hasConfiguredModelSelection() ? `${host.getProvider()}/${host.getModelId()}` : "(unconfigured)";
+          host.emitLocalAssistantMessage(configured.length > 0 ? `Current model: ${current}
+
+Configured models:
+${configured.join("\n")}` : host.getModelSelectionWarning());
+          return true;
+        }
+        const [provider, modelId] = rest.length === 1 ? rest[0].split("/", 2) : [rest[0], rest.slice(1).join(" ")];
+        if (!provider || !modelId) {
+          host.emitLocalAssistantMessage(`Unknown model selection: ${rest[0]}`);
+          return true;
+        }
+        await host.applyModelSelection(provider, modelId);
+        host.emitLocalAssistantMessage(host.hasConfiguredModelSelection() ? `Switched model to ${provider}/${modelId}` : host.getModelSelectionWarning());
+        return true;
+      }
+      if (command === "/skills") {
+        const subcommand = rest[0] || "list";
+        if (subcommand === "reload") {
+          host.rebuildAgentSurface();
+          const skills2 = getAvailableSkills(host.projectRoot);
+          host.emitSkillsList();
+          host.emitLocalAssistantMessage(`Reloaded ${skills2.length} skill(s).`);
+          return true;
+        }
+        const skills = getAvailableSkills(host.projectRoot);
+        host.emitSkillsList();
+        host.emitLocalAssistantMessage(skills.length === 0 ? "No skills available." : skills.map((skill) => `${skill.name} [${skill.source}] - ${skill.description}`).join("\n"));
+        return true;
+      }
+      if (command === "/extensions") {
+        const subcommand = rest[0] || "list";
+        if (subcommand === "reload") {
+          const result = host.reloadProjectExtensions();
+          const loaded2 = getLoadedExtensions();
+          const loadedText = loaded2.length > 0 ? loaded2.join("\n") : "(none)";
+          const errorText = result.errors.length > 0 ? `
+
+Errors:
+${result.errors.join("\n")}` : "";
+          host.emitLocalAssistantMessage(`Reloaded ${loaded2.length} extension(s).
+
+${loadedText}${errorText}`);
+          return true;
+        }
+        const loaded = getLoadedExtensions();
+        host.emitLocalAssistantMessage(loaded.length > 0 ? `Loaded extensions:
+${loaded.join("\n")}` : "No project extensions loaded. Add .js files under Assets/Pie/Extensions or configure additional search paths in Pie Settings.");
+        return true;
+      }
+      if (command === "/init") {
+        const snapshot = getUnityContextSnapshot(host.projectRoot, host.isEditor);
+        const initialMemory = buildInitialProjectMemory(snapshot);
+        const writeTool = createWriteProjectMemoryTool(host.projectRoot);
+        await writeTool.execute("local-init", { content: initialMemory });
+        const surface = host.buildCurrentAgentSurface();
+        host.setAgentSystemPrompt(surface.systemPrompt);
+        host.agentSessionController.updateRuntimeContext({ systemPrompt: surface.systemPrompt, tools: surface.tools });
+        host.emitLocalAssistantMessage(`Initialized project memory at Assets/Pie/AGENTS.md
+
+${initialMemory}`);
+        return true;
+      }
+      return false;
+    };
+  }
+
+  // src/unity-fetch-adapter.ts
+  function headersToRecord(headers) {
+    if (!headers) return {};
+    if (Array.isArray(headers)) {
+      return Object.fromEntries(headers.map(([key, value]) => [key, value]));
+    }
+    if (typeof Headers !== "undefined" && headers instanceof Headers) {
+      const record = {};
+      headers.forEach((value, key) => {
+        record[key] = value;
+      });
+      return record;
+    }
+    return { ...headers };
+  }
+  function createHeaders(record) {
+    return {
+      get(name) {
+        const wanted = name.toLowerCase();
+        for (const [key, value] of Object.entries(record)) {
+          if (key.toLowerCase() === wanted) return value;
+        }
+        return null;
+      },
+      forEach(callback) {
+        for (const [key, value] of Object.entries(record)) callback(value, key);
+      }
+    };
+  }
+  function encodeUtf8(text) {
+    if (typeof TextEncoder !== "undefined") {
+      const bytes2 = new TextEncoder().encode(text);
+      return bytes2.buffer.slice(bytes2.byteOffset, bytes2.byteOffset + bytes2.byteLength);
+    }
+    const bytes = [];
+    for (let i = 0; i < text.length; i++) {
+      let codePoint = text.charCodeAt(i);
+      if (codePoint >= 55296 && codePoint <= 56319 && i + 1 < text.length) {
+        const next = text.charCodeAt(i + 1);
+        if (next >= 56320 && next <= 57343) {
+          codePoint = 65536 + (codePoint - 55296 << 10) + (next - 56320);
+          i++;
+        }
+      }
+      if (codePoint <= 127) {
+        bytes.push(codePoint);
+      } else if (codePoint <= 2047) {
+        bytes.push(192 | codePoint >> 6, 128 | codePoint & 63);
+      } else if (codePoint <= 65535) {
+        bytes.push(224 | codePoint >> 12, 128 | codePoint >> 6 & 63, 128 | codePoint & 63);
+      } else {
+        bytes.push(
+          240 | codePoint >> 18,
+          128 | codePoint >> 12 & 63,
+          128 | codePoint >> 6 & 63,
+          128 | codePoint & 63
+        );
+      }
+    }
+    return new Uint8Array(bytes).buffer;
+  }
+  function createUnityFetchAdapter(client) {
+    return (async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : String(input.url);
+      const body = typeof init?.body === "string" ? init.body : init?.body ? String(init.body) : void 0;
+      const response = await client.request(url, {
+        method: init?.method || "GET",
+        headers: headersToRecord(init?.headers),
+        body,
+        signal: init?.signal ?? void 0
+      });
+      const text = await response.text();
+      return {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        headers: createHeaders(response.headers || {}),
+        url,
+        arrayBuffer: async () => encodeUtf8(text),
+        text: async () => text,
+        json: async () => JSON.parse(text)
+      };
+    });
+  }
+
+  // src/read-file-understanding-adapter.ts
+  var DEFAULT_INLINE_LIMIT_MB = 100;
+  var MAX_EXTRACTED_DOCUMENT_CHARS = 12e4;
+  function fileNameFromPath(path) {
+    const normalized = String(path || "").replace(/\\/g, "/");
+    return normalized.slice(normalized.lastIndexOf("/") + 1) || normalized || "file";
+  }
+  function getCapabilityLimitMb(model, kind2) {
+    const value = model.fileCapabilities?.[kind2];
+    if (value && typeof value === "object" && typeof value.maxFileSizeMb === "number") {
+      return value.maxFileSizeMb;
+    }
+    return DEFAULT_INLINE_LIMIT_MB;
+  }
+  async function prepareInlineFileContent(params) {
+    const fs = getFileSystem();
+    const stat = await fs.stat(params.request.absolutePath);
+    const limitMb = getCapabilityLimitMb(params.model, params.request.kind);
+    const limitBytes = limitMb * 1024 * 1024;
+    if (stat.size > limitBytes) {
+      throw new Error(
+        `Unity ${params.request.kind} understanding supports inline files up to ${limitMb}MB for ${params.model.provider}/${params.model.id}; ${fileNameFromPath(params.request.displayPath)} is ${(stat.size / 1024 / 1024).toFixed(1)}MB.`
+      );
+    }
+    const base64 = await fs.readFile(params.request.absolutePath, "base64");
+    if (params.request.kind === "video") {
+      return {
+        content: [{
+          type: "video",
+          data: base64,
+          mimeType: params.request.mimeType
+        }],
+        details: {
+          inputMode: "inlineDataUrl",
+          inlineFileSizeBytes: stat.size,
+          inlineLimitMb: limitMb
+        }
+      };
+    }
+    if (params.request.kind === "audio") {
+      return {
+        content: [{
+          type: "audio",
+          data: base64,
+          mimeType: params.request.mimeType
+        }],
+        details: {
+          inputMode: "inlineDataUrl",
+          inlineFileSizeBytes: stat.size,
+          inlineLimitMb: limitMb
+        }
+      };
+    }
+    const fileRef = {
+      type: "fileRef",
+      url: `data:${params.request.mimeType};base64,${base64}`,
+      mimeType: params.request.mimeType,
+      modality: "file"
+    };
+    return {
+      content: [fileRef],
+      details: {
+        inputMode: "inlineDataUrl",
+        inlineFileSizeBytes: stat.size,
+        inlineLimitMb: limitMb
+      }
+    };
+  }
+  async function awaitUnityTask(task) {
+    const promiseFactory = globalThis.puer?.$promise ?? (typeof puer !== "undefined" ? puer?.$promise : void 0);
+    if (typeof promiseFactory === "function") {
+      return promiseFactory(task);
+    }
+    if (task && typeof task.then === "function") {
+      return task;
+    }
+    return task;
+  }
+  function authHeaders(model, apiKey) {
+    return {
+      Authorization: `Bearer ${apiKey}`,
+      ...model.headers || {}
+    };
+  }
+  async function uploadDocumentForExtraction(params, fetchImpl) {
+    const upload = CS?.Pie?.PieHttpBridge?.UploadFileMultipartAsync;
+    if (typeof upload !== "function") {
+      throw new Error("Unity document understanding requires PieHttpBridge.UploadFileMultipartAsync. Rebuild/reload the Pie Unity package.");
+    }
+    const baseUrl = params.model.baseUrl?.replace(/\/+$/, "");
+    if (!baseUrl) {
+      throw new Error(`Model ${params.model.provider}/${params.model.id} has no baseUrl for document upload.`);
+    }
+    const uploadJson = await awaitUnityTask(upload(
+      `${baseUrl}/files`,
+      params.request.absolutePath,
+      params.apiKey,
+      "file-extract",
+      params.request.mimeType,
+      fileNameFromPath(params.request.displayPath),
+      JSON.stringify(params.model.headers || {})
+    ));
+    const uploaded = JSON.parse(String(uploadJson || "{}"));
+    const fileId = uploaded.id || uploaded.fileId;
+    if (!fileId) {
+      throw new Error(`Document upload did not return a file id: ${uploadJson}`);
+    }
+    const headers = authHeaders(params.model, params.apiKey);
+    const started = Date.now();
+    while (Date.now() - started < 12e4) {
+      const statusResponse = await fetchImpl(`${baseUrl}/files/${fileId}`, { headers });
+      if (statusResponse.status === 404) {
+        throw new Error(`Uploaded document ${fileId} was not found by provider.`);
+      }
+      if (!statusResponse.ok) {
+        throw new Error(`Document status check failed: HTTP ${statusResponse.status}: ${await statusResponse.text()}`);
+      }
+      const statusJson = await statusResponse.json();
+      const status = String(statusJson.status || uploaded.status || "").toLowerCase();
+      if (!status || status === "ok" || status === "active" || status === "ready") break;
+      if (status === "error" || status === "expired") {
+        throw new Error(`Uploaded document is not ready: ${status}${statusJson.status_details ? ` (${statusJson.status_details})` : ""}`);
+      }
+      if (params.request.signal?.aborted) throw new Error("Operation aborted");
+      await new Promise((resolve2) => setTimeout(resolve2, 1500));
+    }
+    const contentResponse = await fetchImpl(`${baseUrl}/files/${fileId}/content`, { headers });
+    if (!contentResponse.ok) {
+      throw new Error(`Document content extraction failed: HTTP ${contentResponse.status}: ${await contentResponse.text()}`);
+    }
+    const extracted = extractProviderContent(await contentResponse.text());
+    const truncated = extracted.length > MAX_EXTRACTED_DOCUMENT_CHARS;
+    const documentText = truncated ? `${extracted.slice(0, MAX_EXTRACTED_DOCUMENT_CHARS)}
+
+[Document extraction truncated after ${MAX_EXTRACTED_DOCUMENT_CHARS} characters.]` : extracted;
+    return {
+      content: [{
+        type: "text",
+        text: [
+          "Extracted document content:",
+          documentText || "(document extraction returned no text)"
+        ].join("\n")
+      }],
+      details: {
+        inputMode: "fileUploadExtraction",
+        uploadedFileId: fileId
+      }
+    };
+  }
+  function extractProviderContent(raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed.content === "string") return parsed.content;
+      if (typeof parsed.text === "string") return parsed.text;
+    } catch {
+    }
+    return raw;
+  }
+  function createUnityReadFileUnderstanding(options) {
+    return createReadFileUnderstandingHandler({
+      getAgentModel: options.getAgentModel,
+      getSessionId: options.getSessionId,
+      resolveToolModel: options.resolveToolModel,
+      prepareFileContent: (params) => params.request.kind === "document" ? uploadDocumentForExtraction(params, options.fetch) : prepareInlineFileContent(params)
+    });
+  }
+
+  // src/unity-tool-model-runtime.ts
+  function createUnityToolModelRuntime(options) {
+    let runtimeCredential = null;
+    function getRuntimeCredential() {
+      return runtimeCredential;
+    }
+    function getRuntimeApiKeyFor(provider, modelId) {
+      if (!runtimeCredential?.apiKey) return void 0;
+      return runtimeCredential.provider === provider && runtimeCredential.modelId === modelId ? runtimeCredential.apiKey : void 0;
+    }
+    function resolveCandidates(purpose) {
+      return resolveUnityToolModelCandidates(options.bridge, purpose, options.getActiveModel(), {
+        runtimeCredential: getRuntimeCredential()
+      });
+    }
+    return {
+      describeRoutes: () => describeUnityToolModelRoutes(options.bridge, options.getActiveModel(), {
+        runtimeCredential: getRuntimeCredential()
+      }),
+      getRuntimeApiKeyFor,
+      resolveCandidates,
+      resolvePreferred: (purpose) => {
+        const candidates = resolveCandidates(purpose);
+        return candidates.find((candidate) => candidate.model && candidate.apiKey) || candidates[0] || {
+          purpose,
+          requiredCapability: requiredCapabilityForToolPurpose(purpose),
+          routeSource: "unavailable",
+          fallbackReason: `No configured model declares capability for ${purpose}.`
+        };
+      },
+      setRuntimeCredential(provider, modelId, apiKey) {
+        const normalizedApiKey = String(apiKey || "");
+        if (!normalizedApiKey) {
+          if (runtimeCredential?.provider === provider && runtimeCredential.modelId === modelId) {
+            runtimeCredential = null;
+          }
+          return;
+        }
+        runtimeCredential = { provider, modelId, apiKey: normalizedApiKey };
+      }
+    };
+  }
+
+  // src/unity-subagent-tool.ts
+  function createUnitySubagentTool(options) {
+    const capability = createSubagentCapability({
+      get apiKey() {
+        return options.getActiveApiKey();
+      },
+      get model() {
+        return options.getActiveModel();
+      },
+      skills: options.getSkills(),
+      yoloMode: false,
+      getParentTools: () => options.getParentTools().map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters
+      })),
+      createRuntimeTools: () => options.getRuntimeTools().filter((tool) => tool.name !== "spawn_subagents_parallel"),
+      createAgent: ({ systemPrompt, model, tools, apiKey }) => new Agent({
+        initialState: {
+          systemPrompt,
+          model,
+          tools,
+          thinkingLevel: "off"
+        },
+        apiKey
+      }),
+      log: (message) => options.trace.noteRuntimeEvent("subagent_log", { message }),
+      debugLog: (module, message, data) => options.trace.noteRuntimeEvent("subagent_debug", { module, message, data })
+    });
+    return capability.tools[0];
   }
 
   // src/index.ts
-  var bridge = globalThis.pieBridge;
-  if (!bridge) throw new Error("[pie] globalThis.pieBridge not found \u2014 was PieBridge.cs initialized?");
-  bridge.devRpc = {
-    call(method, args = {}) {
-      const raw = bridge.callHost?.("pie.dev_rpc", {
-        method,
-        argsJson: JSON.stringify(args ?? {})
-      });
-      const response = typeof raw === "string" ? JSON.parse(raw || "null") : raw;
-      if (!response?.ok) {
-        throw new Error(String(response?.error || `pie.dev_rpc failed: ${method}`));
-      }
-      return response.resultJson ? JSON.parse(response.resultJson) : null;
-    }
-  };
+  var bridge = getPieBridge();
+  installDevRpcBridge(bridge);
+  installUnityScriptHost(bridge);
+  initializeUnityLogger(bridge);
   var projectRoot = bridge.getProjectRoot();
   var isEditor = bridge.isEditor === true;
   var persistentDataPath = typeof bridge.getPersistentDataPath === "function" ? String(bridge.getPersistentDataPath() || "").replace(/\\/g, "/") : "";
   var httpClient = new UnityHttpClient();
   setHttpClient(httpClient);
-  var PROVIDER_PRESETS = {
-    "kimi-cn": { baseUrl: "https://api.moonshot.cn/v1", api: "openai-completions" },
-    "moonshot": { baseUrl: "https://api.moonshot.cn/v1", api: "openai-completions" },
-    "openai": { baseUrl: "https://api.openai.com/v1", api: "openai-completions" },
-    "anthropic": { baseUrl: "https://api.anthropic.com", api: "anthropic-messages" },
-    "openrouter": { baseUrl: "https://openrouter.ai/api/v1", api: "openai-completions" },
-    "bigmodel": { baseUrl: "https://open.bigmodel.cn/api/paas/v4", api: "openai-completions" },
-    "deepseek": { baseUrl: "https://api.deepseek.com/v1", api: "openai-completions" },
-    "ollama": { baseUrl: "http://localhost:11434/v1", api: "openai-completions" }
-  };
-  var MODEL_PRESETS = {
-    "openai-fast": { provider: "openai", modelId: "gpt-4.1-mini", label: "GPT-4.1 mini" },
-    "openai-strong": { provider: "openai", modelId: "gpt-4.1", label: "GPT-4.1" },
-    "kimi-fast": { provider: "kimi-cn", modelId: "kimi-k2.5", label: "Kimi K2.5" },
-    "claude-fast": { provider: "anthropic", modelId: "claude-3-5-haiku-latest", label: "Claude 3.5 Haiku" },
-    "claude-strong": { provider: "anthropic", modelId: "claude-3-7-sonnet-latest", label: "Claude Sonnet" }
-  };
-  function getBaseConfig(provider) {
-    const preset = PROVIDER_PRESETS[provider.toLowerCase()];
-    if (preset) return preset;
-    for (const [key, val] of Object.entries(PROVIDER_PRESETS)) {
-      if (provider.toLowerCase().startsWith(key)) return val;
-    }
-    return { baseUrl: `https://api.${provider}.com/v1`, api: "openai-completions" };
-  }
-  function buildSystemPrompt(root, editorMode) {
-    const capabilityPromptAdditions = getSharedCapabilityPromptAdditionsForToolNames(
-      createBuiltinTools().map((tool) => tool.name)
-    );
-    const skillsSection = formatSkillsForPrompt2(getAvailableSkills(root));
-    const projectMemory = getProjectMemoryExcerpt(root);
-    const extensionSection = getSystemPromptPatches();
-    const fileToolPromptLines = buildFileToolPromptLines();
-    const memorySection = projectMemory ? `
-
-[Project Memory]
-${projectMemory}
----` : "";
-    const extensionsPromptSection = extensionSection.length > 0 ? `
-
-[Project Extensions]
-${extensionSection.join("\n\n---\n\n")}
----` : "";
-    if (editorMode) {
-      return [
-        "You are Pie, an expert AI coding assistant embedded in Unity Editor.",
-        `The Unity project is located at: ${root}`,
-        `Default filesystem root is Application.persistentDataPath: ${persistentDataPath || "(unavailable)"}`,
-        "You can work with files using these structured tools: read_file, write_file, edit_file, list_directory, search_file_content, search_files.",
-        "When the user explicitly names one of these tools, call that exact tool instead of answering from memory, inference, or prior context.",
-        ...fileToolPromptLines,
-        "You can execute JavaScript in Unity via the eval_js tool and the global CS object.",
-        "Prefer making small, targeted edits. Always read a file before writing it.",
-        "Be concise and helpful.",
-        ...capabilityPromptAdditions,
-        skillsSection,
-        memorySection,
-        extensionsPromptSection
-      ].join("\n");
-    }
-    return [
-      "You are Pie, an AI agent running inside a Unity runtime application.",
-      `Your primary working directory is Application.persistentDataPath: ${persistentDataPath || root}`,
-      "You can work with files using these structured tools: read_file, write_file, edit_file, list_directory, search_file_content, search_files.",
-      "When the user explicitly names one of these tools, call that exact tool instead of answering from memory, inference, or prior context.",
-      ...fileToolPromptLines,
-      "You can execute JavaScript in Unity via the eval_js tool and the global CS object.",
-      "You are intended for runtime automation, NPC behaviors, and voice-to-action control.",
-      "Be concise and helpful.",
-      ...capabilityPromptAdditions,
-      skillsSection,
-      memorySection,
-      extensionsPromptSection
-    ].join("\n");
-  }
-  function buildModel(provider, modelId, baseUrlOverride = "") {
-    const base = getBaseConfig(provider);
-    const effectiveBaseUrl = baseUrlOverride.trim().length > 0 ? baseUrlOverride.trim() : base.baseUrl;
-    return {
-      id: modelId,
-      name: modelId,
-      api: base.api,
-      provider,
-      baseUrl: effectiveBaseUrl,
-      reasoning: false,
-      input: ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 128e3,
-      maxTokens: 8192
-    };
-  }
-  function aliasTool(tool, name, label, description) {
-    return {
-      ...tool,
-      name,
-      label,
-      description: description ?? tool.description
-    };
-  }
-  var _apiKey = "";
-  var _provider = "openai";
-  var _modelId = "gpt-4.1-mini";
-  var _baseUrl = "";
+  var unityFetch = createUnityFetchAdapter(httpClient);
+  var _initialSelection = getDefaultSelection(bridge, getEndpointProfiles(bridge));
+  var _provider = _initialSelection?.provider || "";
+  var _modelId = _initialSelection?.modelId || "";
   var _verboseLogs = false;
   var _currentSession = createSessionRecord({
     provider: _provider,
@@ -17652,110 +24426,122 @@ ${extensionSection.join("\n\n---\n\n")}
     messages: [],
     todoState: []
   });
+  var sessionTrace = new UnitySessionTraceWriter(projectRoot, () => _currentSession?.id);
   var todoTool = createManageTodoListTool();
-  var askUserCapability = createAskUserCapability();
+  var todoLoopState = null;
   var fileToolPathOptions = buildFileToolPathOptions();
-  var activeFileToolRoots = getActiveFileToolRootsConfig();
-  var fileToolRoot = activeFileToolRoots.roots.find((root) => root.name === activeFileToolRoots.defaultRoot)?.path || persistentDataPath || projectRoot;
-  var builtinFileTools = [
-    aliasTool(
-      createReadTool(fileToolRoot, fileToolPathOptions),
-      "read_file",
-      "read_file"
-    ),
-    aliasTool(
-      createWriteTool(fileToolRoot, fileToolPathOptions),
-      "write_file",
-      "write_file"
-    ),
-    aliasTool(
-      createEditTool(fileToolRoot, fileToolPathOptions),
-      "edit_file",
-      "edit_file",
-      "Edit an existing file by replacing exact oldText with newText. Read the file first so oldText matches exactly."
-    ),
-    aliasTool(
-      createLsTool(fileToolRoot, fileToolPathOptions),
-      "list_directory",
-      "list_directory"
-    )
-  ];
-  var unityHostCapabilities = createUnityHostCapabilities(projectRoot, isEditor, {
-    filesystemSearchRoot: fileToolRoot,
-    filesystemPathOptions: fileToolPathOptions
+  function getActiveResolvedModel() {
+    return resolveConfiguredModel(bridge, _provider, _modelId);
+  }
+  function getActiveModel() {
+    return getActiveResolvedModel()?.model || createUnconfiguredModel();
+  }
+  var toolModelRuntime = createUnityToolModelRuntime({ bridge, getActiveModel });
+  function getActiveApiKey() {
+    return getActiveResolvedModel()?.apiKey || toolModelRuntime.getRuntimeApiKeyFor(_provider, _modelId);
+  }
+  var webSearchTool = createSharedWebSearchTool({
+    getModel: () => getActiveModel(),
+    getApiKey: () => getActiveApiKey(),
+    getMode: () => "auto",
+    resolveToolModelCandidates: toolModelRuntime.resolveCandidates,
+    getCurrentDateContext: () => ({
+      currentDate: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+      timeZone: "local"
+    }),
+    fetch: unityFetch
   });
-  var unityFilesystemSearchCapability = unityHostCapabilities.capabilities.find((capability) => capability.id === "filesystem-search-executor");
-  var unitySearchFileContentTool = unityFilesystemSearchCapability?.tools.find((tool) => tool.name === "grep");
-  var unitySearchFilesTool = unityFilesystemSearchCapability?.tools.find((tool) => tool.name === "find");
-  function createBuiltinTools() {
-    const unityNonSearchHostTools = unityHostCapabilities.tools.filter(
-      (tool) => tool.name !== "find" && tool.name !== "grep"
-    );
-    return [
-      ...builtinFileTools,
-      ...unitySearchFileContentTool ? [aliasTool(unitySearchFileContentTool, "search_file_content", "search_file_content")] : [],
-      ...unitySearchFilesTool ? [aliasTool(unitySearchFilesTool, "search_files", "search_files")] : [],
-      ...unityNonSearchHostTools,
-      ...askUserCapability.tools,
-      todoTool.tool,
-      createReadSkillTool(projectRoot)
-    ];
+  var webFetchTool = createSharedWebFetchTool({
+    getModel: () => getActiveModel(),
+    getApiKey: () => getActiveApiKey(),
+    fetch: unityFetch
+  });
+  var understandFile = createUnityReadFileUnderstanding({
+    getAgentModel: () => getActiveModel(),
+    getSessionId: () => _currentSession?.id,
+    fetch: unityFetch,
+    resolveToolModel: toolModelRuntime.resolvePreferred
+  });
+  var subagentTool = createUnitySubagentTool({
+    projectRoot,
+    getActiveModel,
+    getActiveApiKey,
+    getSkills: () => getAvailableSkills(projectRoot),
+    getRuntimeTools: () => getCurrentAgentSurface().tools,
+    getParentTools: () => getCurrentAgentSurface().tools,
+    trace: sessionTrace
+  });
+  function getCurrentAgentSurface() {
+    return createUnityAgentSurface({
+      projectRoot,
+      isEditor,
+      persistentDataPath,
+      fileToolPathOptions,
+      todoTool,
+      webSearchTool,
+      webFetchTool,
+      subagentTool,
+      understandFile
+    });
   }
   function rebuildAgentSurface() {
-    const tools = [
-      ...createBuiltinTools(),
-      ...getExtensionTools()
-    ];
-    agent.setTools(tools);
-    const hooks = buildRegisteredHooks();
-    const setHooks = agent.setHooks;
-    if (typeof setHooks === "function") {
-      setHooks.call(agent, hooks);
-    } else if (hooks) {
-      bridge.log("warn", "[pie/extensions] Agent hooks are not available in this build; registered hooks will be ignored.");
-    }
-    agent.setSystemPrompt(buildSystemPrompt(projectRoot, isEditor));
+    const surface = getCurrentAgentSurface();
+    agent.setTools(surface.tools);
+    agent.setHooks(surface.hooks);
+    agent.setSystemPrompt(surface.systemPrompt);
+    agentSessionController?.updateRuntimeContext({ systemPrompt: surface.systemPrompt, tools: surface.tools });
   }
+  var initialSurface = getCurrentAgentSurface();
+  var initialResolvedModel = resolveConfiguredModel(bridge, _provider, _modelId);
   var agent = new Agent({
     initialState: {
-      systemPrompt: buildSystemPrompt(projectRoot, isEditor),
-      model: buildModel(_provider, _modelId, _baseUrl),
-      tools: createBuiltinTools()
+      systemPrompt: initialSurface.systemPrompt,
+      model: initialResolvedModel?.model || createUnconfiguredModel(),
+      tools: initialSurface.tools
     },
     sessionId: _currentSession.id,
-    getApiKey: () => _apiKey || void 0
+    getApiKey: () => getActiveApiKey()
   });
-  registerInteractionHandler(async (request) => {
-    if (isEditor && bridge.devRpc?.call) {
-      bridge.devRpc.call("interaction.begin", request);
-      while (true) {
-        const state = bridge.devRpc.call("interaction.get_state", { id: request.id });
-        if (state?.completed) {
-          const response2 = state.responseJson ? JSON.parse(state.responseJson) : null;
-          bridge.devRpc.call("interaction.consume_completed", { id: request.id });
-          if (response2?.unavailable) {
-            throw new InteractionUnavailableError(
-              String(response2.message || `Host does not support interaction request: ${request.type}`),
-              request
-            );
-          }
-          return response2;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
+  registerUnityInteractionBinding({ bridge, isEditor });
+  function refreshTodoLoopState() {
+    const executionState = todoTool.getExecutionState();
+    if (!executionState || executionState.mode !== "todo" || executionState.steps.length === 0 || executionState.lifecycle !== "active") {
+      todoLoopState = null;
+      return;
     }
-    const raw = bridge.callHost?.("pie.interaction", request);
-    const response = typeof raw === "string" ? JSON.parse(raw || "null") : raw;
-    if (response?.unavailable) {
-      throw new InteractionUnavailableError(
-        String(response.message || `Host does not support interaction request: ${request.type}`),
-        request
-      );
-    }
-    return response;
+    todoLoopState = executionState.loop ?? createTodoClosureLoop(executionState);
+  }
+  var sessionRuntime = createSessionRuntime({
+    agent,
+    projectRoot,
+    getProvider: () => _provider,
+    getModelId: () => _modelId,
+    getCurrentSession: () => _currentSession,
+    setCurrentSession: (record) => {
+      _currentSession = record;
+    },
+    getTodoState: () => todoTool.getState(),
+    resetAgentForSessionSwitch: () => cancelActivePromptForSessionSwitch(),
+    rebuildAgentSurface,
+    setAgentModel: () => agent.setModel(getActiveModel()),
+    emitSessionSync: () => emitSessionSync()
   });
-  function syncSessionInfo() {
-    agent.sessionId = _currentSession.id;
+  var agentSessionController = createUnityAgentSessionController({
+    agent,
+    projectRoot,
+    getCurrentSession: () => _currentSession,
+    setCurrentSession: (record) => {
+      _currentSession = record;
+    },
+    saveCurrentSession: async () => {
+      await persistCurrentSession();
+    }
+  });
+  function hasConfiguredModelSelection() {
+    return !!resolveConfiguredModel(bridge, _provider, _modelId);
+  }
+  function getModelSelectionWarning() {
+    return "No models are configured. Add one in ~/.pie/models.json and select a configured profile/model before sending messages.";
   }
   function verboseLog(message) {
     if (_verboseLogs) {
@@ -17771,132 +24557,172 @@ ${extensionSection.join("\n\n---\n\n")}
     rebuildAgentSurface();
     return result;
   }
-  async function runUnitySelfCheck() {
-    const lines = [];
-    lines.push("Pie Unity self-check");
-    lines.push(`Project root: ${projectRoot}`);
-    lines.push(`Mode: ${isEditor ? "Editor" : "Runtime"}`);
-    lines.push(`Model: ${_provider}/${_modelId}`);
-    const probeMessages = agent.state.messages.length > 0 ? agent.state.messages.slice() : [
-      {
-        role: "user",
-        content: [{ type: "text", text: "self-check probe" }]
-      }
-    ];
-    const probe = createSessionRecord({
-      sessionId: `probe_${Date.now().toString(36)}`,
-      provider: _provider,
-      modelId: _modelId,
-      messages: probeMessages,
-      todoState: todoTool.getState()
+  async function runUnitySelfCheck2() {
+    return runUnitySelfCheck({
+      agent,
+      bridge,
+      isEditor,
+      modelLabel: hasConfiguredModelSelection() ? `${_provider}/${_modelId}` : "(unconfigured)",
+      projectRoot,
+      getToolRouteSummaries: toolModelRuntime.describeRoutes,
+      reloadProjectExtensions,
+      todoTool
     });
-    const saved = await saveSession(projectRoot, probe);
-    const loaded = await loadSession(projectRoot, saved.id);
-    const sessionOk = !!loaded && loaded.id === saved.id && loaded.provider === saved.provider && loaded.modelId === saved.modelId && (loaded.messages?.length || 0) === saved.messages.length && (loaded.todoState?.length || 0) === saved.todoState.length;
-    lines.push(`Session store: ${sessionOk ? "OK" : "FAIL"}`);
-    const skills = getAvailableSkills(projectRoot);
-    lines.push(`Skills: ${skills.length}`);
-    if (skills.length > 0) {
-      lines.push(`- First skill: ${skills[0].name}`);
-    }
-    const extensionResult = reloadProjectExtensions();
-    const loadedExtensions = getLoadedExtensions();
-    lines.push(`Extensions: ${loadedExtensions.length} loaded`);
-    if (extensionResult.errors.length > 0) {
-      lines.push(`- Extension errors: ${extensionResult.errors.length}`);
-      for (const error of extensionResult.errors.slice(0, 3)) {
-        lines.push(`  ${error}`);
-      }
-    }
-    const activeTools = agent.state.tools.map((tool) => tool.name);
-    const requiredTools = [
-      "ask_user_multi",
-      "manage_todo_list",
-      "read_skill",
-      "read_file",
-      "write_file",
-      "edit_file",
-      "list_directory",
-      "search_file_content",
-      "search_files"
-    ];
-    const missingTools = requiredTools.filter((name) => !activeTools.includes(name));
-    lines.push(`Shared capability wiring: ${missingTools.length === 0 ? "OK" : `MISSING ${missingTools.join(", ")}`}`);
-    const memory = readProjectMemory(projectRoot);
-    lines.push(`Project memory: ${memory ? "present" : "missing"}`);
-    return lines.join("\n");
   }
   async function persistCurrentSession() {
-    const nextRecord = {
-      ..._currentSession,
-      provider: _provider,
-      modelId: _modelId,
-      messages: agent.state.messages.slice(),
-      todoState: todoTool.getState()
-    };
-    if (isSessionEmpty(nextRecord)) {
-      await deleteSession(projectRoot, nextRecord.id);
-      _currentSession = {
-        ...nextRecord,
-        title: "New Session",
-        messageCount: 0
-      };
-      syncSessionInfo();
-      return;
-    }
-    _currentSession = await saveSession(projectRoot, nextRecord);
-    syncSessionInfo();
+    await sessionRuntime.persistCurrentSession();
+  }
+  async function persistCurrentSessionForRecovery() {
+    await sessionRuntime.persistCurrentSessionForRecovery();
+  }
+  async function persistCurrentSessionForRecoveryWithPendingUserMessage(content) {
+    await sessionRuntime.persistCurrentSessionForRecoveryWithPendingUserMessage(content);
   }
   function cancelActivePromptForSessionSwitch() {
     agent.abort();
     agent.resetProcessingState();
   }
+  function isAgentActivelyProcessing() {
+    if (agent.state.isStreaming === true) {
+      return true;
+    }
+    const snapshot = agent.getStatusSnapshot();
+    const phase = String(snapshot?.phase || "").toLowerCase();
+    const turnState = String(snapshot?.turnState || "").toLowerCase();
+    return phase === "responding" || phase === "running_tool" || turnState === "continuing";
+  }
+  function isStalePromptLockError(error) {
+    const message = error instanceof Error ? error.message : String(error || "");
+    return /already processing a prompt/i.test(message) && !isAgentActivelyProcessing();
+  }
+  async function promptAgentWithRecovery(input) {
+    let recoveredStaleLock = false;
+    while (true) {
+      try {
+        await agentSessionController.prompt(input, { source: "unity" });
+        return;
+      } catch (error) {
+        if (!recoveredStaleLock && isStalePromptLockError(error)) {
+          recoveredStaleLock = true;
+          bridge.log("warn", "[pie/index] Clearing stale agent prompt lock after a failed turn.");
+          agentSessionController.abort();
+          agent.resetProcessingState();
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
   function startFreshSession(parentSessionId) {
-    cancelActivePromptForSessionSwitch();
-    _currentSession = createSessionRecord({
-      parentSessionId,
-      provider: _provider,
-      modelId: _modelId,
-      messages: [],
-      todoState: []
-    });
-    agent.reset();
-    agent.setModel(buildModel(_provider, _modelId, _baseUrl));
-    rebuildAgentSurface();
+    sessionRuntime.startFreshSession(parentSessionId);
+    agentSessionController.syncFromActiveSession();
     todoTool.reset();
-    syncSessionInfo();
-    emitSessionSync();
+    todoLoopState = null;
   }
   function restoreSessionRecord(record) {
-    cancelActivePromptForSessionSwitch();
-    _currentSession = record;
-    _provider = record.provider || _provider;
-    _modelId = record.modelId || _modelId;
-    agent.replaceMessages(record.messages || []);
-    agent.setModel(buildModel(_provider, _modelId, _baseUrl));
-    rebuildAgentSurface();
+    _provider = record.provider || "";
+    _modelId = record.modelId || "";
+    const resolved = resolveConfiguredModel(bridge, _provider, _modelId);
+    agent.setModel(resolved?.model || createUnconfiguredModel());
+    sessionRuntime.restoreSessionRecord(record);
+    agentSessionController.syncFromActiveSession();
     todoTool.restore(record.todoState || []);
-    syncSessionInfo();
-    emitSessionSync();
+    refreshTodoLoopState();
+  }
+  function isRecord7(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  function cloneMessage(message) {
+    if (!message || typeof message !== "object") return message;
+    return JSON.parse(JSON.stringify(message));
+  }
+  function trimInterruptedTail(record, lastUserText) {
+    const messages = Array.isArray(record.messages) ? record.messages.map((message) => cloneMessage(message)) : [];
+    const normalizedLastUser = String(lastUserText || "").trim();
+    if (normalizedLastUser.length > 0) {
+      if (messages.length > 0) {
+        const last = messages[messages.length - 1];
+        if (String(last?.role || "") === "assistant") {
+          messages.pop();
+        }
+      }
+      if (messages.length > 0) {
+        const last = messages[messages.length - 1];
+        if (String(last?.role || "") === "user" && collectMessageText(last).trim() === normalizedLastUser) {
+          messages.pop();
+        }
+      }
+    }
+    return {
+      ...record,
+      messageCount: messages.length,
+      messages
+    };
   }
   async function forkFromRecord(record) {
-    const forked = createSessionRecord({
-      parentSessionId: record.id,
-      provider: record.provider || _provider,
-      modelId: record.modelId || _modelId,
-      messages: (record.messages || []).slice(),
-      todoState: (record.todoState || []).slice()
-    });
-    restoreSessionRecord(forked);
-    await persistCurrentSession();
+    await sessionRuntime.forkFromRecord(record);
   }
   function emitLocalAssistantMessage(text) {
     bridge.sendToUnity("message_update", { type: "text_full", text });
     bridge.sendToUnity("turn_end", { role: "assistant", stopReason: "stop" });
     bridge.sendToUnity("agent_end", {});
   }
+  function sleep3(ms) {
+    return new Promise((resolve2) => setTimeout(resolve2, ms));
+  }
+  async function runDebugLocalStream(commandText, promptText) {
+    const visibleUserText = (promptText || "").trim() || commandText;
+    const userMessage = {
+      role: "user",
+      content: [{ type: "text", text: visibleUserText }],
+      timestamp: Date.now()
+    };
+    const baseMessages = agent.state.messages.slice();
+    agent.replaceMessages([...baseMessages, userMessage]);
+    emitSessionSync();
+    await persistCurrentSessionForRecovery();
+    bridge.sendToUnity("state_event", { name: "agent_start", detail: "debug local stream started" });
+    bridge.sendToUnity("state_event", { name: "turn_start", detail: "debug local stream" });
+    bridge.sendToUnity("state_event", { name: "message_start", detail: "debug local stream" });
+    const slowMode = /interrupt|slow|long/i.test(promptText || "");
+    const chunks = slowMode ? Array.from({ length: 40 }, (_, i) => `Line ${i + 1}
+`) : [
+      "One\n",
+      "Two\n",
+      "Three\n",
+      "Four\n",
+      "Five\n",
+      "Six\n",
+      "Seven\n",
+      "Eight\n",
+      "Nine\n",
+      "Ten"
+    ];
+    const chunkDelayMs = slowMode ? 400 : 250;
+    for (const chunk of chunks) {
+      bridge.sendToUnity("message_update", { type: "text_delta", delta: chunk });
+      await sleep3(chunkDelayMs);
+    }
+    const assistantText2 = chunks.join("");
+    const assistantMessage = {
+      role: "assistant",
+      content: [{ type: "text", text: assistantText2 }],
+      api: agent.state.model.api,
+      provider: agent.state.model.provider,
+      model: agent.state.model.id,
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "stop",
+      timestamp: Date.now()
+    };
+    agent.replaceMessages([...baseMessages, userMessage, assistantMessage]);
+    await persistCurrentSession();
+    emitSessionSync();
+    bridge.sendToUnity("state_event", { name: "message_end", detail: "debug local stream complete" });
+    bridge.sendToUnity("turn_end", { role: "assistant", stopReason: "stop" });
+    bridge.sendToUnity("agent_end", {});
+  }
   function hasRealUsage(usage) {
-    if (!usage || typeof usage !== "object") return false;
+    if (!isRecord7(usage)) return false;
     return Number(usage.input || 0) > 0 || Number(usage.output || 0) > 0 || Number(usage.cacheRead || 0) > 0 || Number(usage.cacheWrite || 0) > 0 || Number(usage.totalTokens || 0) > 0;
   }
   function estimateTokensFromText(text) {
@@ -17906,11 +24732,12 @@ ${extensionSection.join("\n\n---\n\n")}
   }
   function collectMessageText(message) {
     if (!message) return "";
+    if (!isRecord7(message)) return "";
     const content = message.content;
     if (typeof content === "string") return content;
     if (!Array.isArray(content)) return "";
     return content.map((block) => {
-      if (!block || typeof block !== "object") return "";
+      if (!isRecord7(block)) return "";
       if (block.type === "text") return typeof block.text === "string" ? block.text : "";
       if (block.type === "thinking") return typeof block.thinking === "string" ? block.thinking : "";
       if (block.type === "toolCall") {
@@ -17922,17 +24749,19 @@ ${extensionSection.join("\n\n---\n\n")}
     }).join("");
   }
   function buildUsagePayload(messages, message, fallbackIndex) {
-    if (hasRealUsage(message?.usage)) {
+    const messageRecord = isRecord7(message) ? message : {};
+    const usage = messageRecord.usage;
+    if (hasRealUsage(usage) && isRecord7(usage)) {
       return {
-        input: Number(message.usage.input || 0),
-        output: Number(message.usage.output || 0),
-        cacheRead: Number(message.usage.cacheRead || 0),
-        cacheWrite: Number(message.usage.cacheWrite || 0),
-        totalTokens: Number(message.usage.totalTokens || 0),
+        input: Number(usage.input || 0),
+        output: Number(usage.output || 0),
+        cacheRead: Number(usage.cacheRead || 0),
+        cacheWrite: Number(usage.cacheWrite || 0),
+        totalTokens: Number(usage.totalTokens || 0),
         estimated: false
       };
     }
-    if ((message?.role || "") !== "assistant") {
+    if ((messageRecord.role || "") !== "assistant") {
       return null;
     }
     const resolvedIndex = typeof fallbackIndex === "number" ? fallbackIndex : Math.max(0, messages.lastIndexOf(message));
@@ -17955,24 +24784,28 @@ ${extensionSection.join("\n\n---\n\n")}
       estimated: true
     };
   }
-  function emitSessionSync() {
-    const stateMessages = agent.state.messages || [];
-    const messages = stateMessages.map((message, index) => ({
-      role: String(message?.role || "assistant"),
-      content: Array.isArray(message?.content) ? message.content.filter((block) => block && typeof block === "object").map((block) => ({
-        type: String(block?.type || "text"),
-        text: typeof block?.text === "string" ? block.text : ""
-      })) : [],
-      errorMessage: typeof message?.errorMessage === "string" ? message.errorMessage : "",
-      stopReason: typeof message?.stopReason === "string" ? message.stopReason : "",
-      usage: buildUsagePayload(stateMessages, message, index)
-    }));
+  function emitSessionSync(record) {
+    const sourceRecord = record || _currentSession;
+    const stateMessages = Array.isArray(sourceRecord?.messages) ? sourceRecord.messages : agent.state.messages || [];
+    const messages = stateMessages.map((message, index) => {
+      const messageRecord = isRecord7(message) ? message : {};
+      return {
+        role: String(messageRecord.role || "assistant"),
+        content: Array.isArray(messageRecord.content) ? messageRecord.content.filter((block) => isRecord7(block)).map((block) => ({
+          type: String(block.type || "text"),
+          text: typeof block.text === "string" ? block.text : ""
+        })) : [],
+        errorMessage: typeof messageRecord.errorMessage === "string" ? messageRecord.errorMessage : "",
+        stopReason: typeof messageRecord.stopReason === "string" ? messageRecord.stopReason : "",
+        usage: buildUsagePayload(stateMessages, message, index)
+      };
+    });
     bridge.sendToUnity("session_sync", {
-      id: _currentSession.id,
-      title: _currentSession.title,
+      id: sourceRecord.id,
+      title: sourceRecord.title,
       messageCount: messages.length,
       messages,
-      todoState: todoTool.getState()
+      todoState: Array.isArray(sourceRecord.todoState) ? sourceRecord.todoState : todoTool.getState()
     });
   }
   function emitSkillsList() {
@@ -17986,471 +24819,150 @@ ${extensionSection.join("\n\n---\n\n")}
   }
   function persistCurrentSessionSafely() {
     persistCurrentSession().catch((err) => {
-      bridge.log("error", `[pie/index] Failed to persist session: ${err?.message || err}`);
+      bridge.log("error", `[pie/index] Failed to persist session: ${err instanceof Error ? err.message : String(err)}`);
     });
   }
   async function applyModelSelection(provider, modelId) {
+    const resolved = resolveConfiguredModel(bridge, provider, modelId);
     _provider = provider;
     _modelId = modelId;
-    agent.setModel(buildModel(_provider, _modelId, _baseUrl));
+    agent.setModel(resolved?.model || createUnconfiguredModel());
     rebuildAgentSurface();
     await persistCurrentSession();
+  }
+  function applyModelSelectionSync(provider, modelId) {
+    const resolved = resolveConfiguredModel(bridge, provider, modelId);
+    _provider = provider;
+    _modelId = modelId;
+    agent.setModel(resolved?.model || createUnconfiguredModel());
+    rebuildAgentSurface();
   }
   function extractToolText(result) {
     if (!result) return "";
     if (typeof result === "string") return result;
-    if (Array.isArray(result.content)) {
-      return result.content.filter((item) => item?.type === "text").map((item) => String(item.text ?? "")).join("\n").trim();
+    if (isRecord7(result) && Array.isArray(result.content)) {
+      return result.content.filter((item) => isRecord7(item) && item.type === "text").map((item) => String(item.text ?? "")).join("\n").trim();
     }
     return "";
   }
   function extractEffectiveArgs(toolName, args, details) {
-    if (toolName === "search_files") {
+    const argRecord = isRecord7(args) ? args : {};
+    const detailRecord = isRecord7(details) ? details : {};
+    if (toolName === "find_files") {
       return {
-        rawPattern: details?.rawPattern ?? args?.pattern ?? args?.query ?? args?.name ?? args?.file_name ?? "",
-        pattern: details?.effectivePattern ?? args?.pattern ?? args?.query ?? args?.name ?? args?.file_name ?? "",
-        path: details?.searchPath ?? args?.path ?? ".",
-        limit: args?.limit
+        rawPattern: detailRecord.rawPattern ?? argRecord.pattern ?? argRecord.query ?? argRecord.name ?? argRecord.file_name ?? "",
+        pattern: detailRecord.effectivePattern ?? argRecord.pattern ?? argRecord.query ?? argRecord.name ?? argRecord.file_name ?? "",
+        path: detailRecord.searchPath ?? argRecord.path ?? ".",
+        limit: argRecord.limit
       };
     }
-    if (toolName === "search_file_content") {
+    if (toolName === "grep_text") {
       return {
-        pattern: details?.effectivePattern ?? args?.pattern ?? "",
-        glob: details?.glob ?? args?.glob ?? "",
-        path: details?.searchPath ?? args?.path ?? ".",
-        literal: details?.literal ?? args?.literal,
-        ignoreCase: details?.ignoreCase ?? args?.ignoreCase,
-        limit: args?.limit
+        pattern: detailRecord.effectivePattern ?? argRecord.pattern ?? "",
+        glob: detailRecord.glob ?? argRecord.glob ?? "",
+        path: detailRecord.searchPath ?? argRecord.path ?? ".",
+        literal: detailRecord.literal ?? argRecord.literal,
+        ignoreCase: detailRecord.ignoreCase ?? argRecord.ignoreCase,
+        limit: argRecord.limit
       };
     }
-    return args ?? {};
+    return argRecord;
   }
-  function tryExplainExternalSessionId(sessionId) {
-    const trimmed = String(sessionId || "").trim();
-    if (!trimmed) return null;
-    const registryPath = CS.System.IO.Path.Combine(
-      CS.System.Environment.GetFolderPath(CS.System.Environment.SpecialFolder.UserProfile),
-      ".unity_skills",
-      "registry.json"
-    );
-    if (!CS.System.IO.File.Exists(registryPath)) {
-      return null;
-    }
-    try {
-      const registry2 = JSON.parse(String(CS.System.IO.File.ReadAllText(registryPath) || "{}"));
-      const entries = Object.values(registry2 || {});
-      const matched = entries.find((entry) => String(entry?.id || "") === trimmed);
-      if (!matched) {
-        return null;
-      }
-      const sessionsDir = bridge.getSessionsDirectory?.();
-      const availableSessions = [];
-      if (typeof sessionsDir === "string" && sessionsDir.length > 0 && CS.System.IO.Directory.Exists(sessionsDir)) {
-        const files = CS.System.IO.Directory.GetFiles(sessionsDir, "*.json");
-        for (let index = 0; index < Math.min(files.Length, 8); index += 1) {
-          try {
-            const parsed = JSON.parse(String(CS.System.IO.File.ReadAllText(files[index]) || "{}"));
-            const metadata = parsed?.metadata || parsed;
-            const id = String(metadata?.id || "").trim();
-            if (!id) continue;
-            const title = String(metadata?.name || metadata?.title || "Untitled Session");
-            const updatedAtRaw = metadata?.updatedAt ?? "";
-            const updatedAt = typeof updatedAtRaw === "number" ? new Date(updatedAtRaw).toISOString() : String(updatedAtRaw || "");
-            availableSessions.push(`- ${id} | ${title} | ${updatedAt}`);
-          } catch {
-          }
-        }
-      }
-      const availableText = availableSessions.length > 0 ? `
-
-Available Pie sessions:
-${availableSessions.join("\n")}` : "\n\nNo Pie chat sessions have been saved yet.";
-      return [
-        `\`${trimmed}\` is a UnitySkills instance ID for project \`${matched.name || matched.path || "unknown"}\`, not a pie-unity chat session ID.`,
-        "pie-unity chat sessions use IDs like `sess_xxx` and are stored separately under Application.persistentDataPath/Pie/sessions.",
-        "Use `/resume` with one of the Pie session IDs shown in the Sessions panel or returned by `/resume` with no arguments.",
-        availableText
-      ].join("\n");
-    } catch {
-      return null;
-    }
-  }
-  async function handleLocalCommand(content) {
-    const trimmed = content.trim();
-    if (!trimmed.startsWith("/")) return false;
-    const [command, ...rest] = trimmed.split(/\s+/);
-    if (command === "/new") {
-      await persistCurrentSession();
-      startFreshSession();
-      emitLocalAssistantMessage(`Started new session: ${_currentSession.id}`);
-      return true;
-    }
-    if (command === "/resume") {
-      const sessionId = rest[0];
-      if (!sessionId) {
-        const sessions = await listSessions(projectRoot);
-        const text = sessions.length === 0 ? "No saved sessions." : sessions.map((session) => `${session.id} | ${session.title} | ${session.modelId} | ${session.updatedAt}`).join("\n");
-        emitLocalAssistantMessage(text);
-        return true;
-      }
-      const loaded = await loadSession(projectRoot, sessionId);
-      if (!loaded) {
-        const explanation = tryExplainExternalSessionId(sessionId);
-        emitLocalAssistantMessage(explanation || `Session not found: ${sessionId}`);
-        return true;
-      }
-      restoreSessionRecord(loaded);
-      emitLocalAssistantMessage(`Resumed session ${loaded.id}
-Title: ${loaded.title}
-Messages: ${loaded.messageCount}`);
-      return true;
-    }
-    if (command === "/tree") {
-      emitLocalAssistantMessage(await formatSessionTree(projectRoot));
-      return true;
-    }
-    if (command === "/session-check") {
-      const probeMessages = agent.state.messages.length > 0 ? agent.state.messages.slice() : [
-        {
-          role: "user",
-          content: [{ type: "text", text: "session-check probe" }]
-        }
-      ];
-      const probe = createSessionRecord({
-        sessionId: `probe_${Date.now().toString(36)}`,
-        provider: _provider,
-        modelId: _modelId,
-        messages: probeMessages,
-        todoState: todoTool.getState()
-      });
-      const saved = await saveSession(projectRoot, probe);
-      const loaded = await loadSession(projectRoot, saved.id);
-      const ok = !!loaded && loaded.id === saved.id && loaded.provider === saved.provider && loaded.modelId === saved.modelId && (loaded.messages?.length || 0) === saved.messages.length && (loaded.todoState?.length || 0) === saved.todoState.length;
-      emitLocalAssistantMessage(
-        ok ? `Session self-check passed.
-Session: ${saved.id}
-Messages: ${saved.messages.length}
-Todos: ${saved.todoState.length}` : `Session self-check failed.
-Saved: ${saved.id}
-Loaded: ${loaded ? loaded.id : "(missing)"}`
-      );
-      return true;
-    }
-    if (command === "/self-check") {
-      emitLocalAssistantMessage(await runUnitySelfCheck());
-      return true;
-    }
-    if (command === "/fork") {
-      const sessionId = rest[0];
-      if (sessionId) {
-        const source2 = await loadSession(projectRoot, sessionId);
-        if (!source2) {
-          const explanation = tryExplainExternalSessionId(sessionId);
-          emitLocalAssistantMessage(explanation || `Session not found: ${sessionId}`);
-          return true;
-        }
-        await forkFromRecord(source2);
-        emitLocalAssistantMessage(`Forked new session ${_currentSession.id} from ${source2.id}`);
-        return true;
-      }
-      await persistCurrentSession();
-      const source = await loadSession(projectRoot, _currentSession.id) || _currentSession;
-      await forkFromRecord(source);
-      emitLocalAssistantMessage(`Forked new session ${_currentSession.id} from ${source.id}`);
-      return true;
-    }
-    if (command === "/memory") {
-      const memory = readProjectMemory(projectRoot);
-      emitLocalAssistantMessage(
-        memory ? `Project memory loaded from Assets/Pie/AGENTS.md
-
-${memory}` : "No project memory found. Use /init to create an initial AGENTS.md."
-      );
-      return true;
-    }
-    if (command === "/model") {
-      if (rest.length === 0) {
-        const presets = Object.entries(MODEL_PRESETS).map(([key, value]) => `${key} => ${value.provider}/${value.modelId} (${value.label})`).join("\n");
-        emitLocalAssistantMessage(`Current model: ${_provider}/${_modelId}
-
-Presets:
-${presets}`);
-        return true;
-      }
-      if (rest.length === 1) {
-        const preset = MODEL_PRESETS[rest[0]];
-        if (!preset) {
-          emitLocalAssistantMessage(`Unknown model preset: ${rest[0]}`);
-          return true;
-        }
-        await applyModelSelection(preset.provider, preset.modelId);
-        emitLocalAssistantMessage(`Switched model to ${preset.provider}/${preset.modelId}`);
-        return true;
-      }
-      const provider = rest[0];
-      const modelId = rest.slice(1).join(" ");
-      await applyModelSelection(provider, modelId);
-      emitLocalAssistantMessage(`Switched model to ${provider}/${modelId}`);
-      return true;
-    }
-    if (command === "/skills") {
-      const subcommand = rest[0] || "list";
-      if (subcommand === "reload") {
-        rebuildAgentSurface();
-        const skills2 = getAvailableSkills(projectRoot);
-        emitSkillsList();
-        emitLocalAssistantMessage(`Reloaded ${skills2.length} skill(s).`);
-        return true;
-      }
-      const skills = getAvailableSkills(projectRoot);
-      emitSkillsList();
-      if (skills.length === 0) {
-        emitLocalAssistantMessage("No skills available.");
-        return true;
-      }
-      emitLocalAssistantMessage(
-        skills.map((skill) => `${skill.name} [${skill.source}] - ${skill.description}`).join("\n")
-      );
-      return true;
-    }
-    if (command === "/extensions") {
-      const subcommand = rest[0] || "list";
-      if (subcommand === "reload") {
-        const result = reloadProjectExtensions();
-        const loaded2 = getLoadedExtensions();
-        const loadedText = loaded2.length > 0 ? loaded2.join("\n") : "(none)";
-        const errorText = result.errors.length > 0 ? `
-
-Errors:
-${result.errors.join("\n")}` : "";
-        emitLocalAssistantMessage(`Reloaded ${loaded2.length} extension(s).
-
-${loadedText}${errorText}`);
-        return true;
-      }
-      const loaded = getLoadedExtensions();
-      emitLocalAssistantMessage(
-        loaded.length > 0 ? `Loaded extensions:
-${loaded.join("\n")}` : "No project extensions loaded. Add .js files under Assets/Pie/Extensions or configure additional search paths in Pie Settings."
-      );
-      return true;
-    }
-    if (command === "/init") {
-      const snapshot = getUnityContextSnapshot(projectRoot, isEditor);
-      const initialMemory = buildInitialProjectMemory(snapshot);
-      const writeTool = createWriteProjectMemoryTool(projectRoot);
-      writeTool.execute("local-init", { content: initialMemory });
-      agent.setSystemPrompt(buildSystemPrompt(projectRoot, isEditor));
-      emitLocalAssistantMessage(`Initialized project memory at Assets/Pie/AGENTS.md
-
-${initialMemory}`);
-      return true;
-    }
-    return false;
-  }
+  var handleLocalCommand = createUnityLocalCommandHandler({
+    agent,
+    agentSessionController,
+    bridge,
+    isEditor,
+    projectRoot,
+    todoTool,
+    applyModelSelection,
+    buildCurrentAgentSurface: getCurrentAgentSurface,
+    emitLocalAssistantMessage,
+    emitSkillsList,
+    forkFromRecord,
+    getCurrentSession: () => _currentSession,
+    getModelId: () => _modelId,
+    getModelSelectionWarning,
+    getProvider: () => _provider,
+    hasConfiguredModelSelection,
+    rebuildAgentSurface,
+    reloadProjectExtensions,
+    restoreSessionRecord,
+    runDebugLocalStream,
+    runUnitySelfCheck: runUnitySelfCheck2,
+    setAgentSystemPrompt: (systemPrompt) => agent.setSystemPrompt(systemPrompt),
+    startFreshSession,
+    persistCurrentSession,
+    persistCurrentSessionForRecovery
+  });
   reloadProjectExtensions();
   emitSessionSync();
-  agent.subscribe((event) => {
-    try {
-      switch (event.type) {
-        case "agent_start":
-          bridge.sendToUnity("state_event", { name: "agent_start", detail: "agent loop started" });
-          break;
-        case "turn_start":
-          bridge.sendToUnity("state_event", { name: "turn_start", detail: "turn started" });
-          break;
-        case "message_start":
-          bridge.sendToUnity("state_event", { name: "message_start", detail: `role=${event.message?.role ?? "assistant"}` });
-          break;
-        case "message_update": {
-          const msg = event.message;
-          const text = Array.isArray(msg.content) ? msg.content.filter((c) => c?.type === "text").map((c) => c.text).join("") : "";
-          if (event.assistantMessageEvent?.type === "thinking_start") {
-            bridge.sendToUnity("thinking_event", { type: "start" });
-          } else if (event.assistantMessageEvent?.type === "thinking_delta") {
-            bridge.sendToUnity("thinking_event", {
-              type: "delta",
-              delta: event.assistantMessageEvent.delta ?? ""
-            });
-          } else if (event.assistantMessageEvent?.type === "thinking_end") {
-            bridge.sendToUnity("thinking_event", {
-              type: "end",
-              text: event.assistantMessageEvent.content ?? ""
-            });
-          }
-          bridge.sendToUnity("state_event", {
-            name: "message_update",
-            detail: `type=${event.assistantMessageEvent?.type ?? "text"} chars=${text.length}`
-          });
-          if (text) {
-            bridge.sendToUnity(
-              "message_update",
-              { type: "text_full", text }
-            );
-          }
-          break;
-        }
-        case "message_end":
-          if (event.message?.role === "assistant") {
-            const usage = buildUsagePayload(agent.state.messages || [], event.message);
-            bridge.sendToUnity("message_metrics", {
-              role: "assistant",
-              usage
-            });
-          }
-          bridge.sendToUnity("state_event", { name: "message_end", detail: `role=${event.message?.role ?? "assistant"}` });
-          break;
-        case "tool_execution_start":
-          verboseLog(`[tool_start payload] ${JSON.stringify({
-            name: event.toolName,
-            callId: event.toolCallId,
-            argsJson: JSON.stringify(event.args ?? {}).substring(0, 4e3)
-          })}`);
-          bridge.sendToUnity(
-            "tool_start",
-            {
-              name: event.toolName,
-              callId: event.toolCallId,
-              argsJson: JSON.stringify(event.args ?? {}).substring(0, 4e3)
-            }
-          );
-          break;
-        case "tool_execution_end":
-          {
-            const effectiveArgs = extractEffectiveArgs(event.toolName, event.args, event.result?.details);
-            const resultText = extractToolText(event.result).substring(0, 4e3);
-            const resultJson = JSON.stringify(event.result ?? "").substring(0, 4e3);
-            const detailsJson = event.result?.details !== void 0 ? JSON.stringify(event.result.details).substring(0, 4e3) : "";
-            verboseLog(`[tool_end payload] ${JSON.stringify({
-              name: event.toolName,
-              callId: event.toolCallId,
-              argsJson: JSON.stringify(event.args ?? {}).substring(0, 4e3),
-              effectiveArgsJson: JSON.stringify(effectiveArgs ?? {}).substring(0, 4e3),
-              isError: !!event.isError
-            })}`);
-            bridge.sendToUnity("tool_end", {
-              name: event.toolName,
-              callId: event.toolCallId,
-              argsJson: JSON.stringify(event.args ?? {}).substring(0, 4e3),
-              effectiveArgsJson: JSON.stringify(effectiveArgs ?? {}).substring(0, 4e3),
-              isError: !!event.isError,
-              resultText,
-              resultJson,
-              detailsJson,
-              error: event.error ? String(event.error?.message ?? event.error).substring(0, 4e3) : event.isError ? resultText || "Tool returned an error result." : void 0
-            });
-          }
-          break;
-        case "agent_end":
-          bridge.sendToUnity("state_event", { name: "agent_end", detail: "agent loop finished" });
-          bridge.sendToUnity("agent_end", {});
-          break;
-      }
-    } catch (err) {
-      bridge.log("error", `[pie/index] Event forwarding error: ${err?.message || err}`);
+  bindUnityAgentEventForwarding({
+    agent,
+    bridge,
+    sessionTrace,
+    todoTool,
+    getTodoLoopState: () => todoLoopState,
+    setTodoLoopState: (loop) => {
+      todoLoopState = loop;
+    },
+    buildUsagePayload,
+    collectMessageText,
+    extractEffectiveArgs,
+    extractToolText,
+    emitSessionSync,
+    persistCurrentSessionSafely,
+    refreshTodoLoopState,
+    verboseLog
+  });
+  installUnityPublicApi({
+    agent,
+    agentSessionController,
+    bridge,
+    sessionTrace,
+    todoTool,
+    applyModelSelectionSync,
+    emitSessionSync,
+    emitSkillsList,
+    getModelStatus: () => {
+      const resolved = resolveConfiguredModel(bridge, _provider, _modelId);
+      return {
+        provider: _provider,
+        modelId: _modelId,
+        baseUrl: resolved?.model.baseUrl || "",
+        configured: !!resolved,
+        verboseLogs: _verboseLogs
+      };
+    },
+    getModelSelectionWarning,
+    handleLocalCommand,
+    hasConfiguredModelSelection,
+    loadSession,
+    persistCurrentSession,
+    persistCurrentSessionForRecovery,
+    persistCurrentSessionForRecoveryWithPendingUserMessage,
+    persistCurrentSessionSafely,
+    projectRoot,
+    promptAgentWithRecovery,
+    rebuildAgentSurface,
+    restoreSessionRecord,
+    startFreshSession,
+    trimInterruptedTail,
+    getTodoLoopState: () => todoLoopState,
+    setTodoLoopState: (loop) => {
+      todoLoopState = loop;
+    },
+    setVerboseLogs: (value) => {
+      _verboseLogs = value;
+      globalThis.__pieVerboseLogs = _verboseLogs;
+    },
+    setModelSelection: (provider, modelId, apiKey) => {
+      const nextProvider = provider !== void 0 ? String(provider || "") : _provider;
+      const nextModelId = modelId !== void 0 ? String(modelId || "") : _modelId;
+      if (apiKey !== void 0) toolModelRuntime.setRuntimeCredential(nextProvider, nextModelId, String(apiKey || ""));
+      _provider = nextProvider;
+      _modelId = nextModelId;
     }
   });
-  agent.subscribeSemantic((event) => {
-    try {
-      switch (event.type) {
-        case "status_snapshot_changed":
-          bridge.sendToUnity("status_snapshot", event.snapshot);
-          break;
-        case "turn_continues":
-          persistCurrentSessionSafely();
-          bridge.sendToUnity("state_event", {
-            name: "turn_continues",
-            detail: `stopReason=${event.message?.stopReason ?? "toolUse"}`
-          });
-          break;
-        case "turn_completed":
-          persistCurrentSessionSafely();
-          bridge.sendToUnity("turn_end", {
-            role: event.message.role,
-            stopReason: event.message?.stopReason ?? "stop"
-          });
-          bridge.sendToUnity("state_event", {
-            name: "turn_completed",
-            detail: `stopReason=${event.message?.stopReason ?? "stop"}`
-          });
-          break;
-        case "turn_failed": {
-          const stopReason = event.message?.stopReason ?? "error";
-          const errMsg = event.message?.errorMessage ?? "Request failed";
-          persistCurrentSessionSafely();
-          bridge.sendToUnity("turn_end", {
-            role: event.message.role,
-            stopReason
-          });
-          bridge.sendToUnity("state_event", {
-            name: "turn_failed",
-            detail: `stopReason=${stopReason}`
-          });
-          bridge.sendToUnity("error", { message: errMsg });
-          break;
-        }
-      }
-    } catch (err) {
-      bridge.log("error", `[pie/index] Semantic event forwarding error: ${err?.message || err}`);
-    }
-  });
-  globalThis.pie = {
-    /**
-     * Entry point called by PieBridge.cs via jsEnv.Eval("pie.handleCSharpMessage(action, data)").
-     * data is a plain JS object (already parsed from JSON by JsEnv eval).
-     */
-    handleCSharpMessage: async function(action, data) {
-      try {
-        switch (action) {
-          case "send_message": {
-            const content = data && typeof data.content === "string" ? data.content : String(data);
-            if (await handleLocalCommand(content)) {
-              break;
-            }
-            agent.prompt(content).catch((err) => {
-              const msg = err?.message || String(err);
-              bridge.log("error", `[pie/index] agent.prompt rejected: ${msg}`);
-              bridge.sendToUnity("error", { message: msg });
-            });
-            break;
-          }
-          case "set_config": {
-            if (data?.apiKey !== void 0) _apiKey = data.apiKey;
-            if (data?.provider !== void 0) _provider = data.provider;
-            if (data?.model !== void 0) _modelId = data.model;
-            if (data?.baseUrl !== void 0) _baseUrl = data.baseUrl;
-            if (data?.verboseLogs !== void 0) _verboseLogs = data.verboseLogs === true;
-            globalThis.__pieVerboseLogs = _verboseLogs;
-            await applyModelSelection(_provider, _modelId);
-            break;
-          }
-          case "new_session": {
-            await persistCurrentSession();
-            startFreshSession();
-            break;
-          }
-          case "list_skills": {
-            emitSkillsList();
-            break;
-          }
-          case "reload_skills": {
-            rebuildAgentSurface();
-            emitSkillsList();
-            break;
-          }
-          case "abort": {
-            agent.abort();
-            break;
-          }
-          default:
-            bridge.log("warn", `[pie/index] Unknown action: ${action}`);
-        }
-      } catch (err) {
-        const msg = err?.message || String(err);
-        bridge.log("error", `[pie/index] Error in ${action}: ${msg}`);
-        bridge.sendToUnity("error", { message: msg });
-      }
-    }
-  };
 })();
 //# sourceMappingURL=core.js.map

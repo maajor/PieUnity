@@ -88,6 +88,11 @@ namespace Pie
             return Task.Run(() => File.ReadAllText(path));
         }
 
+        public static Task<string> ReadAllBytesBase64Async(string path)
+        {
+            return Task.Run(() => Convert.ToBase64String(File.ReadAllBytes(path)));
+        }
+
         public static Task WriteAllTextAsync(string path, string content)
         {
             return Task.Run(() =>
@@ -183,7 +188,7 @@ namespace Pie
             var state = new RequestState(id);
             _requests[id] = state;
 
-            PieDiagnostics.Verbose($"[PieFileBridge] find start path={rootPath} pattern={pattern} limit={limit}");
+            PieDiagnostics.Verbose($"[PieFileBridge] find_files start path={rootPath} pattern={pattern} limit={limit}");
             Task.Run(() => RunFind(state, rootPath, pattern, limit));
             return id;
         }
@@ -194,7 +199,7 @@ namespace Pie
             var state = new RequestState(id);
             _requests[id] = state;
 
-            PieDiagnostics.Verbose($"[PieFileBridge] grep start path={searchPath} pattern={pattern} glob={globPattern} limit={limit}");
+            PieDiagnostics.Verbose($"[PieFileBridge] grep_text start path={searchPath} pattern={pattern} glob={globPattern} limit={limit}");
             Task.Run(() => RunGrep(state, searchPath, pattern, globPattern, ignoreCase, literal, contextLines, limit));
             return id;
         }
@@ -270,17 +275,17 @@ namespace Pie
             {
                 var payload = ExecuteFind(rootPath, pattern, limit, state.Cts.Token);
                 state.ResultJson = JsonUtility.ToJson(payload);
-                PieDiagnostics.Verbose($"[PieFileBridge] find done pattern={pattern} matches={payload.Results.Length} dirs={payload.ScannedDirectories} files={payload.ScannedFiles}");
+                PieDiagnostics.Verbose($"[PieFileBridge] find_files done pattern={pattern} matches={payload.Results.Length} dirs={payload.ScannedDirectories} files={payload.ScannedFiles}");
             }
             catch (OperationCanceledException)
             {
                 state.Error = "Operation aborted";
-                PieDiagnostics.Warning("[PieFileBridge] find cancelled");
+                PieDiagnostics.Warning("[PieFileBridge] find_files cancelled");
             }
             catch (Exception ex)
             {
                 state.Error = ex.Message;
-                PieDiagnostics.Error($"[PieFileBridge] find error: {ex.Message}");
+                PieDiagnostics.Error($"[PieFileBridge] find_files error: {ex.Message}");
             }
             finally
             {
@@ -294,17 +299,17 @@ namespace Pie
             {
                 var payload = ExecuteGrep(searchPath, pattern, globPattern, ignoreCase, literal, contextLines, limit, state.Cts.Token);
                 state.ResultJson = JsonUtility.ToJson(payload);
-                PieDiagnostics.Verbose($"[PieFileBridge] grep done pattern={pattern} matches={payload.MatchCount} files={payload.FilesScanned}");
+                PieDiagnostics.Verbose($"[PieFileBridge] grep_text done pattern={pattern} matches={payload.MatchCount} files={payload.FilesScanned}");
             }
             catch (OperationCanceledException)
             {
                 state.Error = "Operation aborted";
-                PieDiagnostics.Warning("[PieFileBridge] grep cancelled");
+                PieDiagnostics.Warning("[PieFileBridge] grep_text cancelled");
             }
             catch (Exception ex)
             {
                 state.Error = ex.Message;
-                PieDiagnostics.Error($"[PieFileBridge] grep error: {ex.Message}");
+                PieDiagnostics.Error($"[PieFileBridge] grep_text error: {ex.Message}");
             }
             finally
             {

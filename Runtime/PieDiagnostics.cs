@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 
 namespace Pie
@@ -19,6 +20,7 @@ namespace Pie
     {
         public static PieLogLevel CurrentLevel = PieLogLevel.Info;
         public static readonly List<string> LogHistory = new List<string>();
+        private static string _logFilePath;
 
         public static void Log(string message, PieLogLevel level = PieLogLevel.Info)
         {
@@ -28,6 +30,7 @@ namespace Pie
             var fullMsg = $"[Pie {timestamp}] {message}";
 
             LogHistory.Add(fullMsg);
+            AppendToFile(fullMsg);
 
             switch (level)
             {
@@ -50,6 +53,39 @@ namespace Pie
 
         public static string ExportLogs() => string.Join("\n", LogHistory);
 
+        public static string GetLogFilePath()
+        {
+            if (!string.IsNullOrEmpty(_logFilePath))
+            {
+                return _logFilePath;
+            }
+
+            try
+            {
+                var logDir = PieUnityCapabilitiesConstants.SharedLogsDirectory;
+                Directory.CreateDirectory(logDir);
+                _logFilePath = PieUnityCapabilitiesConstants.RuntimeLogFilePath;
+            }
+            catch
+            {
+                _logFilePath = Path.Combine(Environment.CurrentDirectory, "pie-unity.log");
+            }
+
+            return _logFilePath;
+        }
+
         public static void Clear() => LogHistory.Clear();
+
+        private static void AppendToFile(string fullMsg)
+        {
+            try
+            {
+                File.AppendAllText(GetLogFilePath(), fullMsg + Environment.NewLine);
+            }
+            catch
+            {
+                // File logging is best-effort only.
+            }
+        }
     }
 }

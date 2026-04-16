@@ -18,12 +18,15 @@ namespace Pie.Editor
         {
             if (!_registeredUpdate)
             {
-                EditorApplication.update += PieDevRpcDispatcher.Tick;
+                EditorApplication.update += Tick;
                 _registeredUpdate = true;
             }
             EditorApplication.delayCall += PieDevRpcDispatcher.InitializeMainThread;
+            AssemblyReloadEvents.beforeAssemblyReload -= HandleBeforeAssemblyReload;
+            AssemblyReloadEvents.beforeAssemblyReload += HandleBeforeAssemblyReload;
             PieDevRpcServer.Start();
             PieHostBridge.Register("pie.dev_rpc", PieDevRpc.InvokeHostCall);
+            PieUnityCapabilitiesBootstrap.InitializeEditor();
             PieDevRpc.Register("rpc.thread_info", _ => JsonUtility.ToJson(new ThreadInfoPayload
             {
                 mainThreadId = PieDevRpcDispatcher.MainThreadId,
@@ -31,6 +34,17 @@ namespace Pie.Editor
             }));
 
             PieChatWindow.EnsureDevRpcReady();
+        }
+
+        private static void HandleBeforeAssemblyReload()
+        {
+            PieDevRpcServer.BeginDomainReloadShutdown();
+        }
+
+        private static void Tick()
+        {
+            PieDevRpcDispatcher.Tick();
+            PieUnityCapabilitiesBootstrap.Heartbeat();
         }
     }
 }

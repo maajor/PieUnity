@@ -2,7 +2,8 @@
   "name": "Pie.Runtime",
   "rootNamespace": "Pie",
   "references": [
-    "com.tencent.puerts.core"
+    "com.tencent.puerts.core",
+    "com.tencent.puerts.v8"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

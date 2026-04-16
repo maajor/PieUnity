@@ -1,6 +1,6 @@
-# Pie Unity Agent
+# com.pie.agent
 
-`pie-unity` is a Unity AI agent package built on top of [PuerTS](https://github.com/Tencent/puerts) V8.
+`com.pie.agent` is the Pie Unity host package built on top of [PuerTS](https://github.com/Tencent/puerts) V8.
 It uses a runtime-first architecture: the agent core runs in Runtime, while the Editor provides a chat UI and authoring workflow.
 
 ## Highlights
@@ -11,11 +11,58 @@ It uses a runtime-first architecture: the agent core runs in Runtime, while the 
 - Runtime state lives under `Application.persistentDataPath/Pie`
 - Project skills, project extensions, and project memory are first-class package concepts
 
+## Unity RPC Host
+
+`com.pie.agent` exposes a local RPC/REST host for agent-driven Unity work.
+
+Stable HTTP entrypoints:
+
+- `GET /health`
+- `GET /instances`
+- `GET /manifest`
+- `POST /tool/{name}`
+- `POST /rpc/{method}`
+
+Recommended host tools:
+
+- `unity_scene_query`
+- `unity_scene_object_inspect`
+- `unity_scene_object_edit`
+- `unity_refresh`
+- `unity_log_read`
+- `unity_script_run`
+
+Tool naming rule:
+
+- all model-visible tool names are lowercase
+- only `a-z`, `0-9`, and `_` are used
+- do not assume dot-delimited names like `unity.query`
+
+This keeps provider compatibility predictable across OpenAI-compatible gateways and other hosts.
+
+### Tool taxonomy / MECE boundary
+
+PieChat's default agent surface should use one primary tool per concept:
+
+- Files: `read_file`, `write_file`, `edit_file`, `list_dir`
+- Search: `find_files`, `grep_text`
+- Skills: `read_skill`, `read_resource`, `resolve_resource`
+- Unity project/runtime context: `unity_project_inspect`
+- Unity scene reads: `unity_scene_query`, `unity_scene_object_inspect`
+- Unity scene object edits: `unity_scene_object_edit`
+- Unity script tasks: `unity_script_run`
+- Unity diagnostics: `unity_log_read`
+- Interaction/state: `ask_user_multi`, `manage_todo_list`
+
+Dev RPC no longer exposes duplicate project-file, target/result, skill, or editor convenience tools as primary manifest entries. External helper scripts should use local filesystem access for Unity project files and call `unity_refresh` when Unity must import changed assets; inside PieChat, prefer the normal file tools with project-root resolution.
+
+`unity_scene_object_edit` is a scene object edit patch tool, including common component lifecycle/property patches such as add/remove/enable/set public field or property. Reads belong to `unity_scene_query` / `unity_scene_object_inspect`; logs belong to `unity_log_read`; short multi-frame Unity composition belongs to `unity_script_run`.
+
 ## Host Responsibility
 
 `ARCHITECTURE.md` is the shared architecture source of truth for Pie.
 
-`pie-unity` is responsible for mapping shared Pie semantics into Unity-native product experiences:
+`com.pie.agent` is responsible for mapping shared Pie semantics into Unity-native product experiences:
 
 - shared commands become Unity buttons, menus, or runtime actions
 - shared tool and status semantics become Unity panels, logs, or widgets
@@ -28,15 +75,51 @@ Example:
 - Positive: a shared `command` can be rendered as a toolbar action or menu item in Unity
 - Negative: Unity-specific dialog or widget APIs should not become the shared cross-host contract
 
+### PieChat reload / resume lifecycle guardrails
+
+PieChat reload recovery is intentionally interrupt-and-resume, not transparent network-stream resume.
+
+- Before Unity assembly reload, abort the active turn, cancel C# HTTP/file bridge work, close the Dev RPC listener, and wait only for a bounded time.
+- After reload, create a fresh bridge and load the interrupted session state. Do not continue the old streaming response or reuse old AppDomain worker tasks.
+- `SESSION_RECOVERY_WAS_STREAMING=true` means "the previous turn was interrupted by reload"; it does not mean "resume the old HTTP stream".
+- `GET /health` must stay a readiness probe. It may check bounded main-thread responsiveness and request counts, but it must not call into PuerTS/JS or run agent/session code. Calling PuerTS from health previously caused native crash/reload hangs.
+- During reload, connection refused, transient unavailable, or bounded `main_thread_timeout` health responses are acceptable. A socket that accepts requests but blocks indefinitely is not acceptable.
+- PieChat rejects a second `send` while a turn is already busy; do not queue overlapping streaming turns unless a real queue is designed.
+- Future `AgentSessionController` reuse must go through a Unity adapter. The adapter has to keep Unity's pending-user recovery as the source of truth before delegating to controller persistence, otherwise reload recovery can duplicate the interrupted user message.
+
 ## Requirements
 
-`pie-unity` depends on PuerTS:
+`com.pie.agent` depends on the PuerTS Unity v3 runtime packages:
 
-- Install `com.tencent.puerts.core`
-- Use the PuerTS V8 backend
-- Include the native V8 plugin for your target platform
+- Download `PuerTS_Core_3.0.2.tar.gz` and `PuerTS_V8_3.0.2.tar.gz` from the PuerTS `Unity_v3.0.2` release.
+- Extract both archives locally and point Unity Package Manager at the extracted package directories.
+- Do not install or depend on `PuerTS_Agent_3.0.2`, `Puerts.AI`, or `com.tencent.puerts.agent`; pie-unity owns the agent host layer.
+- Do not use remote `https://*.tar.gz` dependencies or git tag/path dependencies for PuerTS in this setup.
 
-If PuerTS or the V8 runtime is missing, `PieBridge` will not initialize and neither `Pie Chat` nor `PieRunner` will work.
+Recommended `manifest.json` dependency values after extraction:
+
+- `file:/absolute/path/to/extracted/PuerTS_Core_3.0.2/core`
+- `file:/absolute/path/to/extracted/PuerTS_V8_3.0.2/v8`
+
+If PuerTS Core or V8 is missing, `PieBridge` will not initialize and neither `Pie Chat` nor `PieRunner` will work.
+
+## First Run Validation
+
+After installation:
+
+1. Open `Tools > Pie > Pie Chat`.
+2. Run `/self-check` and confirm the model, tool route, web search, and file-understanding sections are healthy.
+3. Send a short message and verify a response appears in PieChat.
+4. Run a Unity scene query through PieChat.
+5. Trigger an assembly reload and confirm PieChat reconnects without duplicating the interrupted prompt.
+
+Release candidates should also run:
+
+```bash
+PIE_UNITY_REAL_RPC=1 npm run verify:unity:reliability
+```
+
+`unity_script_run` is a cooperative step-bounded runner: use generator tasks, yield for multi-frame work, and expect long synchronous loops to fail with `STEP_TIMEOUT` instead of being arbitrarily preempted.
 
 ## Installation
 
@@ -47,7 +130,7 @@ Install through Unity Package Manager:
 - Git release repository:
   `Add package from git URL...`
 - Current public Git URL:
-  `https://github.com/Cydream-Tech/PieUnity.git#0.1.6`
+  `https://github.com/Cydream-Tech/PieUnity.git#0.1.7`
 
 After installation, you can import the `Extension Demo` sample from the Package Manager Samples section.
 
@@ -58,6 +141,15 @@ After installation, you can import the `Extension Demo` sample from the Package 
 1. Open `Tools > Pie > Pie Chat`
 2. Enter your `apiKey`, `provider`, `model`, and optional `baseUrl`
 3. Start chatting
+
+For CLI or agent-driven Unity control, use the built-in helper:
+
+```bash
+node products/cli/builtin/skills/pie-unity-rpc/pie-unity-rpc.js health --project "/abs/path/to/project"
+node products/cli/builtin/skills/pie-unity-rpc/pie-unity-rpc.js manifest --project "/abs/path/to/project" --namespace unity
+node products/cli/builtin/skills/pie-unity-rpc/pie-unity-rpc.js tool --project "/abs/path/to/project" --tool chat_send --data '{"text":"respond with exactly pong"}'
+node products/cli/builtin/skills/pie-unity-rpc/pie-unity-rpc.js tool --project "/abs/path/to/project" --tool chat_get_state
+```
 
 Available local commands include:
 
@@ -101,6 +193,15 @@ public class Demo : MonoBehaviour
 }
 ```
 
+`pie-unity` now reads models only from `~/.pie/models.json`. The file must use top-level `profiles`, not `providers`, and each profile must explicitly declare:
+
+- `api`
+- `baseUrl`
+- `apiKey` or `apiKeyEnv`
+- `models`
+
+If no valid profile is configured, Unity starts in an unconfigured model state and asks you to configure `~/.pie/models.json` before sending messages.
+
 ## Paths
 
 Project assets:
@@ -131,7 +232,7 @@ Create a settings asset from:
 - `Default File Tool Root Editor`
 - `Default File Tool Root Runtime`
 
-File tool roots let you expose named filesystem roots to `read_file`, `write_file`, `edit_file`, `list_directory`, `search_file_content`, and `search_files`.
+File tool roots let you expose named filesystem roots to `read_file`, `write_file`, `edit_file`, `list_dir`, `grep_text`, and `find_files`.
 
 Built-in roots:
 
@@ -155,6 +256,8 @@ Connection settings:
 - `provider` selects the built-in API family
 - `model` selects the model ID
 - `baseUrl` is optional; when set, it overrides the built-in provider endpoint
+
+When changing config through `pie_chat.set_config` from the CLI helper, the helper waits briefly for the Unity-side bridge to apply the new settings before returning.
 
 ## Skills
 
