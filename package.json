@@ -1,9 +1,10 @@
 {
   "name": "com.pie.agent",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "displayName": "Pie AI Agent",
   "description": "Platform for Intelligent Engineering - runtime-first AI agent framework for Unity.",
   "unity": "2022.3",
+  "type": "module",
   "license": "Apache-2.0",
   "keywords": [
     "ai",
