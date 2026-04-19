@@ -533,8 +533,8 @@ namespace Pie
                     instanceId = PieUnityCapabilityRegistry.InstanceId,
                     projectPath = PieUnityCapabilityRegistry.ProjectPath,
                     projectName = PieUnityCapabilitiesBootstrap.ProductName,
-                    productName = Application.productName ?? "",
-                    applicationIdentifier = Application.identifier ?? "",
+                    productName = PieUnityCapabilitiesBootstrap.UnityProductName ?? "",
+                    applicationIdentifier = PieUnityCapabilitiesBootstrap.ApplicationIdentifier ?? "",
                     mode = PieUnityCapabilityRegistry.Mode,
                     port = Port,
                     running = IsRunning,
@@ -899,7 +899,11 @@ namespace Pie
         {
             private static Func<string, string> _editorResumeSessionHandler;
             private static string _productName = "";
+            private static string _unityProductName = "";
+            private static string _applicationIdentifier = "";
             public static string ProductName => _productName;
+            public static string UnityProductName => _unityProductName;
+            public static string ApplicationIdentifier => _applicationIdentifier;
 
             [Serializable]
             private sealed class TextPayload
@@ -923,6 +927,7 @@ namespace Pie
             {
                 var projectPath = GetProjectPath();
                 _productName = DeriveProjectName(projectPath);
+                CaptureUnityApplicationMetadata();
                 var instanceId = BuildInstanceId(projectPath, "editor", _productName);
                 PieUnityCapabilityRegistry.ConfigureContext(instanceId, projectPath, "editor");
             PieUnityInstanceRegistry.Register(instanceId, projectPath, _productName, "editor", PieDevRpcServer.Port, PieDevRpcServer.AuthToken, GetUnityProductName(), GetApplicationIdentifier());
@@ -934,6 +939,7 @@ namespace Pie
             {
                 var projectPath = GetProjectPath(runner != null ? runner.ProjectRootOverride : null);
                 _productName = DeriveProjectName(projectPath);
+                CaptureUnityApplicationMetadata();
                 var instanceId = BuildInstanceId(projectPath, "runtime", _productName);
                 PieUnityCapabilityRegistry.ConfigureContext(instanceId, projectPath, "runtime");
             PieUnityInstanceRegistry.Register(instanceId, projectPath, _productName, "runtime", PieDevRpcServer.Port, PieDevRpcServer.AuthToken, GetUnityProductName(), GetApplicationIdentifier());
@@ -943,6 +949,7 @@ namespace Pie
 
             public static void Heartbeat()
             {
+                CaptureUnityApplicationMetadata();
                 var instanceId = PieUnityCapabilityRegistry.InstanceId;
                 if (string.IsNullOrWhiteSpace(instanceId))
                     return;
@@ -1487,12 +1494,28 @@ namespace Pie
 
             private static string GetUnityProductName()
             {
-                return string.IsNullOrWhiteSpace(Application.productName) ? _productName : Application.productName;
+                return string.IsNullOrWhiteSpace(_unityProductName) ? _productName : _unityProductName;
             }
 
             private static string GetApplicationIdentifier()
             {
-                return string.IsNullOrWhiteSpace(Application.identifier) ? "" : Application.identifier;
+                return string.IsNullOrWhiteSpace(_applicationIdentifier) ? "" : _applicationIdentifier;
+            }
+
+            private static void CaptureUnityApplicationMetadata()
+            {
+                try
+                {
+                    _unityProductName = string.IsNullOrWhiteSpace(Application.productName) ? _productName : Application.productName;
+                    _applicationIdentifier = string.IsNullOrWhiteSpace(Application.identifier) ? "" : Application.identifier;
+                }
+                catch
+                {
+                    if (string.IsNullOrWhiteSpace(_unityProductName))
+                        _unityProductName = _productName;
+                    if (_applicationIdentifier == null)
+                        _applicationIdentifier = "";
+                }
             }
 
             private static string ComputeStableHash(string value)
@@ -2017,8 +2040,8 @@ namespace Pie
                         instanceId = instanceId,
                         projectPath = projectPath,
                         projectName = DeriveProjectName(projectPath),
-                        productName = Application.productName ?? "",
-                        applicationIdentifier = Application.identifier ?? "",
+                        productName = PieUnityCapabilitiesBootstrap.UnityProductName ?? "",
+                        applicationIdentifier = PieUnityCapabilitiesBootstrap.ApplicationIdentifier ?? "",
                         mode = mode,
                         filterNamespace = filterNamespace ?? "",
                         filterName = filterName ?? "",
@@ -2039,8 +2062,8 @@ namespace Pie
                     instanceId = instanceId,
                     projectPath = projectPath,
                     projectName = DeriveProjectName(projectPath),
-                    productName = Application.productName ?? "",
-                    applicationIdentifier = Application.identifier ?? "",
+                    productName = PieUnityCapabilitiesBootstrap.UnityProductName ?? "",
+                    applicationIdentifier = PieUnityCapabilitiesBootstrap.ApplicationIdentifier ?? "",
                     mode = mode,
                     namespaces = namespaces,
                     stableTools = entries.Count((entry) => string.Equals(entry.kind, "tool", StringComparison.OrdinalIgnoreCase) && !entry.deprecated),
