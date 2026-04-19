@@ -1,3 +1,4 @@
+#if PIE_UNITY_SPLIT_SOURCES
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -58,9 +59,17 @@ namespace Pie
             Func<string, string> handler,
             string capabilityKind = "host",
             bool convenience = false,
-            bool requiresMainThread = true)
+            bool requiresMainThread = true,
+            string owner = "",
+            string writeScope = "",
+            string returns = "",
+            string recommendedWorkflow = "",
+            string[] examples = null,
+            string[] errorCodes = null,
+            bool destructive = false,
+            bool canTriggerDomainReload = false)
         {
-            RegisterInternal(RpcMethods, "rpc", name, ns, description, mode, readOnly, deprecated, aliases, parameters, handler, capabilityKind, convenience, requiresMainThread);
+            RegisterInternal(RpcMethods, "rpc", name, ns, description, mode, readOnly, deprecated, aliases, parameters, handler, capabilityKind, convenience, requiresMainThread, owner, writeScope, returns, recommendedWorkflow, examples, errorCodes, destructive, canTriggerDomainReload);
         }
 
         public static void RegisterTool(
@@ -75,9 +84,17 @@ namespace Pie
             Func<string, string> handler,
             string capabilityKind = "host",
             bool convenience = false,
-            bool requiresMainThread = true)
+            bool requiresMainThread = true,
+            string owner = "",
+            string writeScope = "",
+            string returns = "",
+            string recommendedWorkflow = "",
+            string[] examples = null,
+            string[] errorCodes = null,
+            bool destructive = false,
+            bool canTriggerDomainReload = false)
         {
-            RegisterInternal(ToolMethods, "tool", name, ns, description, mode, readOnly, deprecated, aliases, parameters, handler, capabilityKind, convenience, requiresMainThread);
+            RegisterInternal(ToolMethods, "tool", name, ns, description, mode, readOnly, deprecated, aliases, parameters, handler, capabilityKind, convenience, requiresMainThread, owner, writeScope, returns, recommendedWorkflow, examples, errorCodes, destructive, canTriggerDomainReload);
         }
 
         public static bool TryInvokeRpc(string name, string argsJson, out string resultJson, out string error)
@@ -140,6 +157,9 @@ namespace Pie
                 {
                     instanceId = instanceId,
                     projectPath = projectPath,
+                    projectName = DeriveProjectName(projectPath),
+                    productName = Application.productName ?? "",
+                    applicationIdentifier = Application.identifier ?? "",
                     mode = mode,
                     filterNamespace = filterNamespace ?? "",
                     filterName = filterName ?? "",
@@ -159,6 +179,9 @@ namespace Pie
             {
                 instanceId = instanceId,
                 projectPath = projectPath,
+                projectName = DeriveProjectName(projectPath),
+                productName = Application.productName ?? "",
+                applicationIdentifier = Application.identifier ?? "",
                 mode = mode,
                 namespaces = namespaces,
                 stableTools = entries.Count((entry) => string.Equals(entry.kind, "tool", StringComparison.OrdinalIgnoreCase) && !entry.deprecated),
@@ -215,7 +238,15 @@ namespace Pie
             Func<string, string> handler,
             string capabilityKind,
             bool convenience,
-            bool requiresMainThread)
+            bool requiresMainThread,
+            string owner,
+            string writeScope,
+            string returns,
+            string recommendedWorkflow,
+            string[] examples,
+            string[] errorCodes,
+            bool destructive,
+            bool canTriggerDomainReload)
         {
             lock (SyncRoot)
             {
@@ -228,10 +259,20 @@ namespace Pie
                     mode = mode,
                     availableIn = mode,
                     capabilityKind = capabilityKind ?? "host",
+                    owner = owner ?? "",
+                    writeScope = writeScope ?? "",
+                    returns = returns ?? "",
+                    recommendedWorkflow = recommendedWorkflow ?? "",
+                    examples = examples ?? new string[0],
+                    errorCodes = errorCodes ?? new string[0],
                     readOnly = readOnly,
                     deprecated = deprecated,
                     convenience = convenience,
                     requiresMainThread = requiresMainThread,
+                    destructive = destructive,
+                    editorOnly = string.Equals(mode, "editor", StringComparison.OrdinalIgnoreCase),
+                    runtimeOnly = string.Equals(mode, "runtime", StringComparison.OrdinalIgnoreCase),
+                    canTriggerDomainReload = canTriggerDomainReload,
                     aliases = aliases ?? new string[0],
                     parameters = parameters ?? new PieUnityParameterDescriptor[0],
                 };
@@ -255,5 +296,16 @@ namespace Pie
                 }
             }
         }
+
+        private static string DeriveProjectName(string projectPath)
+        {
+            var normalized = (projectPath ?? "").Replace("\\", "/").TrimEnd('/');
+            var index = normalized.LastIndexOf('/');
+            if (index >= 0 && index < normalized.Length - 1)
+                return normalized.Substring(index + 1);
+            return string.IsNullOrWhiteSpace(normalized) ? "" : normalized;
+        }
     }
 }
+
+#endif

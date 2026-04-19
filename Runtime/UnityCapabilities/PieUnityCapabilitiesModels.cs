@@ -1,3 +1,4 @@
+#if PIE_UNITY_SPLIT_SOURCES
 using System;
 using UnityEngine;
 
@@ -31,6 +32,7 @@ namespace Pie
     [Serializable]
     public sealed class PieUnityCapabilityDescriptor
     {
+        public string schemaVersion = PieUnityCapabilitiesConstants.ManifestSchemaVersion;
         public string kind;
         public string name;
         public string ns;
@@ -38,10 +40,20 @@ namespace Pie
         public string mode;
         public string availableIn;
         public string capabilityKind;
+        public string owner = "";
+        public string writeScope = "";
+        public string returns = "";
+        public string recommendedWorkflow = "";
+        public string[] examples = new string[0];
+        public string[] errorCodes = new string[0];
         public bool readOnly;
         public bool deprecated;
         public bool convenience;
         public bool requiresMainThread;
+        public bool destructive;
+        public bool editorOnly;
+        public bool runtimeOnly;
+        public bool canTriggerDomainReload;
         public string[] aliases;
         public PieUnityParameterDescriptor[] parameters;
     }
@@ -51,8 +63,13 @@ namespace Pie
     {
         public string service = "pie-unity";
         public string version = PieUnityCapabilitiesConstants.Version;
+        public string manifestSchemaVersion = PieUnityCapabilitiesConstants.ManifestSchemaVersion;
+        public string skillProtocolVersion = PieUnityCapabilitiesConstants.SkillProtocolVersion;
         public string instanceId = "";
         public string projectPath = "";
+        public string projectName = "";
+        public string productName = "";
+        public string applicationIdentifier = "";
         public string mode = "";
         public string[] namespaces;
         public int stableTools;
@@ -64,8 +81,13 @@ namespace Pie
     {
         public string service = "pie-unity";
         public string version = PieUnityCapabilitiesConstants.Version;
+        public string manifestSchemaVersion = PieUnityCapabilitiesConstants.ManifestSchemaVersion;
+        public string skillProtocolVersion = PieUnityCapabilitiesConstants.SkillProtocolVersion;
         public string instanceId = "";
         public string projectPath = "";
+        public string projectName = "";
+        public string productName = "";
+        public string applicationIdentifier = "";
         public string mode = "";
         public string filterNamespace = "";
         public string filterName = "";
@@ -77,8 +99,13 @@ namespace Pie
     {
         public string service = "pie-unity";
         public string version = PieUnityCapabilitiesConstants.Version;
+        public string manifestSchemaVersion = PieUnityCapabilitiesConstants.ManifestSchemaVersion;
+        public string skillProtocolVersion = PieUnityCapabilitiesConstants.SkillProtocolVersion;
         public string instanceId = "";
         public string projectPath = "";
+        public string projectName = "";
+        public string productName = "";
+        public string applicationIdentifier = "";
         public string mode = "";
         public int port;
         public bool running = true;
@@ -100,11 +127,16 @@ namespace Pie
         public string instanceId;
         public string projectPath;
         public string projectName;
+        public string displayName;
+        public string productName;
+        public string applicationIdentifier;
         public string mode;
         public int port;
+        public string token;
         public int pid;
         public long lastSeenUnix;
         public string version;
+        public string packageVersion;
     }
 
     [Serializable]
@@ -204,3 +236,5 @@ namespace Pie
         public PieUnityRef[] createdRefs;
     }
 }
+
+#endif

@@ -1,3 +1,4 @@
+#if PIE_UNITY_SPLIT_SOURCES
 using System;
 using System.IO;
 using System.Net;
@@ -15,6 +16,7 @@ namespace Pie
         private static Task _loopTask;
         private static readonly object SyncRoot = new object();
         private static int _port = PieUnityCapabilitiesConstants.DefaultPort;
+        private static string _authToken = "";
         private static volatile bool _domainReloadPending;
         private const int ScriptRunPollIntervalMs = 25;
         private const int ScriptRunMainThreadTimeoutMs = 5000;
@@ -33,6 +35,19 @@ namespace Pie
         }
 
         public static int Port => _port;
+        public static string AuthToken
+        {
+            get
+            {
+                lock (SyncRoot)
+                {
+                    if (string.IsNullOrWhiteSpace(_authToken))
+                        _authToken = GenerateAuthToken();
+                    return _authToken;
+                }
+            }
+        }
+
         public static bool IsRunning
         {
             get
@@ -55,6 +70,8 @@ namespace Pie
                 {
                     _cts?.Cancel();
                     _listener?.Close();
+                    if (string.IsNullOrWhiteSpace(_authToken))
+                        _authToken = GenerateAuthToken();
 
                     _cts = new CancellationTokenSource();
                     _listener = StartListener();
@@ -169,6 +186,12 @@ namespace Pie
                     return;
                 }
 
+                if (!IsAuthorized(request))
+                {
+                    WriteJson(context.Response, 401, BuildEnvelope("rpc", path, false, "null", "RPC_UNAUTHORIZED: missing or invalid X-Pie-Token.", "RPC_UNAUTHORIZED"));
+                    return;
+                }
+
                 if (_domainReloadPending)
                 {
                     WriteJson(context.Response, 503, BuildEnvelope("rpc", path, false, "null", "Unity is reloading scripts. Retry shortly."));
@@ -246,6 +269,9 @@ namespace Pie
             {
                 instanceId = PieUnityCapabilityRegistry.InstanceId,
                 projectPath = PieUnityCapabilityRegistry.ProjectPath,
+                projectName = PieUnityCapabilitiesBootstrap.ProductName,
+                productName = Application.productName ?? "",
+                applicationIdentifier = Application.identifier ?? "",
                 mode = PieUnityCapabilityRegistry.Mode,
                 port = Port,
                 running = IsRunning,
@@ -421,7 +447,7 @@ namespace Pie
             }
         }
 
-        private static string BuildEnvelope(string kind, string name, bool ok, string resultJson, string error)
+        private static string BuildEnvelope(string kind, string name, bool ok, string resultJson, string error, string errorCode = "CAPABILITY_ERROR")
         {
             var envelope = new PieUnityEnvelope
             {
@@ -433,7 +459,7 @@ namespace Pie
                 name = name ?? "",
                 result = resultJson ?? "null",
                 error = ok ? "" : (error ?? "Unknown error"),
-                errorCode = ok ? "" : "CAPABILITY_ERROR",
+                errorCode = ok ? "" : (errorCode ?? "CAPABILITY_ERROR"),
                 serverAvailability = GetSafeAvailabilityNoticeJson(),
             };
 
@@ -498,5 +524,20 @@ namespace Pie
                 .Replace("\r", "\\r")
                 .Replace("\t", "\\t");
         }
+
+        private static bool IsAuthorized(HttpListenerRequest request)
+        {
+            var expected = AuthToken;
+            var actual = request.Headers["X-Pie-Token"] ?? "";
+            return !string.IsNullOrWhiteSpace(expected)
+                && string.Equals(actual, expected, StringComparison.Ordinal);
+        }
+
+        private static string GenerateAuthToken()
+        {
+            return Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
+        }
     }
 }
+
+#endif

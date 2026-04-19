@@ -1,3 +1,4 @@
+#if PIE_UNITY_SPLIT_SOURCES
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
@@ -69,3 +70,5 @@ namespace Pie
         }
     }
 }
+
+#endif

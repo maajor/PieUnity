@@ -91,7 +91,14 @@ namespace Pie
 
             try
             {
-                _jsEnv.Eval($"pie.handleCSharpMessage('{action}', {jsonData});");
+                var normalizedJson = NormalizeMessageJson(jsonData);
+                if (normalizedJson == null)
+                {
+                    PieDiagnostics.Error("[PieBridge.SendToJs] BRIDGE_INVALID_JSON: payload is not valid JSON");
+                    return false;
+                }
+
+                _jsEnv.Eval($"pie.handleCSharpMessage({JsonString(action ?? "")}, {normalizedJson});");
                 return true;
             }
             catch (Exception ex)
@@ -442,14 +449,38 @@ namespace Pie
                 + "\"";
         }
 
-        private static string EscapeForJs(string value)
+        private string NormalizeMessageJson(string value)
         {
-            if (value == null) return "null";
-            return value
-                .Replace("\\", "\\\\")
-                .Replace("'", "\\'")
-                .Replace("\n", "\\n")
-                .Replace("\r", "\\r");
+            var trimmed = string.IsNullOrWhiteSpace(value) ? "{}" : value.Trim();
+            if (!LooksLikeJsonValue(trimmed))
+                return null;
+
+            try
+            {
+                var isValid = _jsEnv.Eval<bool>(
+                    $"(function(){{try{{JSON.parse({JsonString(trimmed)});return true;}}catch(e){{return false;}}}})()");
+                return isValid ? trimmed : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool LooksLikeJsonValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            var first = value[0];
+            return first == '{'
+                || first == '['
+                || first == '"'
+                || first == '-'
+                || (first >= '0' && first <= '9')
+                || value == "true"
+                || value == "false"
+                || value == "null";
         }
     }
 }

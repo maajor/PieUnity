@@ -1,3 +1,4 @@
+#if PIE_UNITY_SPLIT_SOURCES
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,7 +17,7 @@ namespace Pie
             public PieUnityInstance[] instances;
         }
 
-        public static void Register(string instanceId, string projectPath, string projectName, string mode, int port)
+        public static void Register(string instanceId, string projectPath, string projectName, string mode, int port, string token, string productName = "", string applicationIdentifier = "")
         {
             try
             {
@@ -46,11 +47,16 @@ namespace Pie
                         instanceId = instanceId,
                         projectPath = projectPath,
                         projectName = projectName,
+                        displayName = string.IsNullOrWhiteSpace(productName) ? projectName : productName,
+                        productName = productName,
+                        applicationIdentifier = applicationIdentifier,
                         mode = mode,
                         port = port,
+                        token = token,
                         pid = pid,
                         lastSeenUnix = now,
                         version = PieUnityCapabilitiesConstants.Version,
+                        packageVersion = PieUnityCapabilitiesConstants.Version,
                     });
 
                     WriteAllInternal(next);
@@ -224,3 +230,5 @@ namespace Pie
         }
     }
 }
+
+#endif

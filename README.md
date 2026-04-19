@@ -131,7 +131,8 @@ After installation:
 Release candidates should also run:
 
 ```bash
-PIE_UNITY_REAL_RPC=1 npm run verify:unity:reliability
+UNITY_EDITOR="/path/to/Unity" npm run verify:unity:reliability
+PIE_UNITY_REAL_RPC=1 UNITY_EDITOR="/path/to/Unity" npm run verify:unity:reliability
 ```
 
 `unity_script_run` is a cooperative step-bounded runner: use generator tasks, yield for multi-frame work, and expect long synchronous loops to fail with `STEP_TIMEOUT` instead of being arbitrarily preempted.
@@ -157,14 +158,27 @@ After installation, you can import the `Extension Demo` sample from the Package 
 2. Enter your `apiKey`, `provider`, `model`, and optional `baseUrl`
 3. Start chatting
 
-For CLI or agent-driven Unity control, use the built-in helper:
+For CLI or agent-driven Unity control, use the package-contained RPC skill from
+the current Unity project's resolved `com.pie.agent` package. Prefer the copy at
+`Packages/com.pie.agent/Skills/pie-unity-rpc`, or the matching
+`Library/PackageCache/com.pie.agent*/Skills/pie-unity-rpc` entry when Unity
+resolves the package into the cache. The CLI no longer ships or installs a
+global `pie-unity-rpc` copy; `com.pie.agent` is the canonical source.
+
+Then run:
 
 ```bash
-node products/cli/builtin/skills/pie-unity-rpc/pie-unity-rpc.js health --project "/abs/path/to/project"
-node products/cli/builtin/skills/pie-unity-rpc/pie-unity-rpc.js manifest --project "/abs/path/to/project" --namespace unity
-node products/cli/builtin/skills/pie-unity-rpc/pie-unity-rpc.js tool --project "/abs/path/to/project" --tool chat_send --data '{"text":"respond with exactly pong"}'
-node products/cli/builtin/skills/pie-unity-rpc/pie-unity-rpc.js tool --project "/abs/path/to/project" --tool chat_get_state
+node <resolved-com.pie.agent>/Skills/pie-unity-rpc/pie-unity-rpc.js health --project "/abs/path/to/project"
+node <resolved-com.pie.agent>/Skills/pie-unity-rpc/pie-unity-rpc.js manifest --project "/abs/path/to/project" --namespace unity
+node <resolved-com.pie.agent>/Skills/pie-unity-rpc/pie-unity-rpc.js tool --tool chat_send --data '{"text":"respond with exactly pong"}'
+node <resolved-com.pie.agent>/Skills/pie-unity-rpc/pie-unity-rpc.js tool --tool chat_get_state
 ```
+
+Agents should inspect `/manifest` first and choose a host by the capability
+needed for the user's task. Editor and runtime hosts are both live tool hosts;
+do not infer intended use from host mode. Prefer project namespaces such as
+`voxmod` over generic Unity editing tools when they are available. Do not edit
+prefab YAML or serialized object references directly when an RPC tool exists.
 
 Available local commands include:
 

@@ -82,6 +82,9 @@ namespace Pie
         private static readonly HashSet<string> _binaryExtensionSet = new HashSet<string>(_binaryExtensions, StringComparer.OrdinalIgnoreCase);
 
         private const int GrepMaxLineLength = 400;
+        private const int RegexTimeoutMs = 250;
+        private const int MaxRegexPatternLength = 512;
+        private const int MaxGlobPatternLength = 256;
 
         public static Task<string> ReadAllTextAsync(string path)
         {
@@ -168,8 +171,15 @@ namespace Pie
         {
             return Task.Run(() =>
             {
-                var payload = ExecuteFind(rootPath, pattern, limit, CancellationToken.None);
-                return JsonUtility.ToJson(payload);
+                try
+                {
+                    var payload = ExecuteFind(rootPath, pattern, limit, CancellationToken.None);
+                    return JsonUtility.ToJson(payload);
+                }
+                catch (RegexMatchTimeoutException ex)
+                {
+                    throw new TimeoutException("REGEX_INVALID_OR_TIMEOUT: regex matching timed out", ex);
+                }
             });
         }
 
@@ -177,8 +187,15 @@ namespace Pie
         {
             return Task.Run(() =>
             {
-                var payload = ExecuteGrep(searchPath, pattern, globPattern, ignoreCase, literal, contextLines, limit, CancellationToken.None);
-                return JsonUtility.ToJson(payload);
+                try
+                {
+                    var payload = ExecuteGrep(searchPath, pattern, globPattern, ignoreCase, literal, contextLines, limit, CancellationToken.None);
+                    return JsonUtility.ToJson(payload);
+                }
+                catch (RegexMatchTimeoutException ex)
+                {
+                    throw new TimeoutException("REGEX_INVALID_OR_TIMEOUT: regex matching timed out", ex);
+                }
             });
         }
 
@@ -282,6 +299,11 @@ namespace Pie
                 state.Error = "Operation aborted";
                 PieDiagnostics.Warning("[PieFileBridge] find_files cancelled");
             }
+            catch (RegexMatchTimeoutException ex)
+            {
+                state.Error = "REGEX_INVALID_OR_TIMEOUT: " + ex.Message;
+                PieDiagnostics.Warning("[PieFileBridge] find_files regex timeout");
+            }
             catch (Exception ex)
             {
                 state.Error = ex.Message;
@@ -305,6 +327,11 @@ namespace Pie
             {
                 state.Error = "Operation aborted";
                 PieDiagnostics.Warning("[PieFileBridge] grep_text cancelled");
+            }
+            catch (RegexMatchTimeoutException ex)
+            {
+                state.Error = "REGEX_INVALID_OR_TIMEOUT: " + ex.Message;
+                PieDiagnostics.Warning("[PieFileBridge] grep_text regex timeout");
             }
             catch (Exception ex)
             {
@@ -561,11 +588,14 @@ namespace Pie
             if (literal)
                 pattern = Regex.Escape(pattern);
 
+            if ((pattern ?? string.Empty).Length > MaxRegexPatternLength)
+                throw new ArgumentException("REGEX_INVALID_OR_TIMEOUT: regex pattern is too long");
+
             var options = RegexOptions.Multiline;
             if (ignoreCase)
                 options |= RegexOptions.IgnoreCase;
 
-            return new Regex(pattern, options);
+            return new Regex(pattern, options, TimeSpan.FromMilliseconds(RegexTimeoutMs));
         }
 
         private static bool MatchesSimpleGlob(string entryName, string globPattern)
@@ -622,6 +652,9 @@ namespace Pie
         private static Regex GlobToRegex(string pattern)
         {
             var normalizedPattern = (pattern ?? string.Empty).Replace("\\", "/");
+            if (normalizedPattern.Length > MaxGlobPatternLength)
+                throw new ArgumentException("REGEX_INVALID_OR_TIMEOUT: glob pattern is too long");
+
             var sb = new System.Text.StringBuilder("^");
 
             for (int i = 0; i < normalizedPattern.Length; i++)
@@ -668,7 +701,7 @@ namespace Pie
             }
 
             sb.Append("$");
-            return new Regex(sb.ToString(), RegexOptions.IgnoreCase);
+            return new Regex(sb.ToString(), RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(RegexTimeoutMs));
         }
 
         private static string MakeRelativePath(string rootPath, string fullPath)

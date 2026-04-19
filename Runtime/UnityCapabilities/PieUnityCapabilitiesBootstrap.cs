@@ -1,3 +1,4 @@
+#if PIE_UNITY_SPLIT_SOURCES
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,8 +39,9 @@ namespace Pie
             _productName = DeriveProjectName(projectPath);
             var instanceId = BuildInstanceId(projectPath, "editor", _productName);
             PieUnityCapabilityRegistry.ConfigureContext(instanceId, projectPath, "editor");
-            PieUnityInstanceRegistry.Register(instanceId, projectPath, _productName, "editor", PieDevRpcServer.Port);
+            PieUnityInstanceRegistry.Register(instanceId, projectPath, _productName, "editor", PieDevRpcServer.Port, PieDevRpcServer.AuthToken, GetUnityProductName(), GetApplicationIdentifier());
             RegisterSharedCapabilities(isEditor: true);
+            PieUnityEditorAuthoring.RegisterEditorTools();
         }
 
         public static void InitializeRuntime(PieRunner runner)
@@ -48,7 +50,7 @@ namespace Pie
             _productName = DeriveProjectName(projectPath);
             var instanceId = BuildInstanceId(projectPath, "runtime", _productName);
             PieUnityCapabilityRegistry.ConfigureContext(instanceId, projectPath, "runtime");
-            PieUnityInstanceRegistry.Register(instanceId, projectPath, _productName, "runtime", PieDevRpcServer.Port);
+            PieUnityInstanceRegistry.Register(instanceId, projectPath, _productName, "runtime", PieDevRpcServer.Port, PieDevRpcServer.AuthToken, GetUnityProductName(), GetApplicationIdentifier());
             RegisterSharedCapabilities(isEditor: false);
             RegisterRuntimeCapabilities(runner, projectPath);
         }
@@ -63,7 +65,10 @@ namespace Pie
                 PieUnityCapabilityRegistry.ProjectPath,
                 _productName,
                 PieUnityCapabilityRegistry.Mode,
-                PieDevRpcServer.Port);
+                PieDevRpcServer.Port,
+                PieDevRpcServer.AuthToken,
+                GetUnityProductName(),
+                GetApplicationIdentifier());
         }
 
         public static void Shutdown()
@@ -594,6 +599,16 @@ namespace Pie
             return string.IsNullOrWhiteSpace(name) ? "PieUnity" : name;
         }
 
+        private static string GetUnityProductName()
+        {
+            return string.IsNullOrWhiteSpace(Application.productName) ? _productName : Application.productName;
+        }
+
+        private static string GetApplicationIdentifier()
+        {
+            return string.IsNullOrWhiteSpace(Application.identifier) ? "" : Application.identifier;
+        }
+
         private static string ComputeStableHash(string value)
         {
             using (var sha = SHA256.Create())
@@ -647,3 +662,5 @@ namespace Pie
         }
     }
 }
+
+#endif

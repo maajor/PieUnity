@@ -1,3 +1,4 @@
+#if PIE_UNITY_SPLIT_SOURCES
 using UnityEditor;
 using UnityEngine;
 
@@ -48,3 +49,5 @@ namespace Pie.Editor
         }
     }
 }
+
+#endif

@@ -65,18 +65,6 @@ namespace Pie.Editor
         private bool   _verboseLogs = false;
         private bool   _autoResume = true;
 
-        private const string SESSION_RECOVERY_PREFIX = "Pie_EditorRecovery_";
-        private const string SESSION_RECOVERY_ACTIVE_SESSION = SESSION_RECOVERY_PREFIX + "ActiveSessionId";
-        private const string SESSION_RECOVERY_WAS_STREAMING = SESSION_RECOVERY_PREFIX + "WasStreaming";
-        private const string SESSION_RECOVERY_LAST_USER = SESSION_RECOVERY_PREFIX + "LastUserMessage";
-        private const string SESSION_RECOVERY_DRAFT = SESSION_RECOVERY_PREFIX + "DraftInput";
-        private const string SESSION_RECOVERY_PROVIDER = SESSION_RECOVERY_PREFIX + "Provider";
-        private const string SESSION_RECOVERY_MODEL = SESSION_RECOVERY_PREFIX + "Model";
-        private const string SESSION_RECOVERY_BASE_URL = SESSION_RECOVERY_PREFIX + "BaseUrl";
-        private const string SESSION_RECOVERY_SAVED_AT = SESSION_RECOVERY_PREFIX + "SavedAtTicksUtc";
-        private const string SESSION_RECOVERY_LAST_KNOWN_ACTIVE_SESSION = SESSION_RECOVERY_PREFIX + "LastKnownActiveSession";
-        private const double SESSION_RECOVERY_RESTORE_DELAY_SECONDS = 0.5d;
-
         [Serializable]
         private class DevTextPayload
         {
@@ -103,38 +91,6 @@ namespace Pie.Editor
         }
 
         [Serializable]
-        private class DevChatStatePayload
-        {
-            public bool isOpen;
-            public bool isInitialized;
-            public bool isStreaming;
-            public bool isBusy;
-            public string statusText;
-            public string inputText;
-            public int messageCount;
-            public int todoCount;
-            public string activeSessionId;
-            public int configAppliedVersion;
-        }
-
-        [Serializable]
-        private class DevChatMessagePayload
-        {
-            public string role;
-            public string title;
-            public string content;
-            public string summary;
-            public bool isRunning;
-            public bool isError;
-        }
-
-        [Serializable]
-        private class DevChatMessagesPayload
-        {
-            public DevChatMessagePayload[] messages;
-        }
-
-        [Serializable]
         private class DevSessionPathPayload
         {
             public string sessionId;
@@ -146,21 +102,6 @@ namespace Pie.Editor
             public string sessionsDir;
             public string sessionPath;
             public bool exists;
-        }
-
-        [Serializable]
-        private class DevRecoveryStatePayload
-        {
-            public bool pendingAfterReload;
-            public string activeSessionId;
-            public string lastKnownActiveSessionId;
-            public bool wasStreaming;
-            public string lastUserMessageText;
-            public string draftInputText;
-            public string savedAt;
-            public bool hasSnapshot;
-            public bool restoreScheduled;
-            public double restoreNotBeforeAt;
         }
 
         [Serializable]
@@ -321,20 +262,9 @@ namespace Pie.Editor
         internal static string DevRpcGetRecoveryState()
         {
             _currentWindow?.TryRunScheduledRecoveryRestore(true);
-            var hasSnapshot = !string.IsNullOrEmpty(SessionState.GetString(SESSION_RECOVERY_SAVED_AT, ""));
-            return JsonUtility.ToJson(new DevRecoveryStatePayload
-            {
-                pendingAfterReload = hasSnapshot,
-                activeSessionId = SessionState.GetString(SESSION_RECOVERY_ACTIVE_SESSION, ""),
-                lastKnownActiveSessionId = SessionState.GetString(SESSION_RECOVERY_LAST_KNOWN_ACTIVE_SESSION, ""),
-                wasStreaming = SessionState.GetBool(SESSION_RECOVERY_WAS_STREAMING, false),
-                lastUserMessageText = SessionState.GetString(SESSION_RECOVERY_LAST_USER, ""),
-                draftInputText = SessionState.GetString(SESSION_RECOVERY_DRAFT, ""),
-                savedAt = SessionState.GetString(SESSION_RECOVERY_SAVED_AT, ""),
-                hasSnapshot = hasSnapshot,
-                restoreScheduled = _currentWindow?._recoveryRestoreScheduled == true,
-                restoreNotBeforeAt = _currentWindow?._recoveryRestoreNotBeforeAt ?? -1,
-            });
+            return PieChatSessionRecovery.BuildRecoveryStateJson(
+                _currentWindow?._recoveryRestoreScheduled == true,
+                _currentWindow?._recoveryRestoreNotBeforeAt ?? -1);
         }
 
         internal static string DevRpcBeginInteraction(string argsJson)
@@ -470,7 +400,7 @@ namespace Pie.Editor
 
             ConnectBridge();
             if (_autoResume && HasRecoverySnapshot())
-                ScheduleRecoveryRestore(SESSION_RECOVERY_RESTORE_DELAY_SECONDS);
+                ScheduleRecoveryRestore(PieChatSessionRecovery.RestoreDelaySeconds);
         }
 
         private void OnDisable()
@@ -485,19 +415,17 @@ namespace Pie.Editor
 
         private static string BuildDevChatStateJson(PieChatWindow window)
         {
-            return JsonUtility.ToJson(new DevChatStatePayload
-            {
-                isOpen = window != null,
-                isInitialized = window?._bridge?.IsInitialized == true,
-                isStreaming = window?._isStreaming == true,
-                isBusy = window?.IsBusy() == true,
-                statusText = window?._statusText ?? "",
-                inputText = window?._inputText ?? "",
-                messageCount = window?._messages.Count ?? 0,
-                todoCount = window?._todoItems.Count ?? 0,
-                activeSessionId = window?._activeSessionId ?? "",
-                configAppliedVersion = window?._configAppliedVersion ?? 0,
-            });
+            return PieChatDevRpcPayloads.BuildStateJson(
+                window != null,
+                window?._bridge?.IsInitialized == true,
+                window?._isStreaming == true,
+                window?.IsBusy() == true,
+                window?._statusText ?? "",
+                window?._inputText ?? "",
+                window?._messages.Count ?? 0,
+                window?._todoItems.Count ?? 0,
+                window?._activeSessionId ?? "",
+                window?._configAppliedVersion ?? 0);
         }
 
         private bool IsBusy()
@@ -517,12 +445,12 @@ namespace Pie.Editor
         private string GetRecentMessagesJson(int limit)
         {
             var count = Math.Min(limit, _messages.Count);
-            var items = new DevChatMessagePayload[count];
+            var items = new PieChatDevRpcPayloads.DevChatMessagePayload[count];
             var start = Math.Max(0, _messages.Count - count);
             for (var i = 0; i < count; i++)
             {
                 var msg = _messages[start + i];
-                items[i] = new DevChatMessagePayload
+                items[i] = new PieChatDevRpcPayloads.DevChatMessagePayload
                 {
                     role = msg.Role ?? "",
                     title = msg.Title ?? "",
@@ -533,10 +461,7 @@ namespace Pie.Editor
                 };
             }
 
-            return JsonUtility.ToJson(new DevChatMessagesPayload
-            {
-                messages = items,
-            });
+            return PieChatDevRpcPayloads.BuildMessagesJson(items);
         }
 
         private string HandleInteractionHostCall(string argsJson)
@@ -815,7 +740,7 @@ namespace Pie.Editor
         private void TickRecoveryRestore()
         {
             if (_autoResume && HasRecoverySnapshot() && !_recoveryRestoreScheduled)
-                ScheduleRecoveryRestore(SESSION_RECOVERY_RESTORE_DELAY_SECONDS);
+                ScheduleRecoveryRestore(PieChatSessionRecovery.RestoreDelaySeconds);
 
             if (_autoResume && HasRecoverySnapshot())
                 TryRunScheduledRecoveryRestore(false);
@@ -841,7 +766,7 @@ namespace Pie.Editor
                 PushSettings();
                 _bridge.SendToJs("list_skills", "{}");
                 if (_autoResume && HasRecoverySnapshot())
-                    ScheduleRecoveryRestore(SESSION_RECOVERY_RESTORE_DELAY_SECONDS);
+                    ScheduleRecoveryRestore(PieChatSessionRecovery.RestoreDelaySeconds);
             }
 
             RefreshSessions();
@@ -1977,7 +1902,7 @@ namespace Pie.Editor
                 var payload = JsonUtility.FromJson<SessionSyncPayload>(json);
                 _activeSessionId = payload?.id ?? "";
                 if (!string.IsNullOrEmpty(_activeSessionId))
-                    SessionState.SetString(SESSION_RECOVERY_LAST_KNOWN_ACTIVE_SESSION, _activeSessionId);
+                    PieChatSessionRecovery.SetLastKnownActiveSession(_activeSessionId);
                 _messages.Clear();
                 _todoItems.Clear();
 
@@ -2007,7 +1932,7 @@ namespace Pie.Editor
                     _todoItems.AddRange(payload.todoState);
 
                 _isStreaming = false;
-                var pendingRecoverySessionId = SessionState.GetString(SESSION_RECOVERY_ACTIVE_SESSION, "");
+                var pendingRecoverySessionId = PieChatSessionRecovery.Read().activeSessionId;
                 var expectedRecoverySessionId = !string.IsNullOrEmpty(pendingRecoverySessionId)
                     ? pendingRecoverySessionId
                     : "";
@@ -2254,17 +2179,15 @@ namespace Pie.Editor
             RefreshSessions();
         }
 
-        private void SendRecoveryResume(RecoverySnapshot snapshot)
+        private void SendRecoveryResume(PieChatSessionRecovery.Snapshot snapshot)
         {
             if (_bridge?.IsInitialized != true || snapshot == null || string.IsNullOrEmpty(snapshot.activeSessionId))
                 return;
 
-            var escapedSessionId = snapshot.activeSessionId.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            var escapedLastUser = (snapshot.lastUserMessageText ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
             PieDiagnostics.Verbose($"[PieChatWindow] Sending recovery resume_session for {snapshot.activeSessionId}");
             _bridge.SendToJs(
                 "resume_session",
-                $"{{\"sessionId\":\"{escapedSessionId}\",\"recoverInterrupted\":{(snapshot.wasStreaming ? "true" : "false")},\"lastUserText\":\"{escapedLastUser}\"}}");
+                PieChatSessionRecovery.BuildResumeArgsJson(snapshot));
         }
 
         private void RefreshSessions()
@@ -2399,121 +2322,22 @@ namespace Pie.Editor
 
         private string SummarizeToolResult(string toolName, string resultText, string detailsJson)
         {
-            if (toolName == "inspect_unity_context")
-            {
-                var source = !string.IsNullOrEmpty(detailsJson) ? detailsJson : resultText;
-                var pipeline = ExtractJsonString(source, "renderPipeline") ?? "unknown pipeline";
-                var scene = ExtractJsonString(source, "sceneName") ?? "unknown scene";
-                return $"{pipeline}, scene={scene}";
-            }
-
-            if (string.IsNullOrEmpty(resultText)) return "Done.";
-
-            if (toolName == "write_project_memory")
-            {
-                return "AGENTS.md updated";
-            }
-
-            if (toolName == "read_project_memory")
-            {
-                return resultText.Contains("No project memory found", StringComparison.Ordinal)
-                    ? "No AGENTS.md yet"
-                    : "Loaded AGENTS.md";
-            }
-
-            if (toolName == "manage_todo_list")
-            {
-                if (resultText.Contains("Todo action failed", StringComparison.Ordinal)) return resultText.Trim();
-                if (resultText.Contains("No active todo list", StringComparison.Ordinal) || resultText.Contains("No todos", StringComparison.Ordinal)) return "No active todo list";
-                if (resultText.StartsWith("Created ", StringComparison.Ordinal)) return resultText.Trim();
-                if (resultText.StartsWith("Completed item ", StringComparison.Ordinal)) return resultText.Trim();
-                if (resultText.StartsWith("Cleared todo list", StringComparison.Ordinal)) return resultText.Trim();
-                return resultText.Trim();
-            }
-
-            if (toolName == "web_search")
-            {
-                var sourceCount = ExtractJsonInt(detailsJson, "sourceCount");
-                var toolModel = ExtractJsonString(detailsJson, "toolModel");
-                var providerMode = ExtractJsonString(detailsJson, "providerMode");
-                var parts = new System.Collections.Generic.List<string>();
-                parts.Add(sourceCount >= 0 ? $"{sourceCount} sources" : "search completed");
-                if (!string.IsNullOrEmpty(toolModel)) parts.Add(toolModel);
-                if (!string.IsNullOrEmpty(providerMode)) parts.Add(providerMode);
-                return string.Join(" · ", parts);
-            }
-
-            if (toolName == "read_file" && !string.IsNullOrEmpty(detailsJson) && detailsJson.Contains("\"understanding\"", StringComparison.Ordinal))
-            {
-                var purpose = ExtractJsonString(detailsJson, "purpose");
-                var toolModel = ExtractJsonString(detailsJson, "toolModel");
-                var routeSource = ExtractJsonString(detailsJson, "routeSource");
-                var brief = resultText.Replace("\r", "").Trim();
-                if (brief.Length > 80) brief = brief.Substring(0, 80) + "...";
-                var parts = new System.Collections.Generic.List<string>();
-                parts.Add(string.IsNullOrEmpty(purpose) ? "file understanding" : purpose);
-                if (!string.IsNullOrEmpty(toolModel)) parts.Add(toolModel);
-                if (!string.IsNullOrEmpty(routeSource)) parts.Add(routeSource);
-                if (!string.IsNullOrEmpty(brief)) parts.Add(brief);
-                return string.Join(" · ", parts);
-            }
-
-            return resultText.Replace("\r", "").Trim();
+            return PieChatToolSummaryFormatter.SummarizeToolResult(toolName, resultText, detailsJson);
         }
 
         private string SummarizeToolFailure(string toolName, string errorText)
         {
-            if (toolName == "manage_todo_list" && errorText.Contains("Todo action failed", StringComparison.Ordinal))
-                return errorText.Replace("\r", "").Trim();
-            return errorText.Replace("\r", "").Trim();
+            return PieChatToolSummaryFormatter.SummarizeToolFailure(toolName, errorText);
         }
 
         private string BuildArgsSummary(string argsJson)
         {
-            if (string.IsNullOrEmpty(argsJson))
-                return null;
-
-            var formatted = FormatStructuredText(argsJson);
-            if (string.IsNullOrEmpty(formatted))
-                return null;
-
-            var singleLine = formatted.Replace("\r", "").Replace("\n", " ").Trim();
-            if (singleLine.Length > 160)
-                singleLine = singleLine.Substring(0, 160) + "...";
-
-            return $"args: {singleLine}";
+            return PieChatToolSummaryFormatter.BuildArgsSummary(argsJson);
         }
 
         private string BuildEffectiveArgsFromDetails(string toolName, string detailsJson)
         {
-            if (string.IsNullOrEmpty(detailsJson))
-                return null;
-
-            if (toolName == "find_files")
-            {
-                var effectivePattern = ExtractJsonString(detailsJson, "effectivePattern");
-                var searchPath = ExtractJsonString(detailsJson, "searchPath");
-                var rawPattern = ExtractJsonString(detailsJson, "rawPattern");
-                var parts = new System.Collections.Generic.List<string>();
-                if (!string.IsNullOrEmpty(rawPattern)) parts.Add($"rawPattern={rawPattern}");
-                if (!string.IsNullOrEmpty(effectivePattern)) parts.Add($"pattern={effectivePattern}");
-                if (!string.IsNullOrEmpty(searchPath)) parts.Add($"path={searchPath}");
-                return parts.Count > 0 ? $"args: {{ {string.Join(", ", parts)} }}" : null;
-            }
-
-            if (toolName == "grep_text")
-            {
-                var effectivePattern = ExtractJsonString(detailsJson, "effectivePattern");
-                var searchPath = ExtractJsonString(detailsJson, "searchPath");
-                var glob = ExtractJsonString(detailsJson, "glob");
-                var parts = new System.Collections.Generic.List<string>();
-                if (!string.IsNullOrEmpty(effectivePattern)) parts.Add($"pattern={effectivePattern}");
-                if (!string.IsNullOrEmpty(glob)) parts.Add($"glob={glob}");
-                if (!string.IsNullOrEmpty(searchPath)) parts.Add($"path={searchPath}");
-                return parts.Count > 0 ? $"args: {{ {string.Join(", ", parts)} }}" : null;
-            }
-
-            return null;
+            return PieChatToolSummaryFormatter.BuildEffectiveArgsFromDetails(toolName, detailsJson);
         }
 
         private string BuildToolDetail(string toolName, string argsJson, string resultText, string detailsJson, string error)
@@ -2663,6 +2487,69 @@ namespace Pie.Editor
             return int.TryParse(json.Substring(start, index - start), out var value) ? value : -1;
         }
 
+        private int ExtractJsonArrayCount(string json, string key)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(key))
+                return -1;
+
+            var pattern = $"\"{key}\":";
+            var index = json.IndexOf(pattern, StringComparison.Ordinal);
+            if (index < 0)
+                return -1;
+
+            index += pattern.Length;
+            while (index < json.Length && char.IsWhiteSpace(json[index]))
+                index++;
+            if (index >= json.Length || json[index] != '[')
+                return -1;
+
+            index++;
+            var depth = 0;
+            var inString = false;
+            var escape = false;
+            var count = 0;
+            var hasValue = false;
+            for (; index < json.Length; index++)
+            {
+                var ch = json[index];
+                if (inString)
+                {
+                    if (escape) escape = false;
+                    else if (ch == '\\') escape = true;
+                    else if (ch == '"') inString = false;
+                    continue;
+                }
+                if (ch == '"')
+                {
+                    inString = true;
+                    hasValue = true;
+                    continue;
+                }
+                if (ch == '[' || ch == '{')
+                {
+                    depth++;
+                    hasValue = true;
+                    continue;
+                }
+                if (ch == ']' && depth == 0)
+                    return hasValue ? count + 1 : 0;
+                if (ch == ']' || ch == '}')
+                {
+                    depth--;
+                    continue;
+                }
+                if (ch == ',' && depth == 0)
+                {
+                    count++;
+                    hasValue = false;
+                    continue;
+                }
+                if (!char.IsWhiteSpace(ch))
+                    hasValue = true;
+            }
+            return -1;
+        }
+
         private void AppendIndent(System.Text.StringBuilder sb, int indent)
         {
             for (var i = 0; i < indent; i++)
@@ -2799,18 +2686,19 @@ namespace Pie.Editor
                 var wasInterrupted = HasInFlightAssistantWork();
                 var activeSessionId = !string.IsNullOrEmpty(_activeSessionId)
                     ? _activeSessionId
-                    : SessionState.GetString(SESSION_RECOVERY_LAST_KNOWN_ACTIVE_SESSION, "");
+                    : PieChatSessionRecovery.GetLastKnownActiveSession();
                 var latestUserText = IsRestorableInputText(_lastSubmittedInputText)
                     ? _lastSubmittedInputText
                     : (GetLatestUserMessage() ?? "");
-                SessionState.SetString(SESSION_RECOVERY_ACTIVE_SESSION, activeSessionId ?? "");
-                SessionState.SetBool(SESSION_RECOVERY_WAS_STREAMING, wasInterrupted);
-                SessionState.SetString(SESSION_RECOVERY_LAST_USER, latestUserText);
-                SessionState.SetString(SESSION_RECOVERY_DRAFT, _inputText ?? "");
-                SessionState.SetString(SESSION_RECOVERY_PROVIDER, _provider ?? "");
-                SessionState.SetString(SESSION_RECOVERY_MODEL, _model ?? "");
-                SessionState.SetString(SESSION_RECOVERY_BASE_URL, _baseUrl ?? "");
-                SessionState.SetString(SESSION_RECOVERY_SAVED_AT, DateTime.UtcNow.Ticks.ToString());
+                PieChatSessionRecovery.Save(
+                    activeSessionId,
+                    wasInterrupted,
+                    latestUserText,
+                    _inputText,
+                    _provider,
+                    _model,
+                    _baseUrl,
+                    DateTime.UtcNow.Ticks);
             }
             catch (Exception ex)
             {
@@ -2826,7 +2714,8 @@ namespace Pie.Editor
             }
 
             SaveRecoverySnapshot();
-            PieDiagnostics.Verbose($"[PieChatWindow] SaveRecoverySnapshotIfNeeded: saved session={SessionState.GetString(SESSION_RECOVERY_ACTIVE_SESSION, "")} streaming={SessionState.GetBool(SESSION_RECOVERY_WAS_STREAMING, false)}");
+            var snapshot = PieChatSessionRecovery.Read();
+            PieDiagnostics.Verbose($"[PieChatWindow] SaveRecoverySnapshotIfNeeded: saved session={snapshot.activeSessionId} streaming={snapshot.wasStreaming}");
         }
 
         private void ScheduleRecoveryRestore(double delaySeconds)
@@ -2930,7 +2819,7 @@ namespace Pie.Editor
                 }
 
                 if (string.IsNullOrEmpty(snapshot.activeSessionId))
-                    snapshot.activeSessionId = SessionState.GetString(SESSION_RECOVERY_LAST_KNOWN_ACTIVE_SESSION, "");
+                    snapshot.activeSessionId = PieChatSessionRecovery.GetLastKnownActiveSession();
 
                 if (snapshot.wasStreaming)
                 {
@@ -2975,42 +2864,11 @@ namespace Pie.Editor
             }
         }
 
-        private RecoverySnapshot ReadRecoverySnapshot()
-        {
-            var savedAtRaw = SessionState.GetString(SESSION_RECOVERY_SAVED_AT, "");
-            long savedAtTicksUtc = 0;
-            if (!string.IsNullOrEmpty(savedAtRaw))
-                long.TryParse(savedAtRaw, out savedAtTicksUtc);
+        private PieChatSessionRecovery.Snapshot ReadRecoverySnapshot() => PieChatSessionRecovery.Read();
 
-            return new RecoverySnapshot
-            {
-                activeSessionId = SessionState.GetString(SESSION_RECOVERY_ACTIVE_SESSION, ""),
-                wasStreaming = SessionState.GetBool(SESSION_RECOVERY_WAS_STREAMING, false),
-                lastUserMessageText = SessionState.GetString(SESSION_RECOVERY_LAST_USER, ""),
-                draftInputText = SessionState.GetString(SESSION_RECOVERY_DRAFT, ""),
-                provider = SessionState.GetString(SESSION_RECOVERY_PROVIDER, ""),
-                model = SessionState.GetString(SESSION_RECOVERY_MODEL, ""),
-                baseUrl = SessionState.GetString(SESSION_RECOVERY_BASE_URL, ""),
-                savedAtTicksUtc = savedAtTicksUtc,
-            };
-        }
+        private void ClearRecoverySnapshot() => PieChatSessionRecovery.Clear();
 
-        private void ClearRecoverySnapshot()
-        {
-            SessionState.EraseString(SESSION_RECOVERY_ACTIVE_SESSION);
-            SessionState.EraseBool(SESSION_RECOVERY_WAS_STREAMING);
-            SessionState.EraseString(SESSION_RECOVERY_LAST_USER);
-            SessionState.EraseString(SESSION_RECOVERY_DRAFT);
-            SessionState.EraseString(SESSION_RECOVERY_PROVIDER);
-            SessionState.EraseString(SESSION_RECOVERY_MODEL);
-            SessionState.EraseString(SESSION_RECOVERY_BASE_URL);
-            SessionState.EraseString(SESSION_RECOVERY_SAVED_AT);
-        }
-
-        private bool HasRecoverySnapshot()
-        {
-            return !string.IsNullOrEmpty(SessionState.GetString(SESSION_RECOVERY_SAVED_AT, ""));
-        }
+        private bool HasRecoverySnapshot() => PieChatSessionRecovery.HasSnapshot();
 
         private bool IsRestorableInputText(string value)
         {
@@ -3184,19 +3042,6 @@ namespace Pie.Editor
         {
             public string type;
             public string text;
-        }
-
-        [Serializable]
-        private class RecoverySnapshot
-        {
-            public string activeSessionId;
-            public bool wasStreaming;
-            public string lastUserMessageText;
-            public string draftInputText;
-            public string provider;
-            public string model;
-            public string baseUrl;
-            public long savedAtTicksUtc;
         }
 
         private class PendingInteraction

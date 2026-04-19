@@ -1,3 +1,4 @@
+#if PIE_UNITY_SPLIT_SOURCES
 namespace Pie
 {
     public static class PieUnityAvailability
@@ -24,3 +25,5 @@ namespace Pie
         }
     }
 }
+
+#endif

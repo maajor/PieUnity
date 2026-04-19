@@ -1,3 +1,4 @@
+#if PIE_UNITY_SPLIT_SOURCES
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -132,3 +133,5 @@ namespace Pie
         }
     }
 }
+
+#endif

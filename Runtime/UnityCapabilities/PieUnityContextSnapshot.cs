@@ -1,3 +1,4 @@
+#if PIE_UNITY_SPLIT_SOURCES
 using System;
 using System.IO;
 using UnityEngine;
@@ -73,3 +74,5 @@ namespace Pie
         }
     }
 }
+
+#endif

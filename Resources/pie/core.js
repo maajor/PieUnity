@@ -13606,6 +13606,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     write_file: { riskClass: "write", concurrencySafe: false, requiresPermission: true, permissionScope: "filesystem", writesFile: true, highRisk: true },
     edit_file: { riskClass: "write", concurrencySafe: false, requiresPermission: true, permissionScope: "filesystem", writesFile: true, highRisk: true },
     bash: { riskClass: "shell", concurrencySafe: false, requiresPermission: true, permissionScope: "shell", executesShell: true, availableInPlanMode: true, allowedForSubagentByDefault: true, highRisk: true, maxOutputChars: 1e5 },
+    web_research: { riskClass: "network", concurrencySafe: true, permissionScope: "network", readsNetwork: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
     web_search: { riskClass: "network", concurrencySafe: true, permissionScope: "network", readsNetwork: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
     web_fetch: { riskClass: "network", concurrencySafe: true, permissionScope: "network", readsNetwork: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
     code_intel: { riskClass: "read_only", concurrencySafe: true, permissionScope: "filesystem", readsFile: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
@@ -14082,9 +14083,20 @@ ${resource.content}`
       "failureCategory",
       "fallbackReason",
       "qualityWarnings",
+      "qualityScore",
       "sourceCount",
+      "sources",
+      "fetchedSources",
+      "browserRequiredSources",
       "actualQueries",
       "attempts",
+      "providerAttempts",
+      "providerHealth",
+      "routeRankReason",
+      "latencyMetrics",
+      "costEstimate",
+      "browserReadSummary",
+      "guardFindings",
       "timedOut"
     ];
     const summary = {};
@@ -14101,6 +14113,54 @@ ${resource.content}`
             routeSource: attempt.routeSource,
             failureCategory: attempt.failureCategory,
             fallbackReason: typeof attempt.fallbackReason === "string" && attempt.fallbackReason.length > 200 ? `${attempt.fallbackReason.slice(0, 200)}...` : attempt.fallbackReason,
+            sourceCount: attempt.sourceCount,
+            qualityWarnings: attempt.qualityWarnings
+          };
+        });
+        continue;
+      }
+      if ((key === "sources" || key === "fetchedSources" || key === "browserRequiredSources") && Array.isArray(value)) {
+        summary[key] = {
+          count: value.length,
+          items: value.slice(0, 5).map((entry) => {
+            if (!isRecord(entry)) return entry;
+            return {
+              url: entry.finalUrl || entry.url,
+              title: entry.title,
+              score: entry.score,
+              requiresBrowser: entry.requiresBrowser,
+              failureCategory: entry.failureCategory,
+              extractionMethod: entry.extractionMethod,
+              browserReadSummary: entry.browserReadSummary
+            };
+          })
+        };
+        continue;
+      }
+      if (key === "providerHealth" && Array.isArray(value)) {
+        summary[key] = value.slice(0, 5).map((entry) => {
+          if (!isRecord(entry)) return entry;
+          return {
+            routeKey: entry.routeKey,
+            attempts: entry.attempts,
+            successes: entry.successes,
+            failures: entry.failures,
+            lowQuality: entry.lowQuality,
+            rateLimited: entry.rateLimited,
+            timeouts: entry.timeouts
+          };
+        });
+        continue;
+      }
+      if (key === "providerAttempts" && Array.isArray(value)) {
+        summary[key] = value.slice(-5).map((attempt) => {
+          if (!isRecord(attempt)) return attempt;
+          return {
+            provider: attempt.provider,
+            modelId: attempt.modelId,
+            providerMode: attempt.providerMode,
+            routeSource: attempt.routeSource,
+            failureCategory: attempt.failureCategory,
             sourceCount: attempt.sourceCount,
             qualityWarnings: attempt.qualityWarnings
           };
@@ -20237,6 +20297,15 @@ Perform a web search for the query: ${params.input.query}`
   function assistantText(message) {
     return message.content.filter((block) => block.type === "text").map((block) => block.text).join("\n").trim();
   }
+  async function withAbort(promise, signal) {
+    if (!signal) return promise;
+    if (signal.aborted) throw signal.reason ?? new Error("operation aborted");
+    return await new Promise((resolve2, reject) => {
+      const onAbort = () => reject(signal.reason ?? new Error("operation aborted"));
+      signal.addEventListener("abort", onAbort, { once: true });
+      promise.then(resolve2, reject).finally(() => signal.removeEventListener("abort", onAbort));
+    });
+  }
   async function applyPromptWithModel(deps, prompt, url, content, signal) {
     const model = deps.getModel?.();
     const apiKey = deps.getApiKey?.();
@@ -20252,24 +20321,27 @@ Perform a web search for the query: ${params.input.query}`
       };
     }
     try {
-      const response = await completeSimple(
-        model,
-        {
-          systemPrompt: "You are a web_fetch extraction tool. Answer only from the fetched page content. Include uncertainty if the page does not contain the requested information.",
-          messages: [{
-            role: "user",
-            timestamp: Date.now(),
-            content: [{
-              type: "text",
-              text: [`URL: ${url}`, `Task: ${prompt}`, "", "Fetched content:", content].join("\n")
+      const response = await withAbort(
+        completeSimple(
+          model,
+          {
+            systemPrompt: "You are a web_fetch extraction tool. Answer only from the fetched page content. Include uncertainty if the page does not contain the requested information.",
+            messages: [{
+              role: "user",
+              timestamp: Date.now(),
+              content: [{
+                type: "text",
+                text: [`URL: ${url}`, `Task: ${prompt}`, "", "Fetched content:", content].join("\n")
+              }]
             }]
-          }]
-        },
-        {
-          apiKey,
-          maxTokens: Math.min(model.maxTokens || 4096, 4096),
-          signal
-        }
+          },
+          {
+            apiKey,
+            maxTokens: Math.min(model.maxTokens || 4096, 4096),
+            signal
+          }
+        ),
+        signal
       );
       const text = assistantText(response) || response.errorMessage || "(web_fetch extraction model returned no text)";
       return { text, model: modelLabel2(model), isError: response.stopReason === "error" || response.stopReason === "aborted" };
@@ -20428,6 +20500,621 @@ Perform a web search for the query: ${params.input.query}`
         } finally {
           timeout.dispose();
         }
+      }
+    };
+  }
+
+  // ../../packages/shared-headless-capabilities/src/web-research.ts
+  var webResearchSchema = Type.Object({
+    query: Type.String({
+      minLength: 2,
+      description: "The research question or topic. Use for end-to-end public web research."
+    }),
+    allowed_domains: Type.Optional(Type.Array(Type.String({
+      description: "Only include sources from these domains. Use only when the user explicitly asks to limit sources."
+    }))),
+    blocked_domains: Type.Optional(Type.Array(Type.String({
+      description: "Exclude sources from these domains. Use only when the user explicitly asks to avoid sources."
+    }))),
+    max_sources: Type.Optional(Type.Number({
+      minimum: 1,
+      maximum: 8,
+      description: "Maximum credible sources to fetch and cite. Defaults to 3."
+    }))
+  });
+  var DEFAULT_WEB_RESEARCH_SEARCH_ATTEMPT_TIMEOUT_MS = 45e3;
+  var DEFAULT_WEB_RESEARCH_FETCH_ATTEMPT_TIMEOUT_MS = 3e4;
+  var DEFAULT_WEB_RESEARCH_BROWSER_ATTEMPT_TIMEOUT_MS = 45e3;
+  function isRecord3(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  function textFromResult(result) {
+    return result.content.filter((item) => item.type === "text" && typeof item.text === "string").map((item) => item.text).join("\n").trim();
+  }
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+  function normalizeHost(hostname) {
+    return hostname.toLowerCase().replace(/^www\./, "");
+  }
+  function parseResearchUrl(value) {
+    const trimmed = value.trim();
+    const match = /^(https?):\/\/([^/?#]+)([^?#]*)?(\?[^#]*)?(#.*)?$/i.exec(trimmed);
+    if (!match) return null;
+    const protocol = match[1].toLowerCase();
+    const rawHost = match[2].replace(/^[^@]+@/, "");
+    const hostname = rawHost.startsWith("[") ? rawHost : rawHost.split(":")[0];
+    const pathname = match[3] && match[3].startsWith("/") ? match[3] : "/";
+    const search = match[4] || "";
+    const href = `${protocol}://${rawHost}${pathname}${search}`;
+    return {
+      href,
+      hostname,
+      pathname,
+      search,
+      hasSearchParam(name) {
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`(?:^\\?|&)${escaped}(?:=|&|$)`, "i").test(search);
+      }
+    };
+  }
+  function sourceKey(url) {
+    const parsed = parseResearchUrl(url);
+    if (!parsed) return url.trim();
+    return parsed.href.replace(/\/$/, "");
+  }
+  function isSearchPage(url) {
+    const host = normalizeHost(url.hostname);
+    if (/(google|bing|duckduckgo|baidu|yahoo|yandex)\./.test(host)) return true;
+    return /(^|\/)(search|results)(\/|$)/i.test(url.pathname) || url.hasSearchParam("q");
+  }
+  function isHomepage(url) {
+    return (url.pathname === "" || url.pathname === "/") && !url.search;
+  }
+  function looksOfficial(url) {
+    const host = normalizeHost(url.hostname);
+    return host.startsWith("docs.") || host.startsWith("developer.") || host.startsWith("developers.") || host.startsWith("learn.") || host.startsWith("api.") || /(^|\.)gov$/.test(host) || /(^|\.)edu$/.test(host) || /\/(docs|documentation|reference|guide|guides|api|manual)\b/i.test(url.pathname);
+  }
+  function looksGithubAuthoritative(url) {
+    const host = normalizeHost(url.hostname);
+    if (host !== "github.com") return false;
+    return /\/(releases|issues|pull|wiki|blob|tree|commit)\b/i.test(url.pathname);
+  }
+  function looksNewsAuthority(url) {
+    const host = normalizeHost(url.hostname);
+    return [
+      "apnews.com",
+      "reuters.com",
+      "bbc.com",
+      "pbs.org",
+      "npr.org",
+      "theguardian.com",
+      "nytimes.com",
+      "wsj.com",
+      "chinadaily.com.cn",
+      "xinhuanet.com"
+    ].some((domain) => host === domain || host.endsWith(`.${domain}`));
+  }
+  function scoreWebResearchSource(source) {
+    const reasons = [];
+    let score = 45;
+    const url = parseResearchUrl(source.url);
+    if (!url) {
+      score = 0;
+      reasons.push("invalid_url");
+      return { source, score, reasons };
+    }
+    if (looksOfficial(url)) {
+      score += 35;
+      reasons.push("official_or_docs");
+    }
+    if (looksGithubAuthoritative(url)) {
+      score += 25;
+      reasons.push("github_primary_source");
+    }
+    if (looksNewsAuthority(url)) {
+      score += 20;
+      reasons.push("news_authority");
+    }
+    if (isHomepage(url)) {
+      score -= 35;
+      reasons.push("homepage");
+    }
+    if (isSearchPage(url)) {
+      score -= 60;
+      reasons.push("search_page");
+    }
+    if (!source.title?.trim()) {
+      score -= 15;
+      reasons.push("missing_title");
+    }
+    if (/\.pdf($|\?)/i.test(url.pathname)) {
+      score += 10;
+      reasons.push("pdf_document");
+    }
+    return { source, score: clamp(score, 0, 100), reasons };
+  }
+  function dedupeSources(sources) {
+    const seen = /* @__PURE__ */ new Set();
+    const deduped = [];
+    for (const source of sources) {
+      if (!source.url) continue;
+      const key = sourceKey(source.url);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(source);
+    }
+    return deduped;
+  }
+  function hasChinese(text) {
+    return /[\u3400-\u9fff]/.test(text);
+  }
+  function isRecentQuery(text) {
+    return /\b(today|latest|current|recent|news|202[0-9]|release|changelog)\b/i.test(text) || /(今天|最新|新闻|最近|当前|今日|发布|更新)/.test(text);
+  }
+  function isDocsQuery(text) {
+    return /\b(docs?|documentation|api|reference|guide|manual|release notes?|changelog|github|issue)\b/i.test(text) || /(文档|官方|接口|指南|发布说明|更新日志|issue|问题)/i.test(text);
+  }
+  function planWebResearchQueries(query, dateContext) {
+    const trimmed = query.trim();
+    const variants = /* @__PURE__ */ new Set([trimmed]);
+    const year = dateContext?.currentDate?.slice(0, 4) || String((/* @__PURE__ */ new Date()).getFullYear());
+    if (isRecentQuery(trimmed)) {
+      variants.add(`${trimmed} ${year}`);
+    }
+    if (isDocsQuery(trimmed)) {
+      variants.add(`${trimmed} official documentation`);
+      variants.add(`${trimmed} GitHub release changelog issue`);
+    } else {
+      variants.add(`${trimmed} official sources documentation GitHub release changelog`);
+    }
+    if (hasChinese(trimmed)) {
+      variants.add(`${trimmed} \u5B98\u65B9 \u6587\u6863 \u6765\u6E90`);
+      if (isRecentQuery(trimmed)) variants.add(`${trimmed} ${year} today news`);
+    }
+    return [...variants].slice(0, 5);
+  }
+  function routeKeyFromAttempt(attempt) {
+    if (!attempt.provider && !attempt.modelId && !attempt.providerMode) return void 0;
+    return `${attempt.provider || "unknown"}/${attempt.modelId || "unknown"}:${attempt.providerMode}`;
+  }
+  function routeKeyFromDecision(route) {
+    const model = route.model;
+    const providerMode = model?.webSearch?.type || "unavailable";
+    return `${model?.provider || "unknown"}/${model?.id || "unknown"}:${providerMode}`;
+  }
+  function healthPenalty(health) {
+    if (!health || health.attempts === 0) return 0;
+    const failureRate = health.failures / health.attempts;
+    const lowQualityRate = health.lowQuality / health.attempts;
+    const rateLimitRate = health.rateLimited / health.attempts;
+    return failureRate * 40 + lowQualityRate * 25 + rateLimitRate * 25;
+  }
+  function sortCandidatesByHealth(candidates, healthEntries) {
+    if (!healthEntries?.length) return candidates;
+    const healthByKey = new Map(healthEntries.map((entry) => [entry.routeKey, entry]));
+    return [...candidates].sort((a, b) => healthPenalty(healthByKey.get(routeKeyFromDecision(a))) - healthPenalty(healthByKey.get(routeKeyFromDecision(b))));
+  }
+  function describeRouteRanking(candidates, healthEntries) {
+    if (!candidates.length) return ["no configured web_search route candidates"];
+    const healthByKey = new Map((healthEntries || []).map((entry) => [entry.routeKey, entry]));
+    return candidates.slice(0, 5).map((candidate, index) => {
+      const key = routeKeyFromDecision(candidate);
+      const health = healthByKey.get(key);
+      if (!health || health.attempts === 0) return `${index + 1}. ${key}: no prior health data`;
+      const successRate = Math.round(health.successes / Math.max(1, health.attempts) * 100);
+      const lowQualityRate = Math.round(health.lowQuality / Math.max(1, health.attempts) * 100);
+      const medianLatencyMs = Math.round(health.totalDurationMs / Math.max(1, health.attempts));
+      return `${index + 1}. ${key}: success=${successRate}%, lowQuality=${lowQualityRate}%, avgLatencyMs=${medianLatencyMs}, penalty=${Math.round(healthPenalty(health))}`;
+    });
+  }
+  function updateProviderHealth(current, attempts) {
+    const byKey = new Map((current || []).map((entry) => [entry.routeKey, { ...entry }]));
+    for (const attempt of attempts) {
+      const key = routeKeyFromAttempt(attempt);
+      if (!key) continue;
+      const entry = byKey.get(key) ?? {
+        routeKey: key,
+        attempts: 0,
+        successes: 0,
+        failures: 0,
+        lowQuality: 0,
+        rateLimited: 0,
+        timeouts: 0,
+        totalDurationMs: 0,
+        totalSources: 0,
+        updatedAt: Date.now()
+      };
+      entry.attempts += 1;
+      entry.totalDurationMs += Math.round(attempt.durationSeconds * 1e3);
+      entry.totalSources += attempt.sourceCount || 0;
+      if (attempt.failureCategory) entry.failures += 1;
+      else entry.successes += 1;
+      if (attempt.failureCategory === "low_quality_result" || attempt.qualityWarnings?.length) entry.lowQuality += 1;
+      if (attempt.failureCategory === "rate_limited") entry.rateLimited += 1;
+      if (attempt.failureCategory === "timeout") entry.timeouts += 1;
+      entry.updatedAt = Date.now();
+      byKey.set(key, entry);
+    }
+    return [...byKey.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 20);
+  }
+  function contentDetails(result) {
+    return isRecord3(result.details) ? result.details : {};
+  }
+  function excerpt(text, max = 1400) {
+    const clean = text.replace(/\s+/g, " ").trim();
+    return clean.length > max ? `${clean.slice(0, max)}...` : clean;
+  }
+  function qualityScore(fetched, scored) {
+    if (!fetched.length) return 0;
+    const fetchScore = Math.min(70, fetched.length * 25);
+    const averageSourceScore = fetched.length ? fetched.reduce((sum, item) => sum + item.score, 0) / fetched.length : scored.length ? scored.slice(0, Math.max(1, fetched.length)).reduce((sum, item) => sum + item.score, 0) / Math.max(1, Math.min(scored.length, fetched.length)) : 0;
+    const citationBonus = fetched.some((item) => item.citationAnchors?.length) ? 10 : 0;
+    return clamp(Math.round(fetchScore + averageSourceScore * 0.25 + citationBonus), 0, 100);
+  }
+  function percentile(values, p) {
+    const sorted = values.filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+    if (!sorted.length) return void 0;
+    const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p / 100 * sorted.length) - 1));
+    return sorted[index];
+  }
+  function formatResearchPack(query, fetchedSources, warnings, browserRequiredSources) {
+    const lines = [
+      `Web research pack for: ${query}`,
+      "",
+      "Use the fetched sources below for the final answer. Do not rely on snippets alone.",
+      "If the fetched sources answer the user's request, answer directly; do not run another web_search or web_fetch loop for the same request.",
+      "",
+      "Fetched sources:"
+    ];
+    fetchedSources.forEach((source, index) => {
+      lines.push(`${index + 1}. ${source.title || source.finalUrl || source.url}`);
+      lines.push(`   URL: ${source.finalUrl || source.url}`);
+      lines.push(`   Excerpt: ${source.textExcerpt || "(no excerpt)"}`);
+    });
+    if (browserRequiredSources.length) {
+      lines.push("");
+      lines.push("Browser-required sources:");
+      for (const source of browserRequiredSources) {
+        lines.push(`- ${source.finalUrl || source.url}`);
+      }
+    }
+    if (warnings.length) {
+      lines.push("");
+      lines.push("Warnings:");
+      for (const warning of warnings) lines.push(`- ${warning}`);
+    }
+    lines.push("");
+    lines.push("Sources:");
+    for (const source of fetchedSources) lines.push(`- ${source.finalUrl || source.url}`);
+    return lines.join("\n");
+  }
+  function createChildSignal(parentSignal) {
+    const controller = new AbortController();
+    const onAbort = () => controller.abort(parentSignal?.reason);
+    if (parentSignal?.aborted) onAbort();
+    else parentSignal?.addEventListener("abort", onAbort, { once: true });
+    return {
+      signal: controller.signal,
+      abort: (reason) => controller.abort(reason),
+      dispose: () => parentSignal?.removeEventListener("abort", onAbort)
+    };
+  }
+  async function runWithDeadline(operation, timeoutMs, message, parentSignal) {
+    const child = createChildSignal(parentSignal);
+    let timer;
+    try {
+      return await new Promise((resolve2, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error(message);
+          child.abort(error);
+          reject(error);
+        }, timeoutMs);
+        operation(child.signal).then(resolve2, reject);
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+      child.dispose();
+    }
+  }
+  function createSharedWebResearchTool(deps) {
+    const initialHealth = deps.loadProviderHealth?.();
+    const initialCandidates = deps.resolveToolModelCandidates?.("web_search") ?? [];
+    const webSearchTool2 = deps.webSearchTool ?? createSharedWebSearchTool({
+      ...deps,
+      resolveToolModelCandidates: (purpose) => sortCandidatesByHealth(deps.resolveToolModelCandidates?.(purpose) ?? [], deps.loadProviderHealth?.() ?? initialHealth)
+    });
+    const webFetchTool2 = deps.webFetchTool ?? createSharedWebFetchTool(deps);
+    return {
+      name: "web_research",
+      label: "web_research",
+      description: "Run end-to-end public web research: plan search queries, search provider-native sources, fetch credible pages, and return a cited research pack. Use for general online research, current information, official docs, news, releases, issues, and webpage summaries. Use web_search/web_fetch directly only when you need precise low-level control. Do not use bash/curl/Python as a web research fallback.",
+      parameters: webResearchSchema,
+      capabilityMetadata: {
+        riskClass: "network",
+        concurrencySafe: true,
+        permissionScope: "network",
+        readsNetwork: true,
+        availableInPlanMode: true,
+        allowedForSubagentByDefault: true,
+        maxOutputChars: 1e5
+      },
+      execute: async (_toolCallId, rawParams, signal, onUpdate) => {
+        const input = rawParams;
+        const totalStartedAt = Date.now();
+        const currentHealth = deps.loadProviderHealth?.() ?? initialHealth;
+        const activeCandidates = deps.resolveToolModelCandidates?.("web_search") ?? initialCandidates;
+        const rankedCandidates = sortCandidatesByHealth(activeCandidates, currentHealth);
+        const routeRankReason = describeRouteRanking(rankedCandidates.length ? rankedCandidates : activeCandidates, currentHealth);
+        const query = String(input.query || "").trim();
+        const maxSources = clamp(Math.floor(input.max_sources ?? 3), 1, 8);
+        const searchAttemptTimeoutMs = Math.max(1e3, deps.searchAttemptTimeoutMs ?? deps.timeoutMs ?? DEFAULT_WEB_RESEARCH_SEARCH_ATTEMPT_TIMEOUT_MS);
+        const fetchAttemptTimeoutMs = Math.max(1e3, deps.fetchAttemptTimeoutMs ?? DEFAULT_WEB_RESEARCH_FETCH_ATTEMPT_TIMEOUT_MS);
+        const browserAttemptTimeoutMs = Math.max(1e3, deps.browserAttemptTimeoutMs ?? DEFAULT_WEB_RESEARCH_BROWSER_ATTEMPT_TIMEOUT_MS);
+        const attempts = [];
+        const providerAttempts = [];
+        const warnings = [];
+        const sourceReadDurations = [];
+        const actualQueries = [];
+        const allSources = [];
+        const dateContext = deps.getCurrentDateContext?.();
+        const queryVariants = planWebResearchQueries(query, dateContext);
+        const minimumSearchQueries = 1;
+        let searchedQueries = 0;
+        let searchDurationMs = 0;
+        let fetchDurationMs = 0;
+        let browserDurationMs = 0;
+        if (!query) {
+          return {
+            content: [{ type: "text", text: "web_research requires a non-empty query." }],
+            details: {
+              query,
+              actualQueries: [],
+              sources: [],
+              fetchedSources: [],
+              providerAttempts: [],
+              attempts: [],
+              qualityScore: 0,
+              warnings: ["missing_query"],
+              browserRequiredSources: [],
+              routeRankReason,
+              latencyMetrics: { totalDurationMs: Date.now() - totalStartedAt, searchDurationMs: 0, fetchDurationMs: 0, browserDurationMs: 0 },
+              costEstimate: { status: "unknown", reason: "Provider usage is not yet normalized across web research search/fetch/browser routes." }
+            },
+            isError: true
+          };
+        }
+        for (const variant of queryVariants) {
+          const startedAt = Date.now();
+          const allowedDomains = input.allowed_domains?.length ? input.allowed_domains : void 0;
+          const blockedDomains = allowedDomains ? void 0 : input.blocked_domains;
+          if (allowedDomains && input.blocked_domains?.length && warnings.length === 0) {
+            warnings.push("Both allowed_domains and blocked_domains were provided; web_research used allowed_domains and ignored blocked_domains for provider compatibility.");
+          }
+          const searchInput = {
+            query: variant,
+            allowed_domains: allowedDomains,
+            blocked_domains: blockedDomains
+          };
+          onUpdate?.({
+            content: [{ type: "text", text: `Searching web for: ${variant} (timeout ${Math.ceil(searchAttemptTimeoutMs / 1e3)}s)` }],
+            details: { query, actualQueries: [...actualQueries, variant], attempts, providerAttempts, fetchedSources: [], sources: dedupeSources(allSources), qualityScore: 0, warnings, browserRequiredSources: [] }
+          });
+          let result;
+          try {
+            result = await runWithDeadline(
+              (childSignal) => webSearchTool2.execute("web_research_search", searchInput, childSignal),
+              searchAttemptTimeoutMs,
+              `web_research search attempt timed out after ${Math.ceil(searchAttemptTimeoutMs / 1e3)} seconds`,
+              signal
+            );
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            attempts.push({
+              phase: "search",
+              query: variant,
+              status: "failed",
+              failureCategory: "timeout",
+              warnings: [message],
+              durationMs: Date.now() - startedAt
+            });
+            searchDurationMs += Date.now() - startedAt;
+            warnings.push(`${variant}: ${message}`);
+            actualQueries.push(variant);
+            break;
+          }
+          const details2 = contentDetails(result);
+          searchDurationMs += Date.now() - startedAt;
+          attempts.push({
+            phase: "search",
+            query: variant,
+            status: result.isError ? "failed" : "completed",
+            failureCategory: details2.failureCategory,
+            warnings: details2.qualityWarnings,
+            durationMs: Date.now() - startedAt
+          });
+          if (details2.actualQueries?.length) actualQueries.push(...details2.actualQueries);
+          else actualQueries.push(variant);
+          if (details2.attempts?.length) providerAttempts.push(...details2.attempts);
+          if (details2.qualityWarnings?.length) warnings.push(...details2.qualityWarnings.map((warning) => `${variant}: ${warning}`));
+          if (Array.isArray(details2.sources)) allSources.push(...details2.sources);
+          searchedQueries += 1;
+          const dedupedSoFar = dedupeSources(allSources);
+          const scoredSoFar = dedupedSoFar.map(scoreWebResearchSource).sort((a, b) => b.score - a.score);
+          const highQualitySources = scoredSoFar.filter((item) => item.score >= 70).length;
+          const searchSourceTarget = Math.min(maxSources, 3);
+          const enoughHighQuality = highQualitySources >= Math.min(searchSourceTarget, 2) || highQualitySources >= 1 && dedupedSoFar.length >= searchSourceTarget * 2 || highQualitySources >= 1 && maxSources === 1;
+          if (searchedQueries >= minimumSearchQueries && enoughHighQuality && !result.isError) {
+            warnings.push(`Fast path used after ${searchedQueries} search quer${searchedQueries === 1 ? "y" : "ies"}: high-quality source target reached.`);
+            break;
+          }
+          if (searchedQueries >= minimumSearchQueries && dedupeSources(allSources).length >= maxSources * 3 && !result.isError) break;
+        }
+        const nextHealth = updateProviderHealth(deps.loadProviderHealth?.() ?? initialHealth, providerAttempts);
+        await deps.saveProviderHealth?.(nextHealth);
+        const dedupedSources = dedupeSources(allSources);
+        const scoredSources = dedupedSources.map(scoreWebResearchSource).sort((a, b) => b.score - a.score);
+        const fetchedSources = [];
+        const browserRequiredSources = [];
+        const minimumFetchedSources = Math.min(maxSources, 2);
+        const targetFetchedSources = Math.min(maxSources, 3);
+        const candidateSources = scoredSources.filter((scored) => {
+          if (scored.score < 35) {
+            warnings.push(`Filtered low-quality source: ${scored.source.url} (${scored.reasons.join(", ") || "low_score"})`);
+            return false;
+          }
+          return true;
+        });
+        const fetchScoredSource = async (scored) => {
+          const startedAt = Date.now();
+          onUpdate?.({
+            content: [{ type: "text", text: `Fetching source: ${scored.source.url}` }],
+            details: { query, actualQueries: [...new Set(actualQueries)], sources: dedupedSources, fetchedSources, providerAttempts, attempts, qualityScore: qualityScore(fetchedSources, scoredSources), warnings, browserRequiredSources }
+          });
+          const fetchResult = await runWithDeadline(
+            (childSignal) => webFetchTool2.execute("web_research_fetch", { url: scored.source.url }, childSignal),
+            fetchAttemptTimeoutMs,
+            `web_research fetch attempt timed out after ${Math.ceil(fetchAttemptTimeoutMs / 1e3)} seconds`,
+            signal
+          ).catch((error) => ({
+            content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+            details: {
+              url: scored.source.url,
+              sourceUrl: scored.source.url,
+              durationMs: Date.now() - startedAt,
+              failureCategory: "timeout"
+            },
+            isError: true
+          }));
+          const details2 = contentDetails(fetchResult);
+          const text = textFromResult(fetchResult);
+          fetchDurationMs += Date.now() - startedAt;
+          sourceReadDurations.push(Date.now() - startedAt);
+          attempts.push({
+            phase: "fetch",
+            url: scored.source.url,
+            status: fetchResult.isError ? "failed" : "completed",
+            failureCategory: details2.failureCategory,
+            durationMs: Date.now() - startedAt
+          });
+          if (details2.requiresBrowser) {
+            const browserEntry = {
+              url: scored.source.url,
+              finalUrl: details2.finalUrl,
+              title: details2.title || scored.source.title,
+              score: scored.score,
+              scoreReasons: scored.reasons,
+              requiresBrowser: true,
+              failureCategory: details2.failureCategory
+            };
+            if (deps.renderedPageReader) {
+              let browserStartedAt = Date.now();
+              try {
+                onUpdate?.({
+                  content: [{ type: "text", text: `Reading browser-rendered source: ${details2.finalUrl || scored.source.url}` }],
+                  details: { query, actualQueries: [...new Set(actualQueries)], sources: dedupedSources, fetchedSources, providerAttempts, attempts, qualityScore: qualityScore(fetchedSources, scoredSources), warnings, browserRequiredSources }
+                });
+                const rendered = await runWithDeadline(
+                  (childSignal) => deps.renderedPageReader({ url: details2.finalUrl || scored.source.url, query }, childSignal),
+                  browserAttemptTimeoutMs,
+                  `web_research browser reader timed out after ${Math.ceil(browserAttemptTimeoutMs / 1e3)} seconds`,
+                  signal
+                );
+                browserDurationMs += Date.now() - browserStartedAt;
+                sourceReadDurations.push(Date.now() - browserStartedAt);
+                attempts.push({ phase: "browser", url: rendered.finalUrl || rendered.url, status: "completed", durationMs: Date.now() - browserStartedAt });
+                fetchedSources.push({
+                  url: scored.source.url,
+                  finalUrl: rendered.finalUrl || rendered.url,
+                  title: rendered.title || details2.title || scored.source.title,
+                  textExcerpt: excerpt(rendered.text),
+                  score: scored.score,
+                  scoreReasons: scored.reasons,
+                  extractionMethod: "browser_rendered",
+                  citationAnchors: rendered.citationAnchors,
+                  requiresBrowser: false,
+                  browserReadSummary: {
+                    screenshotPath: rendered.screenshotPath,
+                    consoleMessageCount: rendered.consoleMessages?.length,
+                    networkRequestCount: rendered.networkRequests?.length
+                  }
+                });
+                return;
+              } catch (error) {
+                browserDurationMs += Date.now() - browserStartedAt;
+                attempts.push({ phase: "browser", url: details2.finalUrl || scored.source.url, status: "failed", failureCategory: "requires_browser", durationMs: Date.now() - browserStartedAt });
+                warnings.push(`Browser reader failed for ${details2.finalUrl || scored.source.url}: ${error instanceof Error ? error.message : String(error)}`);
+              }
+            }
+            browserRequiredSources.push(browserEntry);
+            return;
+          }
+          if (fetchResult.isError || !text) {
+            warnings.push(`Could not fetch ${scored.source.url}: ${details2.failureCategory || "fetch_failed"}`);
+            return;
+          }
+          fetchedSources.push({
+            url: scored.source.url,
+            finalUrl: details2.finalUrl || scored.source.url,
+            title: details2.title || scored.source.title,
+            textExcerpt: excerpt(text),
+            score: scored.score,
+            scoreReasons: scored.reasons,
+            extractionMethod: details2.extractionMethod,
+            citationAnchors: details2.citationAnchors,
+            requiresBrowser: false,
+            failureCategory: details2.failureCategory
+          });
+        };
+        for (let index = 0; index < candidateSources.length && fetchedSources.length < maxSources; index += 3) {
+          if (fetchedSources.length >= targetFetchedSources && qualityScore(fetchedSources, scoredSources) >= 75) {
+            warnings.push(`Stopped after ${fetchedSources.length} credible fetched source(s); quality target reached before max_sources=${maxSources}.`);
+            break;
+          }
+          const remaining = maxSources - fetchedSources.length;
+          const batch = candidateSources.slice(index, index + Math.min(3, remaining)).filter((scored) => fetchedSources.length < minimumFetchedSources || scored.score >= 55);
+          if (!batch.length) continue;
+          await Promise.all(batch.map((scored) => fetchScoredSource(scored)));
+        }
+        const score = qualityScore(fetchedSources, scoredSources);
+        const details = {
+          query,
+          actualQueries: [...new Set(actualQueries)],
+          sources: dedupedSources,
+          fetchedSources,
+          providerAttempts,
+          attempts,
+          qualityScore: score,
+          warnings: [...new Set(warnings)],
+          browserRequiredSources,
+          providerHealth: nextHealth,
+          routeRankReason,
+          latencyMetrics: {
+            totalDurationMs: Date.now() - totalStartedAt,
+            searchDurationMs,
+            fetchDurationMs,
+            browserDurationMs,
+            p95SourceReadMs: percentile(sourceReadDurations, 95)
+          },
+          costEstimate: {
+            status: "unknown",
+            reason: "Provider usage is not yet normalized across web research search/fetch/browser routes."
+          }
+        };
+        if (fetchedSources.length === 0) {
+          const reason = browserRequiredSources.length ? "web_research found candidate sources, but they require browser-rendered reading and no host browser reader completed." : "web_research could not fetch any credible source for this query.";
+          return {
+            content: [{ type: "text", text: `${reason}
+
+Queries tried: ${details.actualQueries.join("; ") || query}` }],
+            details,
+            isError: true
+          };
+        }
+        return {
+          content: [{ type: "text", text: formatResearchPack(query, fetchedSources, details.warnings, browserRequiredSources) }],
+          details
+        };
       }
     };
   }
@@ -21693,11 +22380,11 @@ ${rootObjectLines}
     }
     return String(value);
   }
-  function isRecord3(value) {
+  function isRecord4(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
   }
   function extractRefs(value) {
-    if (!isRecord3(value)) return [];
+    if (!isRecord4(value)) return [];
     if (Array.isArray(value.results)) return value.results;
     if (Array.isArray(value.createdRefs)) return value.createdRefs;
     if (value.target) return [value.target];
@@ -21710,7 +22397,7 @@ ${rootObjectLines}
     return String(source || "").replace(/\b(for|while)\s*\(([^)]*)\)\s*\{/g, (_match, keyword, header) => `${keyword} (${header}) { __pieStepGuard(); `).replace(/\bdo\s*\{/g, "do { __pieStepGuard(); ").replace(/\b(for|while)\s*\(([^)]*)\)\s*([^\s{][\s\S]*?;)/g, (_match, keyword, header, statement) => `${keyword} (${header}) { __pieStepGuard(); ${statement} }`).replace(/\bdo\s*([^\s{][\s\S]*?;)\s*while\s*\(([^)]*)\)/g, (_match, statement, header) => `do { __pieStepGuard(); ${statement} } while (${header})`);
   }
   function isStepTimeoutError(error) {
-    return isRecord3(error) && (error.code === STEP_TIMEOUT_ERROR_CODE || error.name === "PieStepTimeoutError");
+    return isRecord4(error) && (error.code === STEP_TIMEOUT_ERROR_CODE || error.name === "PieStepTimeoutError");
   }
   function buildStatus(task) {
     const done = task.status === "completed" || task.status === "failed" || task.status === "cancelled";
@@ -21863,7 +22550,7 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
       throw new Error(`Script must define export function* ${entryName}(ctx, args).`);
     }
     const iterator = entry(ctx, args);
-    if (!isRecord3(iterator) || typeof iterator.next !== "function") {
+    if (!isRecord4(iterator) || typeof iterator.next !== "function") {
       throw new Error(`Script entry ${entryName} must be a generator function. Use export function* ${entryName}(ctx, args) and yield ctx.nextFrame() for long work.`);
     }
     return iterator;
@@ -21871,7 +22558,7 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
   function interpretYield(task, value) {
     task.waitFrames = 1;
     task.waitUntilMs = 0;
-    if (!isRecord3(value)) return;
+    if (!isRecord4(value)) return;
     if (value.type === "waitFrames") {
       task.waitFrames = Math.max(1, Math.floor(Number(value.frames) || 1));
       return;
@@ -21963,7 +22650,7 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
       pendingInput: null,
       waiters: []
     };
-    const args = isRecord3(payload.args) ? payload.args : {};
+    const args = isRecord4(payload.args) ? payload.args : {};
     const ctx = createTaskContext(bridge2, task, args);
     task.iterator = compileRunIterator(script, String(payload.entry || "run"), ctx, args, task);
     getRunStore().set(task.id, task);
@@ -21996,7 +22683,7 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
     globalThis.__pieUnityScriptHost = {
       invoke(method, argsJson) {
         const parsedPayload = argsJson ? JSON.parse(String(argsJson)) : {};
-        const payload = isRecord3(parsedPayload) ? parsedPayload : {};
+        const payload = isRecord4(parsedPayload) ? parsedPayload : {};
         switch (String(method || "")) {
           case "run_start": {
             if (!installedBridge) throw new Error("Unity script host bridge is not installed.");
@@ -22058,6 +22745,34 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
   }
   function createUnityRuntimeTools() {
     return [
+      {
+        name: "unity_tool_call",
+        label: "unity_tool_call",
+        description: "Call a Unity manifest-discovered tool by name with JSON data. Use this for unity.asset, unity.prefab, unity.scriptable_object, unity.editor, unity.console, or project-specific tools such as voxmod after inspecting the manifest.",
+        parameters: Type.Object({
+          tool: Type.String(),
+          data: Type.Optional(Type.Record(Type.String(), Type.Any()))
+        }),
+        execute: async (_toolCallId, params) => {
+          try {
+            const record = asRecord(params);
+            const tool = String(record.tool || "").trim();
+            if (!tool) throw new Error("tool is required.");
+            const data = asRecord(record.data);
+            const result = requireBridge().devRpc.call(tool, data);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: result
+            };
+          } catch (error) {
+            return {
+              content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+              details: {},
+              isError: true
+            };
+          }
+        }
+      },
       createDevRpcTool(
         "unity_scene_query",
         "Query Unity scene objects and return explicit refs.",
@@ -22572,6 +23287,7 @@ ${extensionSection.join("\n\n---\n\n")}
       ...unitySearchFilesTool ? [aliasTool(unitySearchFilesTool, "find_files", "find_files")] : [],
       ...unityNonSearchHostTools,
       ...askUserCapability.tools,
+      ...params.webResearchTool ? [params.webResearchTool] : [],
       ...params.webSearchTool ? [params.webSearchTool] : [],
       ...params.webFetchTool ? [params.webFetchTool] : [],
       createUnityCodeIntelTool(params.projectRoot),
@@ -23482,11 +24198,11 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
   function assistantEventField(event, field) {
     return event && typeof event === "object" && field in event ? String(event[field] ?? "") : "";
   }
-  function isRecord4(value) {
+  function isRecord5(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
   }
   function routeMetaFromToolResult(toolName, result) {
-    const details = isRecord4(result) && isRecord4(result.details) ? result.details : void 0;
+    const details = isRecord5(result) && isRecord5(result.details) ? result.details : void 0;
     if (!details) return null;
     if (toolName === "web_search") {
       return {
@@ -23501,7 +24217,7 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
         attempts: Array.isArray(details.attempts) ? details.attempts.length : void 0
       };
     }
-    if (toolName === "read_file" && isRecord4(details.understanding)) {
+    if (toolName === "read_file" && isRecord5(details.understanding)) {
       const understanding = details.understanding;
       return {
         toolName,
@@ -23709,11 +24425,11 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
   }
 
   // src/unity-public-api.ts
-  function isRecord5(value) {
+  function isRecord6(value) {
     return typeof value === "object" && value !== null;
   }
   function stringField(value, key) {
-    return isRecord5(value) && typeof value[key] === "string" ? value[key] : void 0;
+    return isRecord6(value) && typeof value[key] === "string" ? value[key] : void 0;
   }
   function installUnityPublicApi(host) {
     globalThis.pie = {
@@ -23748,8 +24464,8 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
               const apiKey = stringField(data, "apiKey");
               const provider = stringField(data, "provider") || "";
               const model = stringField(data, "model") || "";
-              const verboseLogs = isRecord5(data) && data.verboseLogs === true;
-              if (isRecord5(data) && data.verboseLogs !== void 0) host.setVerboseLogs(verboseLogs);
+              const verboseLogs = isRecord6(data) && data.verboseLogs === true;
+              if (isRecord6(data) && data.verboseLogs !== void 0) host.setVerboseLogs(verboseLogs);
               host.setModelSelection(provider, model, apiKey);
               host.applyModelSelectionSync(provider, model);
               host.bridge.sendToUnity("config_applied", host.getModelStatus());
@@ -23770,7 +24486,7 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
               host.bridge.log("info", `[pie/index] resume_session ${sessionId}`);
               const loaded = await host.loadSession(host.projectRoot, sessionId);
               if (loaded) {
-                const recoverInterrupted = isRecord5(data) && data.recoverInterrupted === true;
+                const recoverInterrupted = isRecord6(data) && data.recoverInterrupted === true;
                 const lastUserText = stringField(data, "lastUserText") || "";
                 host.restoreSessionRecord(recoverInterrupted ? host.trimInterruptedTail(loaded, lastUserText) : loaded);
               } else {
@@ -23830,6 +24546,8 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
     const skills = getAvailableSkills(host.projectRoot);
     lines.push(`Skills: ${skills.length}`);
     if (skills.length > 0) lines.push(`- First skill: ${skills[0].name}`);
+    lines.push("External agent skill: use the resolved com.pie.agent package at Skills/pie-unity-rpc; do not use a copied global skill.");
+    lines.push("External RPC smoke: node <resolved-com.pie.agent>/Skills/pie-unity-rpc/pie-unity-rpc.js health --project <Unity project>");
     const extensionResult = host.reloadProjectExtensions();
     const loadedExtensions = getLoadedExtensions();
     lines.push(`Extensions: ${loadedExtensions.length} loaded`);
@@ -23856,6 +24574,7 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
     lines.push(`Shared capability wiring: ${missingTools.length === 0 ? "OK" : `MISSING ${missingTools.join(", ")}`}`);
     lines.push(`File understanding: ${activeTools.includes("read_file") ? "configured through read_file" : "missing read_file"}`);
     lines.push(`Code intelligence: ${activeTools.includes("code_intel") ? "lightweight JS/TS inspection (CLI owns full TypeScript service)" : "unavailable"}`);
+    lines.push("Browser reader: unavailable in Unity; JS-heavy web_fetch/web_research sources return requires_browser with CLI/browser-tools guidance.");
     lines.push("Policy snapshot:");
     lines.push(formatCapabilityPolicySummary(host.agent.state.tools, { mode: "normal", confirmationPolicy: "allow" }));
     const routeSummaries = host.getToolRouteSummaries?.() || [];
@@ -23868,7 +24587,7 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
   }
 
   // src/unity-local-commands.ts
-  function isRecord6(value) {
+  function isRecord7(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
   }
   function tryExplainExternalSessionId(host, sessionId) {
@@ -23884,7 +24603,7 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
     }
     try {
       const registry2 = JSON.parse(String(CS.System.IO.File.ReadAllText(registryPath) || "{}"));
-      const entries = Object.values(isRecord6(registry2) ? registry2 : {});
+      const entries = Object.values(isRecord7(registry2) ? registry2 : {});
       const matched = entries.find((entry) => String(entry.id || "") === trimmed);
       if (!matched) {
         return null;
@@ -23896,7 +24615,7 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
         for (let index = 0; index < Math.min(files.Length, 8); index += 1) {
           try {
             const parsed = JSON.parse(String(CS.System.IO.File.ReadAllText(files[index]) || "{}"));
-            const metadata = isRecord6(parsed) && isRecord6(parsed.metadata) ? parsed.metadata : parsed;
+            const metadata = isRecord7(parsed) && isRecord7(parsed.metadata) ? parsed.metadata : parsed;
             const id = String(metadata.id || "").trim();
             if (!id) continue;
             const title = String(metadata.name || metadata.title || "Untitled Session");
@@ -24420,6 +25139,39 @@ ${initialMemory}`);
     return capability.tools[0];
   }
 
+  // src/unity-web-tools.ts
+  function createUnityWebTools(params) {
+    const getCurrentDateContext = () => ({
+      currentDate: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+      timeZone: "local"
+    });
+    const webSearchTool2 = createSharedWebSearchTool({
+      getModel: params.getActiveModel,
+      getApiKey: params.getActiveApiKey,
+      getMode: () => "auto",
+      resolveToolModelCandidates: params.resolveToolModelCandidates,
+      getCurrentDateContext,
+      fetch: params.fetch
+    });
+    const webFetchTool2 = createSharedWebFetchTool({
+      getModel: params.getActiveModel,
+      getApiKey: params.getActiveApiKey,
+      fetch: params.fetch
+    });
+    const webResearchTool2 = createSharedWebResearchTool({
+      getModel: params.getActiveModel,
+      getApiKey: params.getActiveApiKey,
+      getMode: () => "auto",
+      resolveToolModelCandidates: params.resolveToolModelCandidates,
+      timeoutMs: 9e4,
+      searchAttemptTimeoutMs: 9e4,
+      getCurrentDateContext,
+      fetch: params.fetch,
+      webFetchTool: webFetchTool2
+    });
+    return { webSearchTool: webSearchTool2, webFetchTool: webFetchTool2, webResearchTool: webResearchTool2 };
+  }
+
   // src/index.ts
   var bridge = getPieBridge();
   installDevRpcBridge(bridge);
@@ -24455,20 +25207,10 @@ ${initialMemory}`);
   function getActiveApiKey() {
     return getActiveResolvedModel()?.apiKey || toolModelRuntime.getRuntimeApiKeyFor(_provider, _modelId);
   }
-  var webSearchTool = createSharedWebSearchTool({
-    getModel: () => getActiveModel(),
-    getApiKey: () => getActiveApiKey(),
-    getMode: () => "auto",
+  var { webSearchTool, webFetchTool, webResearchTool } = createUnityWebTools({
+    getActiveModel,
+    getActiveApiKey,
     resolveToolModelCandidates: toolModelRuntime.resolveCandidates,
-    getCurrentDateContext: () => ({
-      currentDate: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
-      timeZone: "local"
-    }),
-    fetch: unityFetch
-  });
-  var webFetchTool = createSharedWebFetchTool({
-    getModel: () => getActiveModel(),
-    getApiKey: () => getActiveApiKey(),
     fetch: unityFetch
   });
   var understandFile = createUnityReadFileUnderstanding({
@@ -24493,6 +25235,7 @@ ${initialMemory}`);
       persistentDataPath,
       fileToolPathOptions,
       todoTool,
+      webResearchTool,
       webSearchTool,
       webFetchTool,
       subagentTool,
@@ -24644,7 +25387,7 @@ ${initialMemory}`);
     todoTool.restore(record.todoState || []);
     refreshTodoLoopState();
   }
-  function isRecord7(value) {
+  function isRecord8(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
   }
   function cloneMessage(message) {
@@ -24737,7 +25480,7 @@ ${initialMemory}`);
     bridge.sendToUnity("agent_end", {});
   }
   function hasRealUsage(usage) {
-    if (!isRecord7(usage)) return false;
+    if (!isRecord8(usage)) return false;
     return Number(usage.input || 0) > 0 || Number(usage.output || 0) > 0 || Number(usage.cacheRead || 0) > 0 || Number(usage.cacheWrite || 0) > 0 || Number(usage.totalTokens || 0) > 0;
   }
   function estimateTokensFromText(text) {
@@ -24747,12 +25490,12 @@ ${initialMemory}`);
   }
   function collectMessageText(message) {
     if (!message) return "";
-    if (!isRecord7(message)) return "";
+    if (!isRecord8(message)) return "";
     const content = message.content;
     if (typeof content === "string") return content;
     if (!Array.isArray(content)) return "";
     return content.map((block) => {
-      if (!isRecord7(block)) return "";
+      if (!isRecord8(block)) return "";
       if (block.type === "text") return typeof block.text === "string" ? block.text : "";
       if (block.type === "thinking") return typeof block.thinking === "string" ? block.thinking : "";
       if (block.type === "toolCall") {
@@ -24764,9 +25507,9 @@ ${initialMemory}`);
     }).join("");
   }
   function buildUsagePayload(messages, message, fallbackIndex) {
-    const messageRecord = isRecord7(message) ? message : {};
+    const messageRecord = isRecord8(message) ? message : {};
     const usage = messageRecord.usage;
-    if (hasRealUsage(usage) && isRecord7(usage)) {
+    if (hasRealUsage(usage) && isRecord8(usage)) {
       return {
         input: Number(usage.input || 0),
         output: Number(usage.output || 0),
@@ -24803,10 +25546,10 @@ ${initialMemory}`);
     const sourceRecord = record || _currentSession;
     const stateMessages = Array.isArray(sourceRecord?.messages) ? sourceRecord.messages : agent.state.messages || [];
     const messages = stateMessages.map((message, index) => {
-      const messageRecord = isRecord7(message) ? message : {};
+      const messageRecord = isRecord8(message) ? message : {};
       return {
         role: String(messageRecord.role || "assistant"),
-        content: Array.isArray(messageRecord.content) ? messageRecord.content.filter((block) => isRecord7(block)).map((block) => ({
+        content: Array.isArray(messageRecord.content) ? messageRecord.content.filter((block) => isRecord8(block)).map((block) => ({
           type: String(block.type || "text"),
           text: typeof block.text === "string" ? block.text : ""
         })) : [],
@@ -24855,14 +25598,14 @@ ${initialMemory}`);
   function extractToolText(result) {
     if (!result) return "";
     if (typeof result === "string") return result;
-    if (isRecord7(result) && Array.isArray(result.content)) {
-      return result.content.filter((item) => isRecord7(item) && item.type === "text").map((item) => String(item.text ?? "")).join("\n").trim();
+    if (isRecord8(result) && Array.isArray(result.content)) {
+      return result.content.filter((item) => isRecord8(item) && item.type === "text").map((item) => String(item.text ?? "")).join("\n").trim();
     }
     return "";
   }
   function extractEffectiveArgs(toolName, args, details) {
-    const argRecord = isRecord7(args) ? args : {};
-    const detailRecord = isRecord7(details) ? details : {};
+    const argRecord = isRecord8(args) ? args : {};
+    const detailRecord = isRecord8(details) ? details : {};
     if (toolName === "find_files") {
       return {
         rawPattern: detailRecord.rawPattern ?? argRecord.pattern ?? argRecord.query ?? argRecord.name ?? argRecord.file_name ?? "",
