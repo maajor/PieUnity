@@ -23921,14 +23921,14 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
   }
 
   // src/model-profiles.ts
-  function validateEndpointProfile(profileId, profile) {
+  function validateEndpointProfile(profileId, profile, options = {}) {
     const missing = [];
     if (!profile.api) missing.push("api");
     if (!profile.baseUrl) missing.push("baseUrl");
     if (!Array.isArray(profile.models) || profile.models.length === 0) missing.push("models");
     const hasProfileKeySource = !!(profile.apiKey || profile.apiKeyEnv);
     const hasModelKeySource = !!(profile.models || []).some((model) => !!model.apiKeyEnv);
-    if (!hasProfileKeySource && !hasModelKeySource) missing.push("apiKey or apiKeyEnv");
+    if (!options.allowMissingApiKey && !hasProfileKeySource && !hasModelKeySource) missing.push("apiKey or apiKeyEnv");
     if (missing.length > 0) {
       return `Profile "${profileId}" is missing required field${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.`;
     }
@@ -24004,11 +24004,31 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
       maxTokens: 0
     };
   }
-  function resolveConfiguredModel(bridge2, provider, modelId) {
+  function createRuntimeConfiguredModel(provider, modelId, baseUrl) {
+    const trimmedProvider = String(provider || "").trim();
+    const trimmedModelId = String(modelId || "").trim();
+    const trimmedBaseUrl = String(baseUrl || "").trim();
+    if (!trimmedProvider || !trimmedModelId || !trimmedBaseUrl) return null;
+    return {
+      model: {
+        id: trimmedModelId,
+        name: trimmedModelId,
+        api: "openai-completions",
+        provider: trimmedProvider,
+        baseUrl: trimmedBaseUrl,
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128e3,
+        maxTokens: 8192
+      }
+    };
+  }
+  function resolveConfiguredModel(bridge2, provider, modelId, options = {}) {
     if (!provider || !modelId) return null;
     const profiles = getEndpointProfiles(bridge2);
     const profile = profiles[provider];
-    if (!profile || validateEndpointProfile(provider, profile)) return null;
+    if (!profile || validateEndpointProfile(provider, profile, options)) return null;
     const modelDef = (profile.models || []).find((candidate) => candidate.id === modelId);
     if (!modelDef) return null;
     return {
@@ -25188,6 +25208,7 @@ ${initialMemory}`);
   var _provider = _initialSelection?.provider || "";
   var _modelId = _initialSelection?.modelId || "";
   var _baseUrlOverride = "";
+  var _runtimeApiKeyOverride = "";
   var _verboseLogs = false;
   var _currentSession = createSessionRecord({
     provider: _provider,
@@ -25210,9 +25231,10 @@ ${initialMemory}`);
     return getActiveResolvedModel()?.apiKey || toolModelRuntime.getRuntimeApiKeyFor(_provider, _modelId);
   }
   function resolveModelWithRuntimeOverrides(provider, modelId) {
-    const resolved = resolveConfiguredModel(bridge, provider, modelId);
+    const resolved = resolveConfiguredModel(bridge, provider, modelId, { allowMissingApiKey: !!_runtimeApiKeyOverride });
     const baseUrl = _baseUrlOverride.trim();
-    if (!resolved || !baseUrl) return resolved;
+    if (!resolved) return createRuntimeConfiguredModel(provider, modelId, baseUrl);
+    if (!baseUrl) return resolved;
     return {
       ...resolved,
       model: {
@@ -25264,7 +25286,7 @@ ${initialMemory}`);
     agentSessionController?.updateRuntimeContext({ systemPrompt: surface.systemPrompt, tools: surface.tools });
   }
   var initialSurface = getCurrentAgentSurface();
-  var initialResolvedModel = resolveConfiguredModel(bridge, _provider, _modelId);
+  var initialResolvedModel = getActiveResolvedModel();
   var agent = new Agent({
     initialState: {
       systemPrompt: initialSurface.systemPrompt,
@@ -25310,10 +25332,10 @@ ${initialMemory}`);
     }
   });
   function hasConfiguredModelSelection() {
-    return !!resolveConfiguredModel(bridge, _provider, _modelId);
+    return !!getActiveResolvedModel();
   }
   function getModelSelectionWarning() {
-    return "No models are configured. Add one in ~/.pie/models.json and select a configured profile/model before sending messages.";
+    return "No model is configured. Select a profile/model from ~/.pie/models.json, or enter provider, model, Base URL, and API key in Pie Chat settings before sending messages.";
   }
   function verboseLog(message) {
     if (_verboseLogs) {
@@ -25394,7 +25416,7 @@ ${initialMemory}`);
   function restoreSessionRecord(record) {
     _provider = record.provider || "";
     _modelId = record.modelId || "";
-    const resolved = resolveConfiguredModel(bridge, _provider, _modelId);
+    const resolved = getActiveResolvedModel();
     agent.setModel(resolved?.model || createUnconfiguredModel());
     sessionRuntime.restoreSessionRecord(record);
     agentSessionController.syncFromActiveSession();
@@ -25731,7 +25753,10 @@ ${initialMemory}`);
     setModelSelection: (provider, modelId, apiKey, baseUrl) => {
       const nextProvider = provider !== void 0 ? String(provider || "") : _provider;
       const nextModelId = modelId !== void 0 ? String(modelId || "") : _modelId;
-      if (apiKey !== void 0) toolModelRuntime.setRuntimeCredential(nextProvider, nextModelId, String(apiKey || ""));
+      if (apiKey !== void 0) {
+        _runtimeApiKeyOverride = String(apiKey || "");
+        toolModelRuntime.setRuntimeCredential(nextProvider, nextModelId, _runtimeApiKeyOverride);
+      }
       if (baseUrl !== void 0) _baseUrlOverride = String(baseUrl || "");
       _provider = nextProvider;
       _modelId = nextModelId;
