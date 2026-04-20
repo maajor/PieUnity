@@ -24464,9 +24464,10 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
               const apiKey = stringField(data, "apiKey");
               const provider = stringField(data, "provider") || "";
               const model = stringField(data, "model") || "";
+              const baseUrl = stringField(data, "baseUrl");
               const verboseLogs = isRecord6(data) && data.verboseLogs === true;
               if (isRecord6(data) && data.verboseLogs !== void 0) host.setVerboseLogs(verboseLogs);
-              host.setModelSelection(provider, model, apiKey);
+              host.setModelSelection(provider, model, apiKey, baseUrl);
               host.applyModelSelectionSync(provider, model);
               host.bridge.sendToUnity("config_applied", host.getModelStatus());
               host.persistCurrentSessionSafely();
@@ -25186,6 +25187,7 @@ ${initialMemory}`);
   var _initialSelection = getDefaultSelection(bridge, getEndpointProfiles(bridge));
   var _provider = _initialSelection?.provider || "";
   var _modelId = _initialSelection?.modelId || "";
+  var _baseUrlOverride = "";
   var _verboseLogs = false;
   var _currentSession = createSessionRecord({
     provider: _provider,
@@ -25198,7 +25200,7 @@ ${initialMemory}`);
   var todoLoopState = null;
   var fileToolPathOptions = buildFileToolPathOptions();
   function getActiveResolvedModel() {
-    return resolveConfiguredModel(bridge, _provider, _modelId);
+    return resolveModelWithRuntimeOverrides(_provider, _modelId);
   }
   function getActiveModel() {
     return getActiveResolvedModel()?.model || createUnconfiguredModel();
@@ -25206,6 +25208,18 @@ ${initialMemory}`);
   var toolModelRuntime = createUnityToolModelRuntime({ bridge, getActiveModel });
   function getActiveApiKey() {
     return getActiveResolvedModel()?.apiKey || toolModelRuntime.getRuntimeApiKeyFor(_provider, _modelId);
+  }
+  function resolveModelWithRuntimeOverrides(provider, modelId) {
+    const resolved = resolveConfiguredModel(bridge, provider, modelId);
+    const baseUrl = _baseUrlOverride.trim();
+    if (!resolved || !baseUrl) return resolved;
+    return {
+      ...resolved,
+      model: {
+        ...resolved.model,
+        baseUrl
+      }
+    };
   }
   var { webSearchTool, webFetchTool, webResearchTool } = createUnityWebTools({
     getActiveModel,
@@ -25581,7 +25595,7 @@ ${initialMemory}`);
     });
   }
   async function applyModelSelection(provider, modelId) {
-    const resolved = resolveConfiguredModel(bridge, provider, modelId);
+    const resolved = resolveModelWithRuntimeOverrides(provider, modelId);
     _provider = provider;
     _modelId = modelId;
     agent.setModel(resolved?.model || createUnconfiguredModel());
@@ -25589,7 +25603,7 @@ ${initialMemory}`);
     await persistCurrentSession();
   }
   function applyModelSelectionSync(provider, modelId) {
-    const resolved = resolveConfiguredModel(bridge, provider, modelId);
+    const resolved = resolveModelWithRuntimeOverrides(provider, modelId);
     _provider = provider;
     _modelId = modelId;
     agent.setModel(resolved?.model || createUnconfiguredModel());
@@ -25683,11 +25697,11 @@ ${initialMemory}`);
     emitSessionSync,
     emitSkillsList,
     getModelStatus: () => {
-      const resolved = resolveConfiguredModel(bridge, _provider, _modelId);
+      const resolved = getActiveResolvedModel();
       return {
         provider: _provider,
         modelId: _modelId,
-        baseUrl: resolved?.model.baseUrl || "",
+        baseUrl: _baseUrlOverride || resolved?.model.baseUrl || "",
         configured: !!resolved,
         verboseLogs: _verboseLogs
       };
@@ -25714,10 +25728,11 @@ ${initialMemory}`);
       _verboseLogs = value;
       globalThis.__pieVerboseLogs = _verboseLogs;
     },
-    setModelSelection: (provider, modelId, apiKey) => {
+    setModelSelection: (provider, modelId, apiKey, baseUrl) => {
       const nextProvider = provider !== void 0 ? String(provider || "") : _provider;
       const nextModelId = modelId !== void 0 ? String(modelId || "") : _modelId;
       if (apiKey !== void 0) toolModelRuntime.setRuntimeCredential(nextProvider, nextModelId, String(apiKey || ""));
+      if (baseUrl !== void 0) _baseUrlOverride = String(baseUrl || "");
       _provider = nextProvider;
       _modelId = nextModelId;
     }
