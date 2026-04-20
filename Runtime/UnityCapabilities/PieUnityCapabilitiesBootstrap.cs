@@ -11,10 +11,12 @@ namespace Pie
 {
     public static class PieUnityCapabilitiesBootstrap
     {
+        private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(15);
         private static Func<string, string> _editorResumeSessionHandler;
         private static string _productName = "";
         private static string _unityProductName = "";
         private static string _applicationIdentifier = "";
+        private static DateTime _nextHeartbeatUtc = DateTime.MinValue;
         public static string ProductName => _productName;
         public static string UnityProductName => _unityProductName;
         public static string ApplicationIdentifier => _applicationIdentifier;
@@ -42,6 +44,7 @@ namespace Pie
             var projectPath = GetProjectPath();
             _productName = DeriveProjectName(projectPath);
             CaptureUnityApplicationMetadata();
+            _nextHeartbeatUtc = DateTime.UtcNow.Add(HeartbeatInterval);
             var instanceId = BuildInstanceId(projectPath, "editor", _productName);
             PieUnityCapabilityRegistry.ConfigureContext(instanceId, projectPath, "editor");
             PieUnityInstanceRegistry.Register(instanceId, projectPath, _productName, "editor", PieDevRpcServer.Port, PieDevRpcServer.AuthToken, GetUnityProductName(), GetApplicationIdentifier());
@@ -54,6 +57,7 @@ namespace Pie
             var projectPath = GetProjectPath(runner != null ? runner.ProjectRootOverride : null);
             _productName = DeriveProjectName(projectPath);
             CaptureUnityApplicationMetadata();
+            _nextHeartbeatUtc = DateTime.UtcNow.Add(HeartbeatInterval);
             var instanceId = BuildInstanceId(projectPath, "runtime", _productName);
             PieUnityCapabilityRegistry.ConfigureContext(instanceId, projectPath, "runtime");
             PieUnityInstanceRegistry.Register(instanceId, projectPath, _productName, "runtime", PieDevRpcServer.Port, PieDevRpcServer.AuthToken, GetUnityProductName(), GetApplicationIdentifier());
@@ -63,6 +67,11 @@ namespace Pie
 
         public static void Heartbeat()
         {
+            var now = DateTime.UtcNow;
+            if (now < _nextHeartbeatUtc)
+                return;
+
+            _nextHeartbeatUtc = now.Add(HeartbeatInterval);
             CaptureUnityApplicationMetadata();
             var instanceId = PieUnityCapabilityRegistry.InstanceId;
             if (string.IsNullOrWhiteSpace(instanceId))

@@ -10,6 +10,8 @@ namespace Pie
     public static class PieUnityInstanceRegistry
     {
         private static readonly object FileSyncRoot = new object();
+        private const int IoRetryCount = 5;
+        private const int IoRetryDelayMs = 25;
 
         [Serializable]
         private sealed class PieUnityInstanceRegistryFile
@@ -117,7 +119,7 @@ namespace Pie
             if (!File.Exists(filePath))
                 return new List<PieUnityInstance>();
 
-            var json = File.ReadAllText(filePath, Encoding.UTF8);
+            var json = ReadRegistryText(filePath);
             if (string.IsNullOrWhiteSpace(json))
                 return new List<PieUnityInstance>();
 
@@ -146,17 +148,24 @@ namespace Pie
                 instances = instances.ToArray(),
             };
             var targetPath = PieUnityCapabilitiesConstants.RegistryFilePath;
-            var tempPath = targetPath + ".tmp";
             var json = JsonUtility.ToJson(wrapper, true);
+            var tempPath = targetPath + "." + System.Diagnostics.Process.GetCurrentProcess().Id + "." + Guid.NewGuid().ToString("N") + ".tmp";
 
             Exception lastError = null;
-            for (var attempt = 0; attempt < 3; attempt++)
+            for (var attempt = 0; attempt < IoRetryCount; attempt++)
             {
                 try
                 {
-                    File.WriteAllText(tempPath, json, Encoding.UTF8);
+                    using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.Read))
+                    using (var writer = new StreamWriter(stream, new UTF8Encoding(true)))
+                    {
+                        writer.Write(json);
+                        writer.Flush();
+                        stream.Flush(true);
+                    }
+
                     if (File.Exists(targetPath))
-                        File.Copy(tempPath, targetPath, true);
+                        File.Replace(tempPath, targetPath, null, true);
                     else
                         File.Move(tempPath, targetPath);
 
@@ -177,11 +186,34 @@ namespace Pie
                         // Ignore temp cleanup failures.
                     }
 
-                    System.Threading.Thread.Sleep(15 * (attempt + 1));
+                    System.Threading.Thread.Sleep(IoRetryDelayMs * (attempt + 1));
                 }
             }
 
             throw lastError ?? new IOException("Failed to write Unity instance registry.");
+        }
+
+        private static string ReadRegistryText(string filePath)
+        {
+            Exception lastError = null;
+            for (var attempt = 0; attempt < IoRetryCount; attempt++)
+            {
+                try
+                {
+                    using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                    using (var reader = new StreamReader(stream, Encoding.UTF8, true))
+                    {
+                        return reader.ReadToEnd();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    System.Threading.Thread.Sleep(IoRetryDelayMs * (attempt + 1));
+                }
+            }
+
+            throw lastError ?? new IOException("Failed to read Unity instance registry.");
         }
 
         private static bool ShouldReplaceExisting(PieUnityInstance item, int pid, string instanceId, string projectPath, string mode)
