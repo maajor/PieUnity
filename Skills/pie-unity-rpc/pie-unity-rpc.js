@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const REGISTRY_FILE = path.join(homedir(), ".pie-unity", "registry.json");
+const REGISTRY_DIR = path.join(homedir(), ".pie-unity", "instances");
 const DEFAULT_WAIT_MS = 600;
 const DEFAULT_RETRIES = 30;
 const ACTIVE_INSTANCE_MAX_AGE_SEC = 120;
@@ -39,18 +39,31 @@ export function parseArgs(argv) {
 	return { command, flags };
 }
 
-export function loadRegistry(filePath = REGISTRY_FILE) {
-	if (!existsSync(filePath)) {
+export function loadRegistry(directoryPath = REGISTRY_DIR) {
+	if (!existsSync(directoryPath)) {
 		return [];
 	}
+
+	const items = [];
 	try {
-		const raw = readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
-		const json = JSON.parse(raw);
-		const items = Array.isArray(json?.instances) ? json.instances : [];
-		return dedupeInstances(items.filter(Boolean));
+		const fileNames = readdirSync(directoryPath, { withFileTypes: true })
+			.filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+			.map((entry) => path.join(directoryPath, entry.name));
+		for (const filePath of fileNames) {
+			try {
+				const raw = readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
+				if (!raw.trim()) continue;
+				const item = JSON.parse(raw);
+				if (!item || typeof item !== "object") continue;
+				items.push(item);
+			} catch {
+				// Ignore malformed instance files so one broken host never poisons discovery.
+			}
+		}
 	} catch {
 		return [];
 	}
+	return dedupeInstances(items.filter(Boolean));
 }
 
 export function getActiveInstances(instances, nowUnix = Math.floor(Date.now() / 1000)) {

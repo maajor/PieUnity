@@ -6,7 +6,7 @@ namespace Pie
 {
     public static class PieUnityCapabilitiesConstants
     {
-        public const string Version = "0.1.16";
+        public const string Version = "0.1.17";
         public const int DefaultPort = 8091;
         public const int MaxPort = 8100;
         public const int RegistryTtlSeconds = 120;
@@ -17,8 +17,8 @@ namespace Pie
         public static string RegistryDirectory =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pie-unity");
 
-        public static string RegistryFilePath =>
-            Path.Combine(RegistryDirectory, "registry.json");
+        public static string InstancesDirectory =>
+            Path.Combine(RegistryDirectory, "instances");
 
         public static string SharedLogsDirectory =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pie", "logs");
