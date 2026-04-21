@@ -112,8 +112,10 @@ namespace Pie
         public bool ready = true;
         public bool domainReloadPending = false;
         public bool bridgeReady = false;
+        public bool scriptHostReady = false;
         public string bridgeLastError = "";
         public string bridgeDiagnostic = "";
+        public string scriptHostDiagnostic = "";
         public bool mainThreadResponsive = true;
         public int activeHttpRequests = 0;
         public int activeFileRequests = 0;

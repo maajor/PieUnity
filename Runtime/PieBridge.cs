@@ -2,7 +2,7 @@
 // Manages the PuerTS V8 JsEnv lifecycle and the C#<->JS message channel.
 //
 // Lifecycle:
-//   1. Initialize() — load core.js, create JsEnv (BackendType.V8), inject pieBridge, execute JS
+//   1. Initialize() — load core.bytes, create JsEnv (BackendType.V8), inject pieBridge, execute JS
 //   2. EditorApplication.update drives JsEnv.Tick() for Promise resolution
 //   3. SendToJs(action, json) — call JS pie.handleCSharpMessage(action, data)
 //   4. ReceiveFromJs(event, json) — called by JS via pieBridge.sendToUnity(...)
@@ -25,11 +25,13 @@ namespace Pie
         private bool _isInitialized = false;
         private bool _isDisposed = false;
         private string _lastError = null;
+        private bool _isUnityScriptHostReady = false;
 
         /// <summary>Fired when JS calls pieBridge.sendToUnity(event, jsonData).</summary>
         public event Action<string, string> OnJsEvent;
 
         public bool IsInitialized => _isInitialized && !_isDisposed && _jsEnv != null;
+        public bool IsUnityScriptHostReady => IsInitialized && _isUnityScriptHostReady;
         public string LastError => _lastError;
         // PuerTS 2.2.2 uses the stable JsEnv + BackendType.V8 path here.
         // pie-unity relies on cooperative script step guards instead of native
@@ -52,10 +54,10 @@ namespace Pie
             try
             {
                 LastInitializationError = "";
-                PieDiagnostics.Verbose("Loading core.js...");
+                PieDiagnostics.Verbose("Loading bundled Pie runtime...");
                 var jsContent = LoadCoreJs();
                 if (string.IsNullOrEmpty(jsContent))
-                    throw new Exception("Failed to load core.js");
+                    throw new Exception("Failed to load bundled Pie runtime from Resources/pie/core.bytes.");
 
                 CreateJsEnvironment(jsContent, projectRoot, settings);
 
@@ -66,7 +68,7 @@ namespace Pie
                 _isInitialized = true;
                 Instance = this;
 
-                PieDiagnostics.Info($"PieBridge ready (V8, core.js {jsContent.Length} chars)");
+                PieDiagnostics.Info($"PieBridge ready (V8, core.bytes {jsContent.Length} chars)");
                 return true;
             }
             catch (Exception ex)
@@ -119,6 +121,7 @@ namespace Pie
             if (_jsEnv == null || _isDisposed)
                 throw new InvalidOperationException("PieBridge is not initialized.");
 
+            RefreshUnityScriptHostReady();
             var script = $"(function(){{var host=globalThis.__pieUnityScriptHost;if(!host||typeof host.invoke!=='function') throw new Error('Unity script host is not ready.'); return host.invoke({JsonString(method ?? "")},{JsonString(argsJson ?? "{}")});}})()";
             return _jsEnv.Eval<string>(script);
         }
@@ -157,6 +160,7 @@ namespace Pie
                 PushSSEData();
                 PushFileData();
                 _jsEnv.Eval("(function(){var host=globalThis.__pieUnityScriptHost;if(host&&typeof host.tick==='function') host.tick();})()");
+                RefreshUnityScriptHostReady();
                 _jsEnv.Tick();
             }
             catch (Exception ex)
@@ -177,11 +181,15 @@ namespace Pie
             PieDiagnostics.Verbose("Injecting pieBridge...");
             InjectPieBridge(projectRoot, settings);
 
-            PieDiagnostics.Verbose("Executing core.js...");
+            PieDiagnostics.Verbose("Executing bundled Pie runtime...");
             _jsEnv.Eval(jsContent);
 
             if (!VerifyPieObject())
-                throw new Exception("pie.handleCSharpMessage not found after core.js execution");
+                throw new Exception("pie.handleCSharpMessage not found after bundled Pie runtime execution");
+
+            RefreshUnityScriptHostReady();
+            if (!_isUnityScriptHostReady)
+                throw new Exception("Unity script host was not installed by the bundled Pie runtime.");
         }
 
         private void DestroyJsEnvironment()
@@ -195,20 +203,29 @@ namespace Pie
                 PieDiagnostics.Warning($"[PieBridge] JsEnv dispose failed: {ex.Message}");
             }
             _jsEnv = null;
+            _isUnityScriptHostReady = false;
         }
 
         private string LoadCoreJs()
         {
+            var textAsset = Resources.Load<TextAsset>("pie/core");
+            if (textAsset != null)
+            {
+                PieDiagnostics.Verbose($"Loaded bundled Pie runtime via Resources.Load from Resources/pie/core.bytes ({textAsset.text.Length} chars)");
+                return textAsset.text;
+            }
+
 #if UNITY_EDITOR
             var projectRoot = Directory.GetParent(Application.dataPath).FullName;
             var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(PieBridge).Assembly);
             var resolvedPackagePath = packageInfo != null ? packageInfo.resolvedPath : "";
 
-            // Try various locations the package might be installed at
+            // Development fallback for local authoring/package layouts when the
+            // canonical TextAsset resource has not been imported yet.
             string[] candidates = {
-                string.IsNullOrEmpty(resolvedPackagePath) ? "" : Path.Combine(resolvedPackagePath, "Resources", "pie", "core.js"),
-                Path.Combine(projectRoot, "Packages", "com.pie.agent", "Resources", "pie", "core.js"),
-                Path.Combine(projectRoot, "Packages", "pie-unity", "Resources", "pie", "core.js"),
+                string.IsNullOrEmpty(resolvedPackagePath) ? "" : Path.Combine(resolvedPackagePath, "Resources", "pie", "core.bytes"),
+                Path.Combine(projectRoot, "Packages", "com.pie.agent", "Resources", "pie", "core.bytes"),
+                Path.Combine(projectRoot, "Packages", "pie-unity", "Resources", "pie", "core.bytes"),
             };
 
             foreach (var path in candidates)
@@ -222,7 +239,7 @@ namespace Pie
                     try
                     {
                         var content = File.ReadAllText(path);
-                        PieDiagnostics.Verbose($"Loaded core.js from: {path}");
+                        PieDiagnostics.Verbose($"Loaded bundled Pie runtime from development fallback path: {path}");
                         return content;
                     }
                     catch (Exception ex)
@@ -238,23 +255,20 @@ namespace Pie
             {
                 foreach (var dir in Directory.GetDirectories(cacheDir, "com.pie.agent@*"))
                 {
-                    var path = Path.Combine(dir, "Resources", "pie", "core.js");
+                    var path = Path.Combine(dir, "Resources", "pie", "core.bytes");
                     if (File.Exists(path))
                     {
-                        try { return File.ReadAllText(path); }
+                        try
+                        {
+                            PieDiagnostics.Verbose($"Loaded bundled Pie runtime from PackageCache fallback path: {path}");
+                            return File.ReadAllText(path);
+                        }
                         catch { /* continue */ }
                     }
                 }
             }
 #endif
-            // Fallback: Resources.Load (works if core.js is in Assets/Resources/pie/)
-            var textAsset = Resources.Load<TextAsset>("pie/core");
-            if (textAsset != null)
-            {
-                PieDiagnostics.Verbose($"Loaded core.js via Resources.Load ({textAsset.text.Length} chars)");
-                return textAsset.text;
-            }
-
+            PieDiagnostics.Warning("Bundled Pie runtime TextAsset was not found at Resources/pie/core.bytes.");
             return null;
         }
 
@@ -380,6 +394,26 @@ namespace Pie
             }
 
             return true;
+        }
+
+        private void RefreshUnityScriptHostReady()
+        {
+            if (_jsEnv == null || _isDisposed)
+            {
+                _isUnityScriptHostReady = false;
+                return;
+            }
+
+            try
+            {
+                _isUnityScriptHostReady = _jsEnv.Eval<bool>(
+                    "!!(globalThis.__pieUnityScriptHost && typeof globalThis.__pieUnityScriptHost.invoke === 'function' && typeof globalThis.__pieUnityScriptHost.tick === 'function')");
+            }
+            catch (Exception ex)
+            {
+                _isUnityScriptHostReady = false;
+                PieDiagnostics.Warning($"[PieBridge] Failed to probe Unity script host readiness: {ex.Message}");
+            }
         }
 
         private const int MAX_LINES_PER_FRAME = 3;

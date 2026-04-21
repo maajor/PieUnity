@@ -131,9 +131,21 @@ After installation:
 Release candidates should also run:
 
 ```bash
+npm run verify:unity:package-release
 UNITY_EDITOR="/path/to/Unity" npm run verify:unity:reliability
 PIE_UNITY_REAL_RPC=1 UNITY_EDITOR="/path/to/Unity" npm run verify:unity:reliability
 ```
+
+## Generated Runtime Bundle Policy
+
+The shipped runtime bridge is a tracked Unity `TextAsset` contract, not an ad-hoc local file.
+
+- Canonical runtime asset: `Resources/pie/core.bytes`
+- Required tracked generated artifacts: `core.bytes`, `core.bytes.meta`, `core.bytes.map`, `core.bytes.map.meta`
+- `core.js` is not a supported shipped runtime asset and must not appear in source or exported packages
+- Run `npm run build:unity` after changing `src/` or the Unity bundle build pipeline
+- Run `npm run check:unity-bundle-drift` to confirm the tracked generated bundle stays stable after rebuild
+- Run `npm run verify:unity:package-release` as the authoritative package release gate; it builds, checks bundle policy/drift, exports a standalone package, validates payload contents, and runs the clean-install dry-run verifier against the exported package
 
 `unity_script_run` is a cooperative step-bounded runner: use generator tasks, yield for multi-frame work, and expect long synchronous loops to fail with `STEP_TIMEOUT` instead of being arbitrarily preempted.
 
@@ -402,7 +414,7 @@ npm run export:pie-unity -- \
 
 This export flow:
 
-- rebuilds `Resources/pie/core.js`
+- rebuilds `Resources/pie/core.bytes`
 - copies only the distributable Unity package payload
 - rewrites `package.json` for standalone distribution
 

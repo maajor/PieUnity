@@ -3097,8 +3097,6 @@ var _PieAgent = (() => {
         this.resolveFinalResult = resolve2;
       });
     }
-    isComplete;
-    extractResult;
     queue = [];
     waiting = [];
     done = false;
@@ -3205,10 +3203,6 @@ var _PieAgent = (() => {
       this.baseContext = baseContext;
       this.minLevel = minLevel;
     }
-    mode;
-    sinks;
-    baseContext;
-    minLevel;
     log(level, message, context = {}) {
       if (LEVEL_ORDER[level] < LEVEL_ORDER[this.minLevel]) {
         return;
@@ -3250,7 +3244,6 @@ var _PieAgent = (() => {
     constructor(mode = "test") {
       this.mode = mode;
     }
-    mode;
     log() {
     }
     debug() {
@@ -3294,7 +3287,7 @@ var _PieAgent = (() => {
   }
 
   // ../../packages/platform/src/node-fs.ts
-  var __filename = fileURLToPath("file:///pie/core.js");
+  var __filename = fileURLToPath("file:///pie/core.bytes");
   var require2 = createRequire(__filename);
   var nodeFs = null;
   var nodePath = null;
@@ -3734,7 +3727,7 @@ var _PieAgent = (() => {
   };
 
   // ../../packages/platform/src/http.ts
-  var __filename2 = fileURLToPath("file:///pie/core.js");
+  var __filename2 = fileURLToPath("file:///pie/core.bytes");
   var require3 = createRequire(__filename2);
   var _procEnv = typeof process !== "undefined" ? process.env : {};
   var DEBUG = _procEnv.PIE_DEBUG_HTTP === "1" || _procEnv.PIE_DEBUG_HTTP === "true";
@@ -4205,7 +4198,7 @@ var _PieAgent = (() => {
   };
 
   // ../../packages/platform/src/config.ts
-  var __filename3 = fileURLToPath("file:///pie/core.js");
+  var __filename3 = fileURLToPath("file:///pie/core.bytes");
   var require4 = createRequire(__filename3);
   var cachedConfig = null;
   function getPlatformConfig() {
@@ -4278,7 +4271,7 @@ var _PieAgent = (() => {
   }
 
   // ../../packages/platform/src/gateway.ts
-  var __filename4 = fileURLToPath("file:///pie/core.js");
+  var __filename4 = fileURLToPath("file:///pie/core.bytes");
   var nodeRequire = createRequire(__filename4);
   var FileSystemGateway = class {
     config;
@@ -14357,9 +14350,6 @@ ${resource.content}`
         this.trace.recentTimeline = [];
       }
     }
-    trace;
-    recentTurnsLimit;
-    recentEventsLimit;
     pendingUserText = null;
     pushEvent(type, meta) {
       this.trace.recentEvents.push({
@@ -14635,7 +14625,6 @@ ${resource.content}`
       this.recentEventsLimit = options.recentEventsLimit ?? 100;
       this.debounceMs = options.debounceMs ?? 50;
     }
-    options;
     cachedSessionId = null;
     cachedController = null;
     flushTimer = null;
@@ -21743,7 +21732,6 @@ Queries tried: ${details.actualQueries.join("; ") || query}` }],
     constructor(bridge2) {
       this.bridge = bridge2;
     }
-    bridge;
     log(entry) {
       const moduleName = String(entry.context?.module || "unity");
       const payload = entry.context ? ` ${JSON.stringify(entry.context)}` : "";
@@ -23888,8 +23876,6 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
       this.projectRoot = projectRoot2;
       this.getSessionId = getSessionId;
     }
-    projectRoot;
-    getSessionId;
   };
 
   // src/pie-bridge.ts
@@ -25763,4 +25749,4 @@ ${initialMemory}`);
     }
   });
 })();
-//# sourceMappingURL=core.js.map
+//# sourceMappingURL=core.bytes.map

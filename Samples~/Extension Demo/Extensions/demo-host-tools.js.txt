@@ -1,0 +1,47 @@
+module.exports = (api) => {
+  api.appendSystemPrompt(
+    "Project extension tools are available for runtime demo data. Prefer read_runtime_flag for demo flags and echo_runtime_payload for round-trip host checks.",
+  );
+
+  api.registerTool({
+    name: "read_runtime_flag",
+    label: "read_runtime_flag",
+    description: "Read a named runtime flag from the Unity host demo.",
+    parameters: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "Flag name to read, for example 'demo_status'." },
+      },
+    },
+    async execute(_toolCallId, args) {
+      const key = typeof args?.key === "string" && args.key.length > 0 ? args.key : "demo_status";
+      const result = await api.callHost("read_runtime_flag", { key });
+      return {
+        content: [{ type: "text", text: String(result?.value ?? "") }],
+        details: result ?? {},
+      };
+    },
+  });
+
+  api.registerTool({
+    name: "echo_runtime_payload",
+    label: "echo_runtime_payload",
+    description: "Send a small JSON payload to the Unity host and get it back for verification.",
+    parameters: {
+      type: "object",
+      properties: {
+        message: { type: "string", description: "A short test message." },
+      },
+    },
+    async execute(_toolCallId, args) {
+      const message = typeof args?.message === "string" && args.message.length > 0
+        ? args.message
+        : "hello-from-extension-demo";
+      const result = await api.callHost("echo_runtime_payload", { message });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result ?? {}) }],
+        details: result ?? {},
+      };
+    },
+  });
+};

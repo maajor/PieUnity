@@ -261,10 +261,12 @@ namespace Pie
         {
             var availability = mainThreadResponsive ? PieUnityAvailability.GetAvailabilityNoticeJson() : "";
             var bridgeReady = PieBridge.Instance != null && PieBridge.Instance.IsInitialized;
+            var scriptHostReady = PieBridge.Instance != null && PieBridge.Instance.IsUnityScriptHostReady;
             var bridgeLastError = PieBridge.Instance != null ? (PieBridge.Instance.LastError ?? "") : (PieBridge.LastInitializationError ?? "");
             var bridgeDiagnostic = BuildBridgeDiagnostic(bridgeReady, bridgeLastError);
+            var scriptHostDiagnostic = BuildScriptHostDiagnostic(bridgeReady, scriptHostReady, bridgeLastError);
             var activeFileRequests = CountActive(PieFileBridge.GetActiveRequestIds());
-            var ready = !_domainReloadPending && mainThreadResponsive && bridgeReady;
+            var ready = !_domainReloadPending && mainThreadResponsive && bridgeReady && scriptHostReady;
             return JsonUtility.ToJson(new PieUnityHealthPayload
             {
                 instanceId = PieUnityCapabilityRegistry.InstanceId,
@@ -278,8 +280,10 @@ namespace Pie
                 ready = ready,
                 domainReloadPending = _domainReloadPending,
                 bridgeReady = bridgeReady,
+                scriptHostReady = scriptHostReady,
                 bridgeLastError = bridgeLastError,
                 bridgeDiagnostic = bridgeDiagnostic,
+                scriptHostDiagnostic = scriptHostDiagnostic,
                 mainThreadResponsive = mainThreadResponsive,
                 activeHttpRequests = PieHttpBridge.ActiveRequestCount,
                 activeFileRequests = activeFileRequests,
@@ -301,7 +305,22 @@ namespace Pie
             if (PieBridge.Instance == null)
                 return "PieBridge instance is not available. Open Tools > Pie > Pie Chat or add a PieRunner, then retry.";
 
-            return "PieBridge exists but is not initialized. Check PuerTS 2.2.2 V8 runtime, Resources/pie/core.js, and the Unity Editor log.";
+            return "PieBridge exists but is not initialized. Check PuerTS 2.2.2 V8 runtime, the packaged Resources/pie/core.bytes TextAsset, and the Unity log.";
+        }
+
+        private static string BuildScriptHostDiagnostic(bool bridgeReady, bool scriptHostReady, string bridgeLastError)
+        {
+            if (!bridgeReady)
+            {
+                if (!string.IsNullOrWhiteSpace(bridgeLastError))
+                    return "Unity script host is unavailable because the Pie JS bridge failed to initialize: " + bridgeLastError;
+                return "Unity script host is unavailable because the Pie JS bridge is not initialized.";
+            }
+
+            if (scriptHostReady)
+                return "Unity script host is installed and ready.";
+
+            return "Unity script host is unavailable even though the Pie JS bridge initialized. Check the packaged runtime bundle and Unity log.";
         }
 
         private static int CountActive(System.Collections.Generic.IEnumerable<int> ids)
