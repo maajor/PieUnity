@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using UnityEngine;
 
 namespace Pie
@@ -15,8 +14,19 @@ namespace Pie
             public Func<string, string> Handler;
         }
 
+        private sealed class RuntimeHostRegistration
+        {
+            public string Namespace = "";
+            public string DisplayName = "";
+            public readonly HashSet<string> ToolKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            public readonly HashSet<string> RpcKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            public readonly HashSet<string> CapabilityNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
         private static readonly Dictionary<string, CapabilityRegistration> RpcMethods = new Dictionary<string, CapabilityRegistration>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, CapabilityRegistration> ToolMethods = new Dictionary<string, CapabilityRegistration>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, RuntimeHostRegistration> RuntimeHosts = new Dictionary<string, RuntimeHostRegistration>(StringComparer.OrdinalIgnoreCase);
+        private static readonly List<string> RuntimeHostDiagnostics = new List<string>();
         private static readonly object SyncRoot = new object();
         private static string _instanceId = "";
         private static string _projectPath = "";
@@ -69,7 +79,29 @@ namespace Pie
             bool destructive = false,
             bool canTriggerDomainReload = false)
         {
-            RegisterInternal(RpcMethods, "rpc", name, ns, description, mode, readOnly, deprecated, aliases, parameters, handler, capabilityKind, convenience, requiresMainThread, owner, writeScope, returns, recommendedWorkflow, examples, errorCodes, destructive, canTriggerDomainReload);
+            RegisterBuiltinInternal(
+                RpcMethods,
+                "rpc",
+                name,
+                ns,
+                description,
+                mode,
+                readOnly,
+                deprecated,
+                aliases,
+                parameters,
+                handler,
+                capabilityKind,
+                convenience,
+                requiresMainThread,
+                owner,
+                writeScope,
+                returns,
+                recommendedWorkflow,
+                examples,
+                errorCodes,
+                destructive,
+                canTriggerDomainReload);
         }
 
         public static void RegisterTool(
@@ -94,7 +126,162 @@ namespace Pie
             bool destructive = false,
             bool canTriggerDomainReload = false)
         {
-            RegisterInternal(ToolMethods, "tool", name, ns, description, mode, readOnly, deprecated, aliases, parameters, handler, capabilityKind, convenience, requiresMainThread, owner, writeScope, returns, recommendedWorkflow, examples, errorCodes, destructive, canTriggerDomainReload);
+            RegisterBuiltinInternal(
+                ToolMethods,
+                "tool",
+                name,
+                ns,
+                description,
+                mode,
+                readOnly,
+                deprecated,
+                aliases,
+                parameters,
+                handler,
+                capabilityKind,
+                convenience,
+                requiresMainThread,
+                owner,
+                writeScope,
+                returns,
+                recommendedWorkflow,
+                examples,
+                errorCodes,
+                destructive,
+                canTriggerDomainReload);
+        }
+
+        public static bool TryReplaceRuntimeHost(
+            string hostNamespace,
+            string hostDisplayName,
+            PieUnityCapabilityDescriptor[] descriptors,
+            Func<PieUnityCapabilityDescriptor, Func<string, string>> handlerFactory,
+            out string error)
+        {
+            lock (SyncRoot)
+            {
+                var normalizedNamespace = NormalizeHostNamespace(hostNamespace);
+                if (string.IsNullOrWhiteSpace(normalizedNamespace))
+                {
+                    error = "Runtime host namespace is required.";
+                    AppendRuntimeHostDiagnostic(error);
+                    return false;
+                }
+
+                if (handlerFactory == null)
+                {
+                    error = $"Runtime host {normalizedNamespace} is missing a handler factory.";
+                    AppendRuntimeHostDiagnostic(error);
+                    return false;
+                }
+
+                var items = descriptors ?? new PieUnityCapabilityDescriptor[0];
+                if (items.Length == 0)
+                {
+                    error = $"Runtime host {normalizedNamespace} did not register any capabilities.";
+                    AppendRuntimeHostDiagnostic(error);
+                    return false;
+                }
+
+                var validationError = ValidateRuntimeHostDescriptors(normalizedNamespace, items);
+                if (!string.IsNullOrWhiteSpace(validationError))
+                {
+                    error = validationError;
+                    AppendRuntimeHostDiagnostic(error);
+                    return false;
+                }
+
+                RemoveRuntimeHostLocked(normalizedNamespace);
+                var registration = new RuntimeHostRegistration
+                {
+                    Namespace = normalizedNamespace,
+                    DisplayName = string.IsNullOrWhiteSpace(hostDisplayName) ? normalizedNamespace : hostDisplayName.Trim(),
+                };
+
+                for (var i = 0; i < items.Length; i++)
+                {
+                    var descriptor = CloneDescriptor(items[i]);
+                    descriptor.source = "runtime_host";
+                    descriptor.hostNamespace = normalizedNamespace;
+                    descriptor.hostDisplayName = registration.DisplayName;
+                    descriptor.ns = string.IsNullOrWhiteSpace(descriptor.ns) ? normalizedNamespace : descriptor.ns;
+                    descriptor.mode = string.IsNullOrWhiteSpace(descriptor.mode) ? "runtime" : descriptor.mode;
+                    descriptor.availableIn = descriptor.mode;
+                    descriptor.aliases = descriptor.aliases ?? new string[0];
+                    descriptor.parameters = descriptor.parameters ?? new PieUnityParameterDescriptor[0];
+                    descriptor.examples = descriptor.examples ?? new string[0];
+                    descriptor.errorCodes = descriptor.errorCodes ?? new string[0];
+
+                    var handler = handlerFactory(descriptor);
+                    if (handler == null)
+                    {
+                        error = $"Runtime host {normalizedNamespace} did not provide a handler for capability {descriptor.name}.";
+                        AppendRuntimeHostDiagnostic(error);
+                        RemoveRuntimeHostLocked(normalizedNamespace);
+                        return false;
+                    }
+
+                    RegisterRegistrationLocked(
+                        string.Equals(descriptor.kind, "rpc", StringComparison.OrdinalIgnoreCase) ? RpcMethods : ToolMethods,
+                        descriptor,
+                        handler,
+                        descriptor.kind,
+                        descriptor.aliases,
+                        registration);
+                }
+
+                RuntimeHosts[normalizedNamespace] = registration;
+                error = "";
+                return true;
+            }
+        }
+
+        public static void UnregisterRuntimeHost(string hostNamespace)
+        {
+            lock (SyncRoot)
+            {
+                RemoveRuntimeHostLocked(NormalizeHostNamespace(hostNamespace));
+            }
+        }
+
+        public static void ResetRuntimeHosts()
+        {
+            lock (SyncRoot)
+            {
+                var namespaces = RuntimeHosts.Keys.ToArray();
+                for (var i = 0; i < namespaces.Length; i++)
+                    RemoveRuntimeHostLocked(namespaces[i]);
+                RuntimeHosts.Clear();
+                RuntimeHostDiagnostics.Clear();
+            }
+        }
+
+        public static string[] GetRegisteredRuntimeHostNamespaces()
+        {
+            lock (SyncRoot)
+            {
+                return RuntimeHosts.Keys
+                    .OrderBy((item) => item, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+        }
+
+        public static int GetRuntimeHostCount()
+        {
+            lock (SyncRoot)
+                return RuntimeHosts.Count;
+        }
+
+        public static int GetRuntimeHostCapabilityCount()
+        {
+            lock (SyncRoot)
+                return RuntimeHosts.Values.Sum((entry) => entry.CapabilityNames.Count);
+        }
+
+        public static string[] GetRuntimeHostDiagnostics()
+        {
+            lock (SyncRoot)
+                return RuntimeHostDiagnostics.ToArray();
         }
 
         public static bool TryInvokeRpc(string name, string argsJson, out string resultJson, out string error)
@@ -224,13 +411,13 @@ namespace Pie
             }
         }
 
-        private static void RegisterInternal(
+        private static void RegisterBuiltinInternal(
             Dictionary<string, CapabilityRegistration> source,
             string kind,
             string name,
             string ns,
             string description,
-            string mode,
+            string capabilityMode,
             bool readOnly,
             bool deprecated,
             string[] aliases,
@@ -239,9 +426,9 @@ namespace Pie
             string capabilityKind,
             bool convenience,
             bool requiresMainThread,
-            string owner,
+            string capabilityOwner,
             string writeScope,
-            string returns,
+            string returnValue,
             string recommendedWorkflow,
             string[] examples,
             string[] errorCodes,
@@ -250,51 +437,217 @@ namespace Pie
         {
             lock (SyncRoot)
             {
-                var descriptor = new PieUnityCapabilityDescriptor
-                {
-                    kind = kind,
-                    name = name,
-                    ns = ns,
-                    description = description,
-                    mode = mode,
-                    availableIn = mode,
-                    capabilityKind = capabilityKind ?? "host",
-                    owner = owner ?? "",
-                    writeScope = writeScope ?? "",
-                    returns = returns ?? "",
-                    recommendedWorkflow = recommendedWorkflow ?? "",
-                    examples = examples ?? new string[0],
-                    errorCodes = errorCodes ?? new string[0],
-                    readOnly = readOnly,
-                    deprecated = deprecated,
-                    convenience = convenience,
-                    requiresMainThread = requiresMainThread,
-                    destructive = destructive,
-                    editorOnly = string.Equals(mode, "editor", StringComparison.OrdinalIgnoreCase),
-                    runtimeOnly = string.Equals(mode, "runtime", StringComparison.OrdinalIgnoreCase),
-                    canTriggerDomainReload = canTriggerDomainReload,
-                    aliases = aliases ?? new string[0],
-                    parameters = parameters ?? new PieUnityParameterDescriptor[0],
-                };
+                var descriptor = new PieUnityCapabilityDescriptor();
+                descriptor.kind = kind;
+                descriptor.name = name;
+                descriptor.ns = ns;
+                descriptor.description = description;
+                descriptor.mode = capabilityMode;
+                descriptor.availableIn = capabilityMode;
+                descriptor.capabilityKind = capabilityKind ?? "host";
+                descriptor.source = "unity_builtin";
+                descriptor.owner = capabilityOwner ?? "";
+                descriptor.writeScope = writeScope ?? "";
+                descriptor.returns = returnValue ?? "";
+                descriptor.recommendedWorkflow = recommendedWorkflow ?? "";
+                descriptor.examples = examples ?? new string[0];
+                descriptor.errorCodes = errorCodes ?? new string[0];
+                descriptor.readOnly = readOnly;
+                descriptor.deprecated = deprecated;
+                descriptor.convenience = convenience;
+                descriptor.requiresMainThread = requiresMainThread;
+                descriptor.destructive = destructive;
+                descriptor.editorOnly = string.Equals(capabilityMode, "editor", StringComparison.OrdinalIgnoreCase);
+                descriptor.runtimeOnly = string.Equals(capabilityMode, "runtime", StringComparison.OrdinalIgnoreCase);
+                descriptor.canTriggerDomainReload = canTriggerDomainReload;
+                descriptor.aliases = aliases ?? new string[0];
+                descriptor.parameters = parameters ?? new PieUnityParameterDescriptor[0];
 
-                var registration = new CapabilityRegistration
-                {
-                    Descriptor = descriptor,
-                    Handler = handler,
-                };
+                RegisterRegistrationLocked(source, descriptor, handler, kind, descriptor.aliases, null);
+            }
+        }
 
-                source[name] = registration;
-                if (aliases == null)
-                    return;
+        private static void RegisterRegistrationLocked(
+            Dictionary<string, CapabilityRegistration> source,
+            PieUnityCapabilityDescriptor descriptor,
+            Func<string, string> handler,
+            string kind,
+            string[] aliases,
+            RuntimeHostRegistration runtimeHost)
+        {
+            var registration = new CapabilityRegistration
+            {
+                Descriptor = descriptor,
+                Handler = handler,
+            };
 
-                for (var i = 0; i < aliases.Length; i++)
+            source[descriptor.name] = registration;
+            if (runtimeHost != null)
+            {
+                runtimeHost.CapabilityNames.Add(descriptor.name);
+                TrackRuntimeHostKey(runtimeHost, descriptor.kind, descriptor.name);
+            }
+
+            if (aliases == null)
+                return;
+
+            for (var i = 0; i < aliases.Length; i++)
+            {
+                var alias = aliases[i];
+                if (string.IsNullOrWhiteSpace(alias))
+                    continue;
+                source[alias] = registration;
+                if (runtimeHost != null)
+                    TrackRuntimeHostKey(runtimeHost, descriptor.kind, alias);
+            }
+        }
+
+        private static string ValidateRuntimeHostDescriptors(string hostNamespace, PieUnityCapabilityDescriptor[] descriptors)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < descriptors.Length; i++)
+            {
+                var descriptor = descriptors[i];
+                if (descriptor == null)
+                    return $"Runtime host {hostNamespace} has a null capability descriptor.";
+
+                    string kind = descriptor.kind ?? string.Empty;
+                    kind = kind.Trim().ToLowerInvariant();
+                if (kind != "tool" && kind != "rpc")
+                    return $"Runtime host {hostNamespace} capability {descriptor.name ?? "(unnamed)"} must use kind tool or rpc.";
+
+                    string name = descriptor.name ?? string.Empty;
+                    name = name.Trim();
+                if (string.IsNullOrWhiteSpace(name))
+                    return $"Runtime host {hostNamespace} has a capability with an empty name.";
+
+                    string ns = descriptor.ns ?? string.Empty;
+                    ns = ns.Trim();
+                if (string.IsNullOrWhiteSpace(ns))
+                    return $"Runtime host {hostNamespace} capability {name} must declare a namespace.";
+
+                if (!string.Equals(ns, hostNamespace, StringComparison.OrdinalIgnoreCase))
+                    return $"Runtime host {hostNamespace} capability {name} must stay in namespace {hostNamespace}.";
+
+                var scopedKey = $"{kind}:{name}";
+                if (!seen.Add(scopedKey))
+                    return $"Runtime host {hostNamespace} registered duplicate capability {name}.";
+
+                var conflict = FindConflictingRegistration(kind == "rpc" ? RpcMethods : ToolMethods, name, hostNamespace);
+                if (!string.IsNullOrWhiteSpace(conflict))
+                    return conflict;
+
+                var aliases = descriptor.aliases ?? new string[0];
+                for (var aliasIndex = 0; aliasIndex < aliases.Length; aliasIndex++)
                 {
-                    var alias = aliases[i];
+                        string alias = aliases[aliasIndex] ?? string.Empty;
+                        alias = alias.Trim();
                     if (string.IsNullOrWhiteSpace(alias))
                         continue;
-                    source[alias] = registration;
+
+                    var aliasKey = $"{kind}:{alias}";
+                    if (!seen.Add(aliasKey))
+                        return $"Runtime host {hostNamespace} registered duplicate alias {alias}.";
+
+                    conflict = FindConflictingRegistration(kind == "rpc" ? RpcMethods : ToolMethods, alias, hostNamespace);
+                    if (!string.IsNullOrWhiteSpace(conflict))
+                        return conflict;
                 }
             }
+
+            return "";
+        }
+
+        private static string FindConflictingRegistration(Dictionary<string, CapabilityRegistration> source, string key, string hostNamespace)
+        {
+            if (!source.TryGetValue(key ?? "", out var existing))
+                return "";
+
+            if (existing?.Descriptor == null)
+                return "";
+
+            if (string.Equals(existing.Descriptor.source, "runtime_host", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(existing.Descriptor.hostNamespace, hostNamespace, StringComparison.OrdinalIgnoreCase))
+                return "";
+
+            var owner = string.Equals(existing.Descriptor.source, "runtime_host", StringComparison.OrdinalIgnoreCase)
+                ? $"runtime host {existing.Descriptor.hostNamespace}"
+                : "built-in pie-unity capability";
+            return $"Runtime host {hostNamespace} cannot register {key} because it conflicts with {owner}.";
+        }
+
+        private static void RemoveRuntimeHostLocked(string hostNamespace)
+        {
+            if (string.IsNullOrWhiteSpace(hostNamespace))
+                return;
+
+            if (!RuntimeHosts.TryGetValue(hostNamespace, out var registration))
+                return;
+
+            foreach (var key in registration.ToolKeys)
+                ToolMethods.Remove(key);
+            foreach (var key in registration.RpcKeys)
+                RpcMethods.Remove(key);
+
+            RuntimeHosts.Remove(hostNamespace);
+        }
+
+        private static void TrackRuntimeHostKey(RuntimeHostRegistration registration, string kind, string key)
+        {
+            if (registration == null || string.IsNullOrWhiteSpace(key))
+                return;
+
+            if (string.Equals(kind, "rpc", StringComparison.OrdinalIgnoreCase))
+                registration.RpcKeys.Add(key);
+            else
+                registration.ToolKeys.Add(key);
+        }
+
+        private static PieUnityCapabilityDescriptor CloneDescriptor(PieUnityCapabilityDescriptor source)
+        {
+            return new PieUnityCapabilityDescriptor
+            {
+                schemaVersion = string.IsNullOrWhiteSpace(source.schemaVersion) ? PieUnityCapabilitiesConstants.ManifestSchemaVersion : source.schemaVersion,
+                kind = source.kind ?? "",
+                name = source.name ?? "",
+                ns = source.ns ?? "",
+                description = source.description ?? "",
+                mode = source.mode ?? "runtime",
+                availableIn = source.availableIn ?? source.mode ?? "runtime",
+                capabilityKind = string.IsNullOrWhiteSpace(source.capabilityKind) ? "host" : source.capabilityKind,
+                owner = source.owner ?? "",
+                writeScope = source.writeScope ?? "",
+                returns = source.returns ?? "",
+                recommendedWorkflow = source.recommendedWorkflow ?? "",
+                examples = source.examples ?? new string[0],
+                errorCodes = source.errorCodes ?? new string[0],
+                readOnly = source.readOnly,
+                deprecated = source.deprecated,
+                convenience = source.convenience,
+                requiresMainThread = source.requiresMainThread,
+                destructive = source.destructive,
+                editorOnly = source.editorOnly,
+                runtimeOnly = source.runtimeOnly,
+                canTriggerDomainReload = source.canTriggerDomainReload,
+                aliases = source.aliases ?? new string[0],
+                parameters = source.parameters ?? new PieUnityParameterDescriptor[0],
+            };
+        }
+
+        private static string NormalizeHostNamespace(string hostNamespace)
+        {
+            return (hostNamespace ?? "").Trim();
+        }
+
+        private static void AppendRuntimeHostDiagnostic(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                return;
+
+            RuntimeHostDiagnostics.Add(message);
+            if (RuntimeHostDiagnostics.Count > 32)
+                RuntimeHostDiagnostics.RemoveRange(0, RuntimeHostDiagnostics.Count - 32);
+            PieDiagnostics.Warning($"[PieUnityCapabilityRegistry] {message}");
         }
 
         private static string DeriveProjectName(string projectPath)

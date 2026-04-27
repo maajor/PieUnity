@@ -47,7 +47,7 @@ Selection behavior:
 - for `tool` and `rpc` commands without `--project`, `--instance`, or `--port`, the helper inspects candidate manifests and selects the only host that exposes the requested capability
 - if multiple candidates remain, the helper returns a structured candidate list; show it and ask the user which instance to use
 - prefer `--instance` when the user already knows the target instance ID
-- treat every pie-unity host as a tool host; do not infer intended use from whether the host reports editor or runtime mode
+- when PlayMode/runtime is alive, expect the helper to surface the runtime owner as the primary discoverable host
 
 ## Health
 
@@ -66,7 +66,7 @@ node <script> manifest --project "/abs/path/to/project" --namespace chat
 node <script> manifest --project "/abs/path/to/project" --name unity_project_inspect
 ```
 
-The host manifest reports `manifestSchemaVersion` and `skillProtocolVersion`. For unfamiliar work, inspect the relevant namespace before calling mutating tools. Prefer project-specific namespaces, such as `voxmod`, over generic Unity editing tools when they are available.
+The host manifest reports `manifestSchemaVersion` and `skillProtocolVersion`. For unfamiliar work, inspect the relevant namespace before calling mutating tools. Prefer project-specific namespaces, such as `voxmod`, over generic Unity editing tools when they are available. If no runtime host namespace exists, use `unity_script_run` with `ctx.runtime` for zero-registration runtime inspection instead of assuming raw globals such as `VX`, `CS`, or `puer` are a stable public contract.
 
 ## Host Workflow
 
@@ -91,6 +91,25 @@ node <script> script-run --project "/abs/path/to/project" --data '{"script":"exp
 ```
 
 Do not pass C#, shader source, or raw file contents to `script-run`. Use normal Pie file tools for Unity project files, then call `unity_refresh` through `tool` if Unity must import changed assets. Do not write long synchronous loops. Express long goals as short generator steps that yield between frames.
+
+For zero-registration runtime work, prefer `ctx.runtime` path inspection and calls:
+
+```js
+export function* run(ctx, args) {
+  const members = ctx.runtime.members("IJsEnvironment.Environment");
+  const result = ctx.runtime.call("IJsEnvironment.Environment.ReloadAllMods", []);
+  return { members, result };
+}
+```
+
+When a runtime host namespace exists in the manifest, `ctx.host(...)` remains the structured higher-level option:
+
+```js
+export function* run(ctx, args) {
+  const result = yield ctx.host("voxmod").call("reload_all_mods", { force: true });
+  return result;
+}
+```
 
 ## Raw Tool / RPC
 

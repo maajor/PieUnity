@@ -3097,6 +3097,8 @@ var _PieAgent = (() => {
         this.resolveFinalResult = resolve2;
       });
     }
+    isComplete;
+    extractResult;
     queue = [];
     waiting = [];
     done = false;
@@ -3203,6 +3205,10 @@ var _PieAgent = (() => {
       this.baseContext = baseContext;
       this.minLevel = minLevel;
     }
+    mode;
+    sinks;
+    baseContext;
+    minLevel;
     log(level, message, context = {}) {
       if (LEVEL_ORDER[level] < LEVEL_ORDER[this.minLevel]) {
         return;
@@ -3244,6 +3250,7 @@ var _PieAgent = (() => {
     constructor(mode = "test") {
       this.mode = mode;
     }
+    mode;
     log() {
     }
     debug() {
@@ -13369,7 +13376,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     if (!raw || typeof raw !== "object") return null;
     const value = raw;
     if (value.mode !== "todo_closure") return null;
-    const status = value.status === "active" || value.status === "completed" || value.status === "aborted" || value.status === "failed" || value.status === "stalled" ? value.status : "active";
+    const status = value.status === "active" || value.status === "paused" || value.status === "completed" || value.status === "aborted" || value.status === "failed" || value.status === "stalled" ? value.status : "active";
     return {
       goal: typeof value.goal === "string" && value.goal.trim().length > 0 ? value.goal : "Drive the active todo list to a terminal cleared state.",
       mode: "todo_closure",
@@ -13441,8 +13448,8 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       return { loop, action: "none", reason: "already_terminal" };
     }
     return {
-      loop: { ...loop, status: "failed", updatedAt: nowIso() },
-      action: "clear_failed",
+      loop: { ...loop, status: "paused", updatedAt: nowIso() },
+      action: "pause_failed",
       reason: "failed_turn"
     };
   }
@@ -13500,6 +13507,16 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     const completed = [...steps].reverse().find((step) => step.status === "completed");
     return completed?.id ?? null;
   }
+  function createRestoredTodoLoop(state, lifecycle, restoredLoop) {
+    if (state.mode !== "todo" || lifecycle !== "active" && lifecycle !== "paused" || state.steps.length === 0) {
+      return null;
+    }
+    if (restoredLoop) {
+      return restoredLoop;
+    }
+    const loop = createTodoClosureLoop({ ...state, lifecycle: "active" });
+    return lifecycle === "paused" && loop ? { ...loop, status: "paused" } : loop;
+  }
   function createEmptyExecutionState() {
     return {
       mode: "idle",
@@ -13520,7 +13537,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     }
     const state = raw;
     const steps = normalizeSteps(state.steps || []);
-    const lifecycle = steps.length === 0 ? "stale" : state.lifecycle === "active" || state.lifecycle === "aborted" || state.lifecycle === "completed" || state.lifecycle === "stale" || state.lifecycle === "stalled" ? state.lifecycle : "active";
+    const lifecycle = steps.length === 0 ? "stale" : state.lifecycle === "active" || state.lifecycle === "paused" || state.lifecycle === "aborted" || state.lifecycle === "completed" || state.lifecycle === "stale" || state.lifecycle === "stalled" ? state.lifecycle : "active";
     const mode = state.mode === "todo" || state.mode === "plan" || state.mode === "idle" ? state.mode : steps.length > 0 ? "todo" : "idle";
     const loop = restoreLoopState(state.loop);
     return {
@@ -13530,7 +13547,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       currentStepId: typeof state.currentStepId === "number" ? state.currentStepId : inferCurrentStepId(steps),
       lastCompletedStepId: typeof state.lastCompletedStepId === "number" ? state.lastCompletedStepId : inferLastCompletedStepId(steps),
       source: state.source === "user_todo" || state.source === "plan_mode" || state.source === "system_auto" ? state.source : "system_auto",
-      loop: mode === "todo" && lifecycle === "active" && steps.length > 0 ? loop ?? createTodoClosureLoop({
+      loop: createRestoredTodoLoop({
         mode,
         lifecycle,
         steps,
@@ -13541,7 +13558,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         awaitingContinuation: Boolean(state.awaitingContinuation),
         failureSummary: typeof state.failureSummary === "string" ? state.failureSummary : null,
         updatedAt: typeof state.updatedAt === "string" && state.updatedAt.length > 0 ? state.updatedAt : nowIso2()
-      }) : null,
+      }, lifecycle, loop),
       awaitingContinuation: Boolean(state.awaitingContinuation),
       failureSummary: typeof state.failureSummary === "string" ? state.failureSummary : null,
       updatedAt: typeof state.updatedAt === "string" && state.updatedAt.length > 0 ? state.updatedAt : nowIso2()
@@ -13604,9 +13621,6 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     web_fetch: { riskClass: "network", concurrencySafe: true, permissionScope: "network", readsNetwork: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
     code_intel: { riskClass: "read_only", concurrencySafe: true, permissionScope: "filesystem", readsFile: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
     spawn_subagents_parallel: { riskClass: "read_only", concurrencySafe: false, permissionScope: "host", readsHostResource: true, availableInPlanMode: true, maxOutputChars: 1e5 },
-    read_skill: { riskClass: "read_only", concurrencySafe: true, permissionScope: "host", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
-    read_resource: { riskClass: "read_only", concurrencySafe: true, permissionScope: "host", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
-    resolve_resource: { riskClass: "read_only", concurrencySafe: true, permissionScope: "host", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
     ask_user_multi: { riskClass: "user_interaction", concurrencySafe: false, permissionScope: "user", asksUser: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
     manage_todo_list: { riskClass: "session_mutation", concurrencySafe: false, permissionScope: "session", mutatesSession: true, availableInPlanMode: true },
     unity_project_inspect: { riskClass: "read_only", concurrencySafe: true, permissionScope: "unity", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
@@ -13615,9 +13629,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     unity_log_read: { riskClass: "read_only", concurrencySafe: true, permissionScope: "unity", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true, maxOutputChars: 1e5 },
     unity_scene_object_edit: { riskClass: "external_side_effect", concurrencySafe: false, requiresPermission: true, permissionScope: "unity", externalSideEffect: true, highRisk: true },
     unity_refresh: { riskClass: "external_side_effect", concurrencySafe: false, permissionScope: "unity", externalSideEffect: true },
-    unity_script_run: { riskClass: "external_side_effect", concurrencySafe: false, requiresPermission: true, permissionScope: "unity", externalSideEffect: true, highRisk: true },
-    read_project_memory: { riskClass: "read_only", concurrencySafe: true, permissionScope: "host", readsHostResource: true, availableInPlanMode: true, allowedForSubagentByDefault: true },
-    write_project_memory: { riskClass: "write", concurrencySafe: false, requiresPermission: true, permissionScope: "host", writesHostResource: true, externalSideEffect: true, highRisk: true }
+    unity_script_run: { riskClass: "external_side_effect", concurrencySafe: false, requiresPermission: true, permissionScope: "unity", externalSideEffect: true, highRisk: true }
   };
   function getToolCapabilityMetadata(tool) {
     return tool.capabilityMetadata ?? tool.risk ?? BUILTIN_TOOL_CAPABILITY_METADATA[tool.name];
@@ -13659,189 +13671,10 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   }
   var DEFAULT_PLAN_MODE_TOOL_NAMES = Object.entries(BUILTIN_TOOL_CAPABILITY_METADATA).filter(([, metadata]) => metadata.availableInPlanMode).map(([name]) => name);
 
-  // ../../packages/shared-headless-capabilities/src/read-skill.ts
-  var ReadSkillParamsSchema = Type.Object({
-    name: Type.String({ description: "Exact skill name from the available_skills list." })
-  });
-  function validateSkillNameArgument(name) {
-    if (name.includes("<|tool")) {
-      return "The skill name must be only an exact name from the available_skills list, not tool-call markup.";
-    }
-    if (name.includes("\n")) {
-      return "The skill name must be a single exact name from the available_skills list, not multi-line text.";
-    }
-    return null;
-  }
-  function formatSkillResources(resources) {
-    if (!Array.isArray(resources) || resources.length === 0) return "";
-    const lines = resources.map((resource) => {
-      const path = String(resource.path || "").trim();
-      const kind2 = String(resource.kind || "").trim();
-      return kind2 ? `- ${path} (${kind2})` : `- ${path}`;
-    });
-    return `
-
-## Skill Resources
-${lines.join("\n")}`;
-  }
-  function createReadSkillCapability(deps) {
-    async function resolveSkill(name) {
-      if (deps.resolveSkill) {
-        return deps.resolveSkill(name);
-      }
-      const skill = deps.skillLoader?.getSkill?.(name) ?? deps.skillLoader?.loadSkill?.(name);
-      if (!skill) {
-        return null;
-      }
-      return {
-        name: skill.name,
-        content: skill.prompt,
-        resources: skill.resourceRefs
-      };
-    }
-    const tool = {
-      name: "read_skill",
-      label: "read_skill",
-      description: "Load the full contents of a skill by exact name from the available_skills list only. Do not pass tool names.",
-      parameters: ReadSkillParamsSchema,
-      async execute(toolCallIdOrArgs, maybeArgs) {
-        const args = typeof toolCallIdOrArgs === "string" ? maybeArgs : toolCallIdOrArgs;
-        const skillName = String(args?.name || "").trim();
-        const validationError = validateSkillNameArgument(skillName);
-        if (validationError) {
-          return {
-            content: [{ type: "text", text: `Invalid skill name: ${validationError}` }],
-            details: { found: false, name: skillName || void 0 },
-            isError: true
-          };
-        }
-        const skill = await resolveSkill(skillName);
-        if (!skill?.content) {
-          return {
-            content: [{ type: "text", text: `Skill not found: ${skillName || "(empty)"}` }],
-            details: { found: false, name: skillName || void 0 },
-            isError: true
-          };
-        }
-        return {
-          content: [{
-            type: "text",
-            text: `# ${skill.name}
-
-${skill.content}${formatSkillResources(skill.resources)}`
-          }],
-          details: {
-            found: true,
-            name: skill.name,
-            ...Array.isArray(skill.resources) ? { resources: skill.resources } : {}
-          }
-        };
-      }
-    };
-    return {
-      ...defineSharedCapability({
-        id: "read-skill",
-        description: "Shared capability for loading full skill contents through a host-provided skill resolver.",
-        tools: [tool]
-      }),
-      tool
-    };
-  }
-
-  // ../../packages/shared-headless-capabilities/src/read-resource.ts
-  var ReadResourceParamsSchema = Type.Object({
-    owner: Type.String({ description: "Exact skill name that owns the resource." }),
-    path: Type.String({ description: "Relative path inside the skill package." })
-  });
-  function inferKind(path) {
-    const lower = path.toLowerCase();
-    if (lower.endsWith(".md")) return "document";
-    if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".sh") || lower.endsWith(".py")) return "script";
-    return void 0;
-  }
-  function inferMimeType(path) {
-    const lower = path.toLowerCase();
-    if (lower.endsWith(".md")) return "text/markdown";
-    if (lower.endsWith(".js") || lower.endsWith(".mjs")) return "application/javascript";
-    if (lower.endsWith(".sh")) return "text/x-shellscript";
-    if (lower.endsWith(".py")) return "text/x-python";
-    if (lower.endsWith(".json")) return "application/json";
-    if (lower.endsWith(".txt")) return "text/plain";
-    return void 0;
-  }
-  function validateRelativeResourcePath(path) {
-    const trimmed = String(path || "").trim().replace(/\\/g, "/");
-    if (!trimmed) {
-      throw new Error("Resource path cannot be empty");
-    }
-    if (trimmed.startsWith("/") || /^[A-Za-z]:\//.test(trimmed)) {
-      throw new Error("Resource path must be relative");
-    }
-    const segments = trimmed.split("/");
-    if (segments.some((segment) => segment === "..")) {
-      throw new Error("Resource path cannot escape the skill package");
-    }
-    return trimmed.replace(/^\.\/+/, "");
-  }
-  function createReadResourceCapability(deps) {
-    const tool = {
-      name: "read_resource",
-      label: "read_resource",
-      description: "Load a relative resource file from inside a skill package by owner and path.",
-      parameters: ReadResourceParamsSchema,
-      async execute(toolCallIdOrArgs, maybeArgs) {
-        const args = typeof toolCallIdOrArgs === "string" ? maybeArgs : toolCallIdOrArgs;
-        const owner = String(args?.owner || "").trim();
-        let resourcePath = "";
-        try {
-          resourcePath = validateRelativeResourcePath(args?.path || "");
-        } catch (error) {
-          return {
-            content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
-            details: { found: false, owner: owner || void 0, path: args?.path || void 0 },
-            isError: true
-          };
-        }
-        const resource = await deps.resolveResource?.(owner, resourcePath);
-        if (!resource?.content) {
-          return {
-            content: [{ type: "text", text: `Resource not found: ${owner || "(empty)"}/${resourcePath || "(empty)"}` }],
-            details: { found: false, owner: owner || void 0, path: resourcePath || void 0 },
-            isError: true
-          };
-        }
-        const kind2 = resource.kind || inferKind(resource.path);
-        const mimeType = resource.mimeType || inferMimeType(resource.path);
-        return {
-          content: [{
-            type: "text",
-            text: `# ${resource.owner}/${resource.path}
-
-${resource.content}`
-          }],
-          details: {
-            found: true,
-            owner: resource.owner,
-            path: resource.path,
-            kind: kind2,
-            mimeType
-          }
-        };
-      }
-    };
-    return {
-      ...defineSharedCapability({
-        id: "read-resource",
-        description: "Shared capability for loading resources scoped to a skill package.",
-        tools: [tool]
-      }),
-      tool
-    };
-  }
-
   // node-stub:node:path
   var sep = "/";
   var join = (...p) => p.filter(Boolean).join("/").replace(/\/+/g, "/");
+  var dirname = (p) => p.split("/").slice(0, -1).join("/") || "/";
   var basename = (p, ext) => {
     const b = p.split("/").pop() || "";
     return ext && b.endsWith(ext) ? b.slice(0, -ext.length) : b;
@@ -13962,88 +13795,6 @@ ${resource.content}`
         isError: true
       };
     }
-  }
-
-  // ../../packages/shared-headless-capabilities/src/resolve-resource.ts
-  var ResolveResourceParamsSchema = Type.Object({
-    owner: Type.String({ description: "Exact skill name that owns the resource." }),
-    path: Type.String({ description: "Relative path inside the skill package." })
-  });
-  function inferKind2(path) {
-    const lower = path.toLowerCase();
-    if (lower.endsWith(".md")) return "document";
-    if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".sh") || lower.endsWith(".py")) return "script";
-    return void 0;
-  }
-  function validateRelativeResourcePath2(path) {
-    const trimmed = String(path || "").trim().replace(/\\/g, "/");
-    if (!trimmed) {
-      throw new Error("Resource path cannot be empty");
-    }
-    if (trimmed.startsWith("/") || /^[A-Za-z]:\//.test(trimmed)) {
-      throw new Error("Resource path must be relative");
-    }
-    const segments = trimmed.split("/");
-    if (segments.some((segment) => segment === "..")) {
-      throw new Error("Resource path cannot escape the skill package");
-    }
-    return trimmed.replace(/^\.\/+/, "");
-  }
-  function createResolveResourceCapability(deps) {
-    const tool = {
-      name: "resolve_resource",
-      label: "resolve_resource",
-      description: "Resolve a relative skill resource to a host executable/readable path without loading its content.",
-      parameters: ResolveResourceParamsSchema,
-      async execute(toolCallIdOrArgs, maybeArgs) {
-        const args = typeof toolCallIdOrArgs === "string" ? maybeArgs : toolCallIdOrArgs;
-        const owner = String(args?.owner || "").trim();
-        let resourcePath = "";
-        try {
-          resourcePath = validateRelativeResourcePath2(args?.path || "");
-        } catch (error) {
-          return {
-            content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
-            details: { found: false, owner: owner || void 0, path: args?.path || void 0 },
-            isError: true
-          };
-        }
-        const resource = await deps.resolveResource?.(owner, resourcePath);
-        if (!resource?.resolvedPath) {
-          return {
-            content: [{ type: "text", text: `Resource not found: ${owner || "(empty)"}/${resourcePath || "(empty)"}` }],
-            details: { found: false, owner: owner || void 0, path: resourcePath || void 0 },
-            isError: true
-          };
-        }
-        return {
-          content: [{
-            type: "text",
-            text: [
-              "Resolved skill resource:",
-              `owner: ${resource.owner}`,
-              `path: ${resource.path}`,
-              `resolvedPath: ${resource.resolvedPath}`
-            ].join("\n")
-          }],
-          details: {
-            found: true,
-            owner: resource.owner,
-            path: resource.path,
-            kind: resource.kind || inferKind2(resource.path),
-            resolvedPath: resource.resolvedPath
-          }
-        };
-      }
-    };
-    return {
-      ...defineSharedCapability({
-        id: "resolve-resource",
-        description: "Shared capability for resolving a skill resource to a host path without loading its contents.",
-        tools: [tool]
-      }),
-      tool
-    };
   }
 
   // ../../packages/shared-headless-capabilities/src/session-trace.ts
@@ -14350,6 +14101,9 @@ ${resource.content}`
         this.trace.recentTimeline = [];
       }
     }
+    trace;
+    recentTurnsLimit;
+    recentEventsLimit;
     pendingUserText = null;
     pushEvent(type, meta) {
       this.trace.recentEvents.push({
@@ -14625,6 +14379,7 @@ ${resource.content}`
       this.recentEventsLimit = options.recentEventsLimit ?? 100;
       this.debounceMs = options.debounceMs ?? 50;
     }
+    options;
     cachedSessionId = null;
     cachedController = null;
     flushTimer = null;
@@ -14742,12 +14497,9 @@ ${resource.content}`
     if (skills.length === 0) return "";
     const lines = [
       "\n\nThe following skills provide specialized instructions for specific tasks.",
-      "Use the read_skill tool only with an exact name from <available_skills> when the task matches its description.",
-      "Tools such as bash, read_file, grep_text, or manage_todo_list are not skills and must not be passed to read_skill.",
-      "Skills may reference package-local resources using relative paths.",
-      "When read_skill returns skill-local resources in details.resources, use read_resource(owner, path) for documents or config files that you need to inspect.",
-      "When read_skill returns a script or executable resource in details.resources, use resolve_resource(owner, path) before execution.",
-      "Do not guess host filesystem paths for skill-local resources.",
+      "Use read_file to load a skill's entry file when the task matches its description.",
+      "When a skill file references a relative path, resolve it against that skill's baseDir and use the resulting ordinary path with file or bash tools.",
+      "Skills are ordinary files in the current runtime filesystem; do not use special skill/resource tool protocols.",
       "",
       "<available_skills>"
     ];
@@ -14755,6 +14507,12 @@ ${resource.content}`
       lines.push("  <skill>");
       lines.push(`    <name>${escapeXml(skill.name)}</name>`);
       lines.push(`    <description>${escapeXml(skill.description)}</description>`);
+      if (skill.filePath) {
+        lines.push(`    <entry>${escapeXml(skill.filePath)}</entry>`);
+      }
+      if (skill.baseDir) {
+        lines.push(`    <baseDir>${escapeXml(skill.baseDir)}</baseDir>`);
+      }
       lines.push("  </skill>");
     }
     lines.push("</available_skills>");
@@ -15613,17 +15371,6 @@ Use this for independent investigation, search, review, or triage work. Provide 
   }
 
   // ../../packages/agent-framework/src/skills/parser.ts
-  function inferResourceKind(path) {
-    const lower = path.toLowerCase();
-    if (lower.endsWith(".md")) return "document";
-    if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".sh") || lower.endsWith(".py")) return "script";
-    return void 0;
-  }
-  function extractResourceRefs(content) {
-    const matches = content.match(/`((?:\.\/)?(?:references|scripts)\/[^`\s]+)`/g) || [];
-    const refs = matches.map((raw) => raw.slice(1, -1).replace(/^\.\//, "")).filter((path, index, all) => path.length > 0 && all.indexOf(path) === index).map((path) => ({ path, kind: inferResourceKind(path) }));
-    return refs.length > 0 ? refs : void 0;
-  }
   function parseFrontmatter(yaml) {
     const result = {};
     const lines = yaml.split("\n");
@@ -15705,7 +15452,6 @@ Use this for independent investigation, search, review, or triage work. Provide 
       displayName,
       description,
       prompt: content,
-      resourceRefs: extractResourceRefs(content),
       allowedTools: Array.isArray(frontmatter.tools) ? frontmatter.tools : typeof frontmatter.tools === "string" ? [frontmatter.tools] : void 0,
       tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : typeof frontmatter.tags === "string" ? [frontmatter.tags] : void 0,
       author: frontmatter.author,
@@ -17442,6 +17188,11 @@ ${compactSummary}`;
         }
         return;
       }
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.role === "assistant" && (lastMessage.stopReason === "error" || lastMessage.stopReason === "aborted")) {
+        this.emit({ type: "auto_continue_skipped", reason: "last_turn_failed" });
+        return;
+      }
       const result = await this.getAutoContinueMessage({
         agent: this.agent,
         sessionManager: this.sessionManager,
@@ -17790,143 +17541,41 @@ ${compactSummary}`;
     return await currentInteractionHandler(request);
   }
 
-  // ../../packages/agent-framework/src/project-memory.ts
-  var PROJECT_MEMORY_CLASSIFICATION = {
-    disposition: "future_shared_capability",
-    sharedContract: true,
-    hostSpecificExecutor: true
-  };
-  function defineProjectMemoryAdapter(adapter) {
-    return adapter;
+  // ../../packages/agent-framework/src/context-files.ts
+  var AGENTS_CONTEXT_FILE_NAME = "AGENTS.md";
+  function normalizeContextPath(path) {
+    return String(path || "").replace(/\\/g, "/").replace(/^\/+/, "").trim() || AGENTS_CONTEXT_FILE_NAME;
   }
-
-  // ../../packages/agent-framework/src/knowledge-index.ts
-  function parseFrontmatterBlock(yaml) {
-    const result = {};
-    const lines = yaml.split("\n");
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const colonIndex = trimmed.indexOf(":");
-      if (colonIndex === -1) continue;
-      const key = trimmed.slice(0, colonIndex).trim();
-      let value = trimmed.slice(colonIndex + 1).trim();
-      if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
-        value = value.slice(1, -1);
+  function normalizeContextContent(content) {
+    return String(content || "").replace(/\r\n/g, "\n").trim();
+  }
+  function dedupeProjectContextFiles(files) {
+    const seen = /* @__PURE__ */ new Set();
+    const result = [];
+    for (const file of files) {
+      const path = normalizeContextPath(file.path);
+      const key = path.toLowerCase();
+      const content = normalizeContextContent(file.content);
+      if (!content || seen.has(key)) {
+        continue;
       }
-      switch (key) {
-        case "title":
-          result.title = value;
-          break;
-        case "desc":
-        case "description":
-          result.description = value;
-          break;
-      }
+      seen.add(key);
+      result.push({ path, content });
     }
     return result;
   }
-  function stripFrontmatter(content) {
-    const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
-    if (!match) {
-      return { metadata: {}, body: content };
+  function buildProjectContextSection(files, options = {}) {
+    const contextFiles = dedupeProjectContextFiles(files);
+    if (contextFiles.length === 0) {
+      return "";
     }
-    return {
-      metadata: parseFrontmatterBlock(match[1]),
-      body: content.slice(match[0].length)
-    };
-  }
-  function extractHeadings(body, maxLevel = 3) {
-    const headings = [];
-    const lines = body.split("\n");
-    for (const rawLine of lines) {
-      const line = rawLine.trim();
-      const match = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
-      if (!match) continue;
-      const level = match[1].length;
-      if (level > maxLevel) continue;
-      headings.push({ level, text: match[2].trim() });
+    const heading = options.heading?.trim() || "Project Context";
+    const intro = options.intro?.trim() || "Project-specific instructions from AGENTS.md files. Apply them in order; later files may add narrower instructions.";
+    const lines = [`## ${heading}`, intro, ""];
+    for (const file of contextFiles) {
+      lines.push(`### ${file.path}`, file.content, "");
     }
-    return headings;
-  }
-  function extractTitle(metadata, headings) {
-    if (metadata.title && metadata.title.trim()) return metadata.title.trim();
-    const firstHeading = headings.find((heading) => heading.level === 1) || headings[0];
-    return firstHeading?.text?.trim() || "";
-  }
-  function extractDescription(metadata, body) {
-    const explicit = metadata.description;
-    if (explicit && explicit.trim()) {
-      return explicit.trim();
-    }
-    const lines = body.split("\n");
-    for (const rawLine of lines.slice(0, 24)) {
-      const line = rawLine.trim();
-      if (!line) continue;
-      const descriptionMatch = line.match(/^description:\s*(.+)$/i);
-      if (descriptionMatch) {
-        return descriptionMatch[1].trim();
-      }
-    }
-    let seenHeading = false;
-    let paragraphLines = [];
-    for (const rawLine of body.split("\n")) {
-      const line = rawLine.trim();
-      if (!line) {
-        if (seenHeading && paragraphLines.length > 0) {
-          break;
-        }
-        continue;
-      }
-      if (/^#{1,6}\s+/.test(line)) {
-        if (seenHeading && paragraphLines.length > 0) {
-          break;
-        }
-        seenHeading = true;
-        continue;
-      }
-      if (!seenHeading) {
-        continue;
-      }
-      if (/^description:\s*/i.test(line)) {
-        continue;
-      }
-      paragraphLines.push(line);
-    }
-    if (paragraphLines.length > 0) {
-      return paragraphLines.join(" ").trim();
-    }
-    return "";
-  }
-  function buildKnowledgeIndexEntry(path, content) {
-    const trimmed = String(content || "").trim();
-    if (!trimmed) return null;
-    const { metadata, body } = stripFrontmatter(trimmed);
-    const headings = extractHeadings(body, 3);
-    const title = extractTitle(metadata, headings);
-    const description = extractDescription(metadata, body);
-    return {
-      path,
-      title,
-      description,
-      headings
-    };
-  }
-  function formatHeadings(headings) {
-    if (headings.length === 0) return "(none)";
-    return headings.map((heading) => `${"#".repeat(heading.level)} ${heading.text}`).join(" | ");
-  }
-  function buildKnowledgeIndexSection(entries, heading = "Project Knowledge Index") {
-    const filtered = entries.filter((entry) => entry && (entry.title || entry.description || entry.headings.length > 0));
-    if (filtered.length === 0) return "";
-    const lines = [`[${heading}]`];
-    for (const entry of filtered) {
-      lines.push(`- path: ${entry.path}`);
-      if (entry.title) lines.push(`  title: ${entry.title}`);
-      if (entry.description) lines.push(`  description: ${entry.description}`);
-      lines.push(`  headings: ${formatHeadings(entry.headings)}`);
-    }
-    return lines.join("\n");
+    return lines.join("\n").trimEnd();
   }
 
   // ../../packages/shared-headless-capabilities/src/ask-user.ts
@@ -18487,6 +18136,9 @@ ${compactSummary}`;
 
   // ../../packages/shared-headless-capabilities/src/builtin/fs/path-utils.ts
   function isInAllowlist(path, allowlistedDirs) {
+    if (allowlistedDirs.some((dir) => isGlobalFilesystemSentinel(dir))) {
+      return true;
+    }
     const normalized = normalizeForComparison(path);
     for (const dir of allowlistedDirs) {
       const normalizedDir = normalizeForComparison(dir);
@@ -18498,9 +18150,19 @@ ${compactSummary}`;
     return false;
   }
   function normalizeForComparison(path) {
-    const normalized = path.replace(/\\/g, "/").replace(/\/+/g, "/");
+    const slashNormalized = path.replace(/\\/g, "/");
+    const isWindowsPath = /^[a-zA-Z]:($|\/)/.test(slashNormalized) || /^\/{2}[^/]+\/[^/]+/.test(slashNormalized);
+    const normalized = slashNormalized.replace(/\/+/g, "/");
     if (normalized === "/") return normalized;
-    return normalized.replace(/\/+$/, "");
+    const trimmed = normalized.replace(/\/+$/, "");
+    return isWindowsPath ? trimmed.toLowerCase() : trimmed;
+  }
+  function isGlobalFilesystemSentinel(path) {
+    return normalizeForComparison(String(path || "").trim()) === "/";
+  }
+  function isAbsoluteUserPath(path) {
+    const normalized = path.replace(/\\/g, "/");
+    return /^[a-zA-Z]:\//.test(normalized) || /^\/{2}[^/]+\/[^/]+/.test(normalized);
   }
   function validateToolPathArgument(filePath) {
     const trimmed = filePath.trim();
@@ -18518,9 +18180,30 @@ ${compactSummary}`;
     return path.endsWith("/") ? path : `${path}/`;
   }
   function isWithinRoot(path, root) {
+    if (isGlobalFilesystemSentinel(root)) {
+      return true;
+    }
     const normalizedPath = normalizeForComparison(path);
     const normalizedRoot = normalizeForComparison(root);
     return normalizedPath === normalizedRoot || normalizedPath.startsWith(withTrailingSep(normalizedRoot));
+  }
+  function getAccessRoots(sandboxRoot, options) {
+    const fs = getFileSystem();
+    const roots = /* @__PURE__ */ new Set();
+    roots.add(fs.normalize(sandboxRoot));
+    if (options?.accessRoot) {
+      roots.add(fs.normalize(options.accessRoot));
+    }
+    for (const root of options?.accessRoots ?? []) {
+      const trimmed = String(root || "").trim();
+      if (trimmed) {
+        roots.add(fs.normalize(trimmed));
+      }
+    }
+    return Array.from(roots);
+  }
+  function isWithinAnyRoot(path, roots) {
+    return roots.some((root) => isWithinRoot(path, root));
   }
   function normalizePrefix(prefix) {
     const normalized = normalizeForComparison(prefix);
@@ -18602,12 +18285,13 @@ ${compactSummary}`;
   function resolveInSandbox(filePath, sandboxRoot, options, rootName) {
     const fs = getFileSystem();
     const allowlistedDirs = options?.allowlistedDirs ?? [];
+    const accessRoots = getAccessRoots(sandboxRoot, options);
     if (!filePath) {
       throw new Error("Path cannot be empty");
     }
     validateToolPathArgument(filePath);
     const cleaned = filePath.trim().startsWith("@") ? filePath.trim().slice(1) : filePath.trim();
-    if (fs.isAbsolute(cleaned)) {
+    if (fs.isAbsolute(cleaned) || isAbsoluteUserPath(cleaned)) {
       const normalized = fs.normalize(cleaned);
       const selectedRoot2 = rootName ? getRootByName(rootName, sandboxRoot, options) : void 0;
       if (rootName && !selectedRoot2) {
@@ -18630,7 +18314,7 @@ ${compactSummary}`;
       if (isInAllowlist(normalized, allowlistedDirs)) {
         return normalized;
       }
-      if (!isWithinRoot(normalized, sandboxRoot)) {
+      if (!isWithinAnyRoot(normalized, accessRoots)) {
         throw new Error(`Absolute path outside sandbox: ${filePath}`);
       }
       return normalized;
@@ -18650,7 +18334,7 @@ ${compactSummary}`;
       }
       return resolved;
     }
-    if (!isWithinRoot(resolved, sandboxRoot) && !isInAllowlist(resolved, allowlistedDirs)) {
+    if (!isWithinAnyRoot(resolved, accessRoots) && !isInAllowlist(resolved, allowlistedDirs)) {
       throw new Error(`Path escapes sandbox: ${filePath}`);
     }
     return resolved;
@@ -18913,6 +18597,10 @@ ${compactSummary}`;
                 const truncation = truncateHead(selectedContent);
                 let outputText;
                 let details;
+                const sourceHeader = `File: ${absolutePath}
+Base directory: ${dirname(absolutePath)}
+
+`;
                 if (truncation.firstLineExceedsLimit) {
                   const firstLineSize = formatSize(Buffer.byteLength(allLines[startLine], "utf-8"));
                   outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit.]`;
@@ -18941,6 +18629,7 @@ ${compactSummary}`;
                 } else {
                   outputText = truncation.content;
                 }
+                outputText = sourceHeader + outputText;
                 const textContent = [{ type: "text", text: outputText }];
                 if (aborted) return;
                 if (signal) {
@@ -20226,7 +19915,7 @@ Perform a web search for the query: ${params.input.query}`
       };
     }
   }
-  function extractTitle2(html) {
+  function extractTitle(html) {
     const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     return match?.[1]?.replace(/\s+/g, " ").trim();
   }
@@ -20416,7 +20105,7 @@ Perform a web search for the query: ${params.input.query}`
           const raw = decoded.text;
           const isHtml = /html/i.test(contentType) || /<\/?[a-z][\s\S]*>/i.test(raw.slice(0, 2e3));
           const isPdf = /pdf/i.test(contentType) || raw.startsWith("%PDF");
-          const title = isHtml ? extractTitle2(raw) : void 0;
+          const title = isHtml ? extractTitle(raw) : void 0;
           const htmlExtraction = isHtml ? htmlToReadableMarkdown(raw) : void 0;
           let text = htmlExtraction?.text ?? (isPdf ? compactPdfText(raw) : raw.trim());
           const extractionMethod = isHtml ? "html_readability" : isPdf ? "pdf_text" : "plain_text";
@@ -21732,6 +21421,7 @@ Queries tried: ${details.actualQueries.join("; ") || query}` }],
     constructor(bridge2) {
       this.bridge = bridge2;
     }
+    bridge;
     log(entry) {
       const moduleName = String(entry.context?.module || "unity");
       const payload = entry.context ? ` ${JSON.stringify(entry.context)}` : "";
@@ -21931,7 +21621,7 @@ Actions: create, read, complete_current, clear.`;
     const sceneManager = CS.UnityEngine.SceneManagement.SceneManager;
     const activeScene = sceneManager.GetActiveScene();
     const selection = isEditor2 && CS.UnityEditor && CS.UnityEditor.Selection ? CS.UnityEditor.Selection.activeGameObject : null;
-    const agentsPath = globalThis.pieBridge?.getProjectMemoryPath?.() || CS.System.IO.Path.Combine(projectRoot2, "Assets", "Pie", "AGENTS.md");
+    const agentsPath = CS.System.IO.Path.Combine(projectRoot2, "AGENTS.md");
     const roots = activeScene && activeScene.IsValid() ? activeScene.GetRootGameObjects() : [];
     const rootObjects = [];
     for (let i = 0; i < roots.length; i++) {
@@ -21947,7 +21637,7 @@ Actions: create, read, complete_current, clear.`;
       productName: CS.UnityEngine.Application.productName,
       unityVersion: CS.UnityEngine.Application.unityVersion,
       agentsPath,
-      hasProjectMemory: CS.System.IO.File.Exists(agentsPath),
+      hasAgentsFile: CS.System.IO.File.Exists(agentsPath),
       renderPipeline: pipelineInfo.pipeline,
       renderPipelineAssetType: pipelineInfo.assetType,
       packageHints: detectPackageHints(projectRoot2),
@@ -21959,7 +21649,7 @@ Actions: create, read, complete_current, clear.`;
     return {
       name: "unity_project_inspect",
       label: "unity_project_inspect",
-      description: "Inspect the current Unity environment, including render pipeline, scene, selection, and project memory status.",
+      description: "Inspect the current Unity environment, including render pipeline, scene, selection, and AGENTS.md status.",
       parameters: Type.Object({}),
       execute: async () => {
         const payload = getUnityContextSnapshot(projectRoot2, isEditor2);
@@ -22208,115 +21898,6 @@ Actions: create, read, complete_current, clear.`;
     };
   }
 
-  // src/tools/project-memory.ts
-  function getAgentsPath(projectRoot2) {
-    const fromBridge = globalThis.pieBridge?.getProjectMemoryPath?.();
-    if (typeof fromBridge === "string" && fromBridge.length > 0) {
-      return fromBridge;
-    }
-    return CS.System.IO.Path.Combine(projectRoot2, "Assets", "Pie", "AGENTS.md");
-  }
-  function getProjectMemoryPath(projectRoot2) {
-    return getAgentsPath(projectRoot2);
-  }
-  function ensureProjectMemoryDir(projectRoot2) {
-    const agentsPath = getAgentsPath(projectRoot2);
-    const dir = CS.System.IO.Path.GetDirectoryName(agentsPath);
-    if (dir && !CS.System.IO.Directory.Exists(dir)) {
-      CS.System.IO.Directory.CreateDirectory(dir);
-    }
-  }
-  function createUnityProjectMemoryAdapter(projectRoot2) {
-    return defineProjectMemoryAdapter({
-      getPath: () => getProjectMemoryPath(projectRoot2),
-      read: () => readProjectMemory(projectRoot2),
-      write: (content) => {
-        ensureProjectMemoryDir(projectRoot2);
-        CS.System.IO.File.WriteAllText(getProjectMemoryPath(projectRoot2), content || "");
-      }
-    });
-  }
-  function readProjectMemory(projectRoot2) {
-    const agentsPath = getProjectMemoryPath(projectRoot2);
-    if (!CS.System.IO.File.Exists(agentsPath)) return "";
-    return CS.System.IO.File.ReadAllText(agentsPath);
-  }
-  function createReadProjectMemoryTool(projectRoot2) {
-    const adapter = createUnityProjectMemoryAdapter(projectRoot2);
-    return {
-      name: "read_project_memory",
-      label: "read_project_memory",
-      description: "Read the project's persistent AGENTS.md memory file from Assets/Pie/AGENTS.md.",
-      parameters: Type.Object({}),
-      execute: async () => {
-        const content = await adapter.read();
-        return {
-          content: [{
-            type: "text",
-            text: content || "No project memory found. Initialize it before relying on persistent project facts."
-          }],
-          details: { hasContent: !!content, path: adapter.getPath(), classification: PROJECT_MEMORY_CLASSIFICATION.disposition }
-        };
-      }
-    };
-  }
-  function createWriteProjectMemoryTool(projectRoot2) {
-    const adapter = createUnityProjectMemoryAdapter(projectRoot2);
-    return {
-      name: "write_project_memory",
-      label: "write_project_memory",
-      description: "Create or overwrite Assets/Pie/AGENTS.md with persistent project instructions and facts.",
-      parameters: Type.Object({
-        content: Type.String({ description: "Full markdown contents for Assets/Pie/AGENTS.md." })
-      }),
-      execute: async (_toolCallId, params) => {
-        await adapter.write(params.content || "");
-        return {
-          content: [{
-            type: "text",
-            text: `Project memory written to ${adapter.getPath()}`
-          }],
-          details: { path: adapter.getPath(), length: (params.content || "").length, classification: PROJECT_MEMORY_CLASSIFICATION.disposition }
-        };
-      }
-    };
-  }
-  function buildInitialProjectMemory(snapshot) {
-    const packageLines = snapshot.packageHints.length > 0 ? snapshot.packageHints.map((hint) => `- ${hint}`).join("\n") : "- No SRP package hints detected";
-    const rootObjectLines = snapshot.rootObjects.length > 0 ? snapshot.rootObjects.map((name) => `- ${name}`).join("\n") : "- No root objects detected";
-    return `# AGENTS.md instructions
-
-## Project Overview
-- Product: ${snapshot.productName}
-- Unity Version: ${snapshot.unityVersion}
-- Scene: ${snapshot.sceneName || "(unknown)"}
-- Project Root: ${snapshot.projectRoot}
-
-## Render Pipeline
-- Active pipeline: ${snapshot.renderPipeline}
-- Pipeline asset type: ${snapshot.renderPipelineAssetType}
-- Color space: ${snapshot.colorSpace}
-
-## Package Hints
-${packageLines}
-
-## Scene Snapshot
-- Root object count: ${snapshot.rootObjectCount}
-${rootObjectLines}
-
-## Safe Editing Rules
-- Always inspect Unity context before creating materials or shaders.
-- Never assume Built-in, URP, or HDRP from memory alone.
-- Prefer reusing existing scene shaders/materials when possible.
-- Keep scene edits small and observable.
-
-## Validation Checklist
-- Confirm render pipeline before material creation.
-- Confirm target scene object names before mutation.
-- Summarize created or modified objects after each task.
-`;
-  }
-
   // src/unity-script-host.ts
   var DEFAULT_TOTAL_TIMEOUT_MS = 3e4;
   var DEFAULT_PER_STEP_TIMEOUT_MS = 100;
@@ -22370,6 +21951,11 @@ ${rootObjectLines}
   }
   function isRecord4(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  function createScriptHostError(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
   }
   function extractRefs(value) {
     if (!isRecord4(value)) return [];
@@ -22477,8 +22063,232 @@ ${rootObjectLines}
       }
     };
   }
+  function getRegisteredHostApi(bridge2) {
+    const call = (fullNameOrNamespace, nameOrArgs, maybeArgs) => {
+      if (!bridge2.host?.call) {
+        throw new Error("Runtime host bridge is not available.");
+      }
+      return bridge2.host.call(fullNameOrNamespace, nameOrArgs, maybeArgs);
+    };
+    const resolveCapabilityName = (namespace, name) => {
+      const normalizedNamespace = String(namespace || "").trim();
+      const normalizedName = String(name || "").trim();
+      if (!normalizedNamespace) {
+        throw new Error("Runtime host namespace is required.");
+      }
+      if (!normalizedName) {
+        throw new Error("Runtime host capability name is required.");
+      }
+      if (bridge2.host?.hasCapability?.(normalizedName)) {
+        return normalizedName;
+      }
+      const inferred = `${normalizedNamespace}_${normalizedName}`;
+      if (bridge2.host?.hasCapability?.(inferred)) {
+        return inferred;
+      }
+      const available = bridge2.host?.listCapabilities?.(normalizedNamespace) ?? [];
+      const names = available.map((item) => String(item?.name || "").trim()).filter(Boolean).join(", ");
+      throw new Error(`Runtime host capability not found: ${normalizedNamespace}.${normalizedName}${names ? ` (available: ${names})` : ""}`);
+    };
+    const byNamespace = (namespace) => ({
+      call(name, args = {}) {
+        return call(namespace, resolveCapabilityName(namespace, name), args);
+      },
+      list() {
+        return bridge2.host?.listCapabilities?.(String(namespace || "").trim()) ?? [];
+      }
+    });
+    return {
+      call(fullName, args = {}) {
+        const normalized = String(fullName || "").trim();
+        if (!normalized) {
+          throw new Error("Runtime host capability name is required.");
+        }
+        return call(normalized, args);
+      },
+      hasCapability(name) {
+        return bridge2.host?.hasCapability?.(name) === true;
+      },
+      list(namespace) {
+        return bridge2.host?.listCapabilities?.(namespace) ?? [];
+      },
+      namespace(namespace) {
+        return byNamespace(namespace);
+      }
+    };
+  }
+  function parseRuntimePath(path) {
+    const normalized = String(path || "").trim();
+    if (!normalized) {
+      throw createScriptHostError("RUNTIME_PATH_NOT_FOUND", "Runtime path is required.");
+    }
+    const parts = normalized.split(".").map((part) => String(part || "").trim()).filter(Boolean);
+    if (parts.length === 0) {
+      throw createScriptHostError("RUNTIME_PATH_NOT_FOUND", "Runtime path is required.");
+    }
+    return parts;
+  }
+  function collectRuntimeMemberNames(value) {
+    if (value === null || value === void 0 || typeof value !== "object" && typeof value !== "function") {
+      return [];
+    }
+    const seen = /* @__PURE__ */ new Set();
+    const names = [];
+    let current = value;
+    let depth = 0;
+    while (current && depth < 3) {
+      for (const name of Object.getOwnPropertyNames(current)) {
+        if (!name || name === "constructor" || seen.has(name)) continue;
+        seen.add(name);
+        names.push(name);
+      }
+      current = Object.getPrototypeOf(current);
+      depth += 1;
+    }
+    names.sort((left, right) => left.localeCompare(right));
+    return names;
+  }
+  function safeSerializeRuntimeValue(value) {
+    if (value === null || value === void 0) return value ?? null;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+    if (Array.isArray(value)) return value.map((item) => safeSerializeRuntimeValue(item));
+    if (typeof value === "function") {
+      return {
+        type: "function",
+        summary: String(value.name || "(anonymous)")
+      };
+    }
+    if (typeof value === "object") {
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch {
+        return {
+          type: "object",
+          summary: summarizeValue(value),
+          members: collectRuntimeMemberNames(value).slice(0, 20)
+        };
+      }
+    }
+    return String(value);
+  }
+  function describeRuntimeValue(value) {
+    const type = value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+    return {
+      type,
+      callable: typeof value === "function",
+      summary: summarizeValue(value),
+      value: safeSerializeRuntimeValue(value)
+    };
+  }
+  function resolveRuntimePath(path) {
+    const parts = parseRuntimePath(path);
+    let parent = globalThis;
+    let value = globalThis;
+    const traversed = [];
+    for (const segment of parts) {
+      if (value === null || value === void 0 || typeof value !== "object" && typeof value !== "function") {
+        throw createScriptHostError("RUNTIME_PATH_NOT_FOUND", `Runtime path not found: ${parts.join(".")}`);
+      }
+      parent = value;
+      traversed.push(segment);
+      value = value[segment];
+      if (value === void 0) {
+        throw createScriptHostError("RUNTIME_PATH_NOT_FOUND", `Runtime path not found: ${traversed.join(".")}`);
+      }
+    }
+    return {
+      path: parts.join("."),
+      parent,
+      value
+    };
+  }
+  function parseRuntimeCallArgs(args) {
+    if (Array.isArray(args)) return args;
+    if (args === null || args === void 0) return [];
+    throw createScriptHostError("RUNTIME_CALL_FAILED", "ctx.runtime.call(path, argsArray) requires an array of arguments.");
+  }
+  function installRuntimeAccessBridge() {
+    const unityGlobal = globalThis;
+    unityGlobal.__pieUnityRuntimeBridge = {
+      has(path) {
+        try {
+          resolveRuntimePath(path);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      get(path) {
+        const resolved = resolveRuntimePath(path);
+        return {
+          path: resolved.path,
+          ...describeRuntimeValue(resolved.value)
+        };
+      },
+      members(path = "") {
+        const target = String(path || "").trim() ? resolveRuntimePath(path).value : globalThis;
+        return collectRuntimeMemberNames(target).map((name) => {
+          let value;
+          try {
+            value = target[name];
+          } catch {
+            value = void 0;
+          }
+          return {
+            name,
+            ...describeRuntimeValue(value)
+          };
+        });
+      },
+      call(path, argsJson) {
+        const resolved = resolveRuntimePath(path);
+        if (typeof resolved.value !== "function") {
+          throw createScriptHostError("RUNTIME_MEMBER_NOT_CALLABLE", `Runtime member is not callable: ${resolved.path}`);
+        }
+        const rawArgs = argsJson ? JSON.parse(String(argsJson)) : [];
+        const args = parseRuntimeCallArgs(rawArgs);
+        try {
+          const result = resolved.value.apply(resolved.parent, args);
+          if (result && typeof result.then === "function") {
+            throw createScriptHostError("RUNTIME_CALL_FAILED", `Runtime path returned a Promise and cannot be awaited through ctx.runtime.call: ${resolved.path}`);
+          }
+          return safeSerializeRuntimeValue(result);
+        } catch (error) {
+          if (isRecord4(error) && typeof error.code === "string") {
+            throw error;
+          }
+          throw createScriptHostError("RUNTIME_CALL_FAILED", error instanceof Error ? error.message : String(error));
+        }
+      }
+    };
+  }
+  function getRuntimeApi() {
+    const bridge2 = globalThis.__pieUnityRuntimeBridge;
+    if (!bridge2) {
+      throw createScriptHostError("RUNTIME_BRIDGE_NOT_READY", "Runtime bridge is not ready.");
+    }
+    return {
+      has(path) {
+        return bridge2.has(path);
+      },
+      get(path) {
+        return bridge2.get(path);
+      },
+      members(path = "") {
+        return bridge2.members(path);
+      },
+      call(path, args = []) {
+        return bridge2.call(path, JSON.stringify(parseRuntimeCallArgs(args)));
+      }
+    };
+  }
   function createTaskContext(bridge2, task, args) {
     const unity = getUnityHostApi(bridge2, task);
+    const runtimeHost = getRegisteredHostApi(bridge2);
+    const hostSelector = ((namespace) => namespace ? runtimeHost.namespace(namespace) : runtimeHost);
+    hostSelector.call = runtimeHost.call;
+    hostSelector.hasCapability = runtimeHost.hasCapability;
+    hostSelector.list = runtimeHost.list;
     return {
       args,
       log(...parts) {
@@ -22501,6 +22311,8 @@ ${rootObjectLines}
       inspect: unity.inspect,
       edit: unity.edit,
       refresh: unity.refresh,
+      host: hostSelector,
+      runtime: getRuntimeApi(),
       get frame() {
         return task.frames;
       },
@@ -22604,7 +22416,12 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
       interpretYield(task, next?.value);
     } catch (error) {
       const stepTimeout = isStepTimeoutError(error);
-      failTask(task, stepTimeout ? "STEP_TIMEOUT" : "SCRIPT_ERROR", stepTimeout ? `Unity script step exceeded ${task.perStepTimeoutMs}ms.` : error instanceof Error ? error.message : String(error));
+      const explicitCode = isRecord4(error) && typeof error.code === "string" ? String(error.code) : "";
+      failTask(
+        task,
+        stepTimeout ? "STEP_TIMEOUT" : explicitCode || "SCRIPT_ERROR",
+        stepTimeout ? `Unity script step exceeded ${task.perStepTimeoutMs}ms.` : error instanceof Error ? error.message : String(error)
+      );
     } finally {
       task.stepDeadlineMs = 0;
     }
@@ -22668,6 +22485,7 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
   }
   function installUnityScriptHost(bridge2) {
     installedBridge = bridge2;
+    installRuntimeAccessBridge();
     globalThis.__pieUnityScriptHost = {
       invoke(method, argsJson) {
         const parsedPayload = argsJson ? JSON.parse(String(argsJson)) : {};
@@ -22871,8 +22689,6 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
   // src/capabilities/index.ts
   function createUnityHostCapabilities(projectRoot2, isEditor2, options) {
     const inspectUnityContextTool = createInspectUnityContextTool(projectRoot2, isEditor2);
-    const readProjectMemoryTool = createReadProjectMemoryTool(projectRoot2);
-    const writeProjectMemoryTool = createWriteProjectMemoryTool(projectRoot2);
     const nativeFindTool = createNativeFindFilesTool(options.filesystemSearchRoot, options.filesystemPathOptions);
     const nativeGrepTool = createNativeGrepTextTool(options.filesystemSearchRoot, options.filesystemPathOptions);
     const unityRuntimeTools = createUnityRuntimeTools();
@@ -22881,11 +22697,6 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
         id: "inspect-unity-context",
         description: "Unity host capability for inspecting the live editor/runtime context.",
         tools: [inspectUnityContextTool, ...unityRuntimeTools]
-      },
-      {
-        id: "project-memory-adapter",
-        description: "Unity host adapter for the shared project-memory contract. Current disposition: future shared capability with host-specific executor.",
-        tools: [readProjectMemoryTool, writeProjectMemoryTool]
       },
       {
         id: "filesystem-search-executor",
@@ -22989,9 +22800,9 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
       description: skill.description,
       source: "project",
       content: skill.prompt,
+      filePath: skill.filePath ? normalizePath3(skill.filePath) : void 0,
       path: skill.filePath ? normalizePath3(skill.filePath) : void 0,
-      baseDir: skill.baseDir ? normalizePath3(skill.baseDir) : void 0,
-      resourceRefs: skill.resourceRefs
+      baseDir: skill.baseDir ? normalizePath3(skill.baseDir) : void 0
     };
   }
   function getAvailableSkills(projectRoot2) {
@@ -23000,41 +22811,61 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
   function formatSkillsForPrompt2(skills) {
     return formatSkillSummariesForPrompt(skills);
   }
-  function readSkillContent(projectRoot2, name) {
-    const loader = createUnitySkillLoader(projectRoot2);
-    const skill = loader.getSkill(name) || loader.loadSkill(name);
-    if (!skill) {
-      return null;
-    }
-    return toLoadedSkill(skill);
+
+  // src/tools/project-agents-file.ts
+  function getProjectAgentsPath(projectRoot2) {
+    return CS.System.IO.Path.Combine(projectRoot2, "AGENTS.md");
   }
-  function readSkillResource(projectRoot2, owner, resourcePath) {
-    const skill = readSkillContent(projectRoot2, owner);
-    const baseDir = normalizePath3(skill?.baseDir || "");
-    const trimmed = normalizePath3(String(resourcePath || "").trim()).replace(/^\.\/+/, "");
-    if (!skill || !baseDir || !trimmed || trimmed.startsWith("/") || /^[A-Za-z]:\//.test(trimmed)) {
-      return null;
+  function ensureProjectAgentsDir(projectRoot2) {
+    const agentsPath = getProjectAgentsPath(projectRoot2);
+    const dir = CS.System.IO.Path.GetDirectoryName(agentsPath);
+    if (dir && !CS.System.IO.Directory.Exists(dir)) {
+      CS.System.IO.Directory.CreateDirectory(dir);
     }
-    const segments = trimmed.split("/").filter((segment) => segment.length > 0);
-    if (segments.some((segment) => segment === "..")) {
-      return null;
-    }
-    let combined = baseDir;
-    for (const segment of segments) {
-      combined = normalizePath3(String(CS.System.IO.Path.Combine(combined, segment)));
-    }
-    if (!(combined === baseDir || combined.startsWith(`${baseDir}/`))) {
-      return null;
-    }
-    if (!CS.System.IO.File.Exists(combined)) {
-      return null;
-    }
-    return {
-      owner: skill.name,
-      path: trimmed,
-      content: String(CS.System.IO.File.ReadAllText(combined) ?? ""),
-      .../\.(js|mjs|sh|py)$/i.test(trimmed) ? { resolvedPath: combined } : {}
-    };
+  }
+  function readProjectAgentsFile(projectRoot2) {
+    const agentsPath = getProjectAgentsPath(projectRoot2);
+    if (!CS.System.IO.File.Exists(agentsPath)) return "";
+    return CS.System.IO.File.ReadAllText(agentsPath);
+  }
+  function writeProjectAgentsFile(projectRoot2, content) {
+    ensureProjectAgentsDir(projectRoot2);
+    CS.System.IO.File.WriteAllText(getProjectAgentsPath(projectRoot2), content || "");
+  }
+  function buildInitialProjectAgentsFile(snapshot) {
+    const packageLines = snapshot.packageHints.length > 0 ? snapshot.packageHints.map((hint) => `- ${hint}`).join("\n") : "- No SRP package hints detected";
+    const rootObjectLines = snapshot.rootObjects.length > 0 ? snapshot.rootObjects.map((name) => `- ${name}`).join("\n") : "- No root objects detected";
+    return `# AGENTS.md instructions
+
+## Project Overview
+- Product: ${snapshot.productName}
+- Unity Version: ${snapshot.unityVersion}
+- Scene: ${snapshot.sceneName || "(unknown)"}
+- Project Root: ${snapshot.projectRoot}
+
+## Render Pipeline
+- Active pipeline: ${snapshot.renderPipeline}
+- Pipeline asset type: ${snapshot.renderPipelineAssetType}
+- Color space: ${snapshot.colorSpace}
+
+## Package Hints
+${packageLines}
+
+## Scene Snapshot
+- Root object count: ${snapshot.rootObjectCount}
+${rootObjectLines}
+
+## Safe Editing Rules
+- Always inspect Unity context before creating materials or shaders.
+- Never assume Built-in, URP, or HDRP from memory alone.
+- Prefer reusing existing scene shaders/materials when possible.
+- Keep scene edits small and observable.
+
+## Validation Checklist
+- Confirm render pipeline before material creation.
+- Confirm target scene object names before mutation.
+- Summarize created or modified objects after each task.
+`;
   }
 
   // src/extensions/registry.ts
@@ -23072,42 +22903,15 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
       callHost: async (name2, args) => {
         const json = JSON.stringify(args ?? {});
         return globalThis.pieBridge?.callHost?.(name2, json);
+      },
+      host: {
+        listCapabilities: (namespace) => globalThis.pieBridge?.host?.listCapabilities?.(namespace) ?? [],
+        call: async (namespace, name2, args) => globalThis.pieBridge?.host?.call?.(namespace, name2, args)
       }
     });
   }
   function registerLoadedExtension(path) {
     registry.registerLoadedExtension(path);
-  }
-
-  // src/tools/read-skill.ts
-  function createReadSkillTool(projectRoot2) {
-    const loader = createUnitySkillLoader(projectRoot2);
-    const capability = createReadSkillCapability({
-      skillLoader: loader
-    });
-    return capability.tool;
-  }
-  function createReadResourceTool(projectRoot2) {
-    return createReadResourceCapability({
-      resolveResource(owner, resourcePath) {
-        return readSkillResource(projectRoot2, owner, resourcePath);
-      }
-    }).tool;
-  }
-  function createResolveResourceTool(projectRoot2) {
-    return createResolveResourceCapability({
-      resolveResource(owner, resourcePath) {
-        const resource = readSkillResource(projectRoot2, owner, resourcePath);
-        if (!resource?.resolvedPath) {
-          return null;
-        }
-        return {
-          owner: resource.owner,
-          path: resource.path,
-          resolvedPath: resource.resolvedPath
-        };
-      }
-    }).tool;
   }
 
   // src/unity-code-intel.ts
@@ -23186,11 +22990,10 @@ return { run: (typeof run !== "undefined" ? run : (module.exports.run || exports
   }
   function buildUnitySystemPrompt(params) {
     const skillsSection = formatSkillsForPrompt2(getAvailableSkills(params.root));
-    const projectMemoryEntry = buildKnowledgeIndexEntry(
-      toDisplayPath(params.root, getProjectMemoryPath(params.root)),
-      readProjectMemory(params.root)
-    );
-    const knowledgeSection = buildKnowledgeIndexSection(projectMemoryEntry ? [projectMemoryEntry] : []);
+    const knowledgeSection = buildProjectContextSection([{
+      path: toDisplayPath(params.root, getProjectAgentsPath(params.root)),
+      content: readProjectAgentsFile(params.root)
+    }]);
     const extensionSection = getSystemPromptPatches();
     const fileToolPromptLines = buildFileToolPromptLines();
     const toolsSection = buildToolsPromptSection(params.tools);
@@ -23233,35 +23036,45 @@ ${extensionSection.join("\n\n---\n\n")}
     const askUserCapability = createAskUserCapability();
     const activeFileToolRoots = getActiveFileToolRootsConfig();
     const fileToolRoot = activeFileToolRoots.roots.find((root) => root.name === activeFileToolRoots.defaultRoot)?.path || params.persistentDataPath || params.projectRoot;
+    const skillAccessRoots = getAvailableSkills(params.projectRoot).map((skill) => skill.baseDir || "").filter((entry) => entry.length > 0);
+    const fileToolPathOptions2 = {
+      ...params.fileToolPathOptions,
+      accessRoots: [
+        ...params.fileToolPathOptions.accessRoots ?? [],
+        params.projectRoot,
+        fileToolRoot,
+        ...skillAccessRoots
+      ]
+    };
     const builtinFileTools = [
       aliasTool(
         createReadTool(fileToolRoot, {
-          ...params.fileToolPathOptions,
+          ...fileToolPathOptions2,
           understandFile: params.understandFile
         }),
         "read_file",
         "read_file"
       ),
       aliasTool(
-        createWriteTool(fileToolRoot, params.fileToolPathOptions),
+        createWriteTool(fileToolRoot, fileToolPathOptions2),
         "write_file",
         "write_file"
       ),
       aliasTool(
-        createEditTool(fileToolRoot, params.fileToolPathOptions),
+        createEditTool(fileToolRoot, fileToolPathOptions2),
         "edit_file",
         "edit_file",
         "Edit an existing file by replacing exact oldText with newText. Read the file first so oldText matches exactly."
       ),
       aliasTool(
-        createLsTool(fileToolRoot, params.fileToolPathOptions),
+        createLsTool(fileToolRoot, fileToolPathOptions2),
         "list_dir",
         "list_dir"
       )
     ];
     const unityHostCapabilities = createUnityHostCapabilities(params.projectRoot, params.isEditor, {
       filesystemSearchRoot: fileToolRoot,
-      filesystemPathOptions: params.fileToolPathOptions
+      filesystemPathOptions: fileToolPathOptions2
     });
     const unityFilesystemSearchCapability = unityHostCapabilities.capabilities.find((capability) => capability.id === "filesystem-search-executor");
     const unitySearchFileContentTool = unityFilesystemSearchCapability?.tools.find((tool) => tool.name === "grep_text");
@@ -23280,10 +23093,7 @@ ${extensionSection.join("\n\n---\n\n")}
       ...params.webFetchTool ? [params.webFetchTool] : [],
       createUnityCodeIntelTool(params.projectRoot),
       ...params.subagentTool ? [params.subagentTool] : [],
-      params.todoTool.tool,
-      createReadSkillTool(params.projectRoot),
-      createReadResourceTool(params.projectRoot),
-      createResolveResourceTool(params.projectRoot)
+      params.todoTool.tool
     ];
   }
   function createUnityAgentSurface(params) {
@@ -23876,6 +23686,8 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
       this.projectRoot = projectRoot2;
       this.getSessionId = getSessionId;
     }
+    projectRoot;
+    getSessionId;
   };
 
   // src/pie-bridge.ts
@@ -23902,6 +23714,187 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
           throw new Error(String(response?.error || `pie.dev_rpc failed: ${method}`));
         }
         return response.resultJson ? JSON.parse(response.resultJson) : null;
+      }
+    };
+  }
+
+  // src/runtime-host-bridge.ts
+  function assertString(value, label) {
+    const text = String(value ?? "").trim();
+    if (!text) {
+      throw new Error(`${label} is required.`);
+    }
+    return text;
+  }
+  function toDescriptor(namespace, displayName, capability) {
+    const kind2 = String(capability?.kind || "").trim().toLowerCase();
+    if (kind2 !== "tool" && kind2 !== "rpc") {
+      throw new Error(`Runtime host capability kind must be tool or rpc: ${capability?.name || "(unnamed)"}`);
+    }
+    return {
+      kind: kind2,
+      name: assertString(capability?.name, "capability name"),
+      namespace: assertString(capability?.namespace || namespace, "capability namespace"),
+      description: assertString(capability?.description, "capability description"),
+      parameters: Array.isArray(capability?.parameters) ? capability.parameters : [],
+      mode: String(capability?.mode || "runtime"),
+      readOnly: capability?.readOnly === true,
+      requiresMainThread: capability?.requiresMainThread !== false,
+      owner: String(capability?.owner || displayName || namespace),
+      writeScope: String(capability?.writeScope || ""),
+      returns: String(capability?.returns || ""),
+      recommendedWorkflow: String(capability?.recommendedWorkflow || ""),
+      examples: Array.isArray(capability?.examples) ? capability.examples.map((item) => String(item || "")) : [],
+      errorCodes: Array.isArray(capability?.errorCodes) ? capability.errorCodes.map((item) => String(item || "")) : [],
+      destructive: capability?.destructive === true,
+      canTriggerDomainReload: capability?.canTriggerDomainReload === true
+    };
+  }
+  function parseArgsJson(argsJson) {
+    if (!argsJson) return {};
+    try {
+      return JSON.parse(String(argsJson));
+    } catch {
+      return {};
+    }
+  }
+  function installRuntimeHostBridge(bridge2) {
+    const hosts = /* @__PURE__ */ new Map();
+    const capabilityIndex = /* @__PURE__ */ new Map();
+    function removeLocalHost(namespace) {
+      const normalized = String(namespace || "").trim();
+      if (!normalized) return;
+      hosts.delete(normalized);
+      for (const [name, entry] of capabilityIndex.entries()) {
+        if (String(entry.descriptor.namespace || "") === normalized) {
+          capabilityIndex.delete(name);
+        }
+      }
+    }
+    function unregisterHost(namespace) {
+      const normalized = String(namespace || "").trim();
+      if (!normalized) return;
+      removeLocalHost(normalized);
+      bridge2.callHost?.("pie.host_bridge", {
+        action: "unregister_host",
+        hostNamespace: normalized
+      });
+    }
+    function registerHost(host) {
+      const namespace = assertString(host?.namespace, "host namespace");
+      const displayName = String(host?.displayName || namespace);
+      const capabilities = Array.isArray(host?.capabilities) ? host.capabilities : [];
+      if (capabilities.length === 0) {
+        throw new Error(`Runtime host ${namespace} registered no capabilities.`);
+      }
+      const descriptors = capabilities.map((capability) => toDescriptor(namespace, displayName, capability));
+      const handlers = /* @__PURE__ */ new Map();
+      for (let index = 0; index < descriptors.length; index += 1) {
+        const descriptor = descriptors[index];
+        const execute = capabilities[index]?.execute;
+        if (typeof execute !== "function") {
+          throw new Error(`Runtime host capability ${descriptor.name} must provide execute(args).`);
+        }
+        handlers.set(descriptor.name, execute);
+      }
+      removeLocalHost(namespace);
+      bridge2.callHost?.("pie.host_bridge", {
+        action: "register_host",
+        hostNamespace: namespace,
+        hostDisplayName: displayName,
+        capabilities: descriptors.map((descriptor) => ({
+          kind: descriptor.kind,
+          name: descriptor.name,
+          namespace: descriptor.namespace,
+          description: descriptor.description,
+          mode: descriptor.mode,
+          readOnly: descriptor.readOnly === true,
+          requiresMainThread: descriptor.requiresMainThread !== false,
+          owner: descriptor.owner || "",
+          writeScope: descriptor.writeScope || "",
+          returns: descriptor.returns || "",
+          recommendedWorkflow: descriptor.recommendedWorkflow || "",
+          examples: descriptor.examples || [],
+          errorCodes: descriptor.errorCodes || [],
+          destructive: descriptor.destructive === true,
+          canTriggerDomainReload: descriptor.canTriggerDomainReload === true,
+          parameters: descriptor.parameters || []
+        }))
+      });
+      const record = {
+        namespace,
+        displayName,
+        capabilities: descriptors,
+        handlers
+      };
+      hosts.set(namespace, record);
+      for (const descriptor of descriptors) {
+        capabilityIndex.set(descriptor.name, {
+          descriptor,
+          handler: handlers.get(descriptor.name)
+        });
+      }
+      return {
+        namespace,
+        capabilityCount: descriptors.length
+      };
+    }
+    function resolveCapabilityName(fullNameOrNamespace, nameOrArgs) {
+      const first = String(fullNameOrNamespace || "").trim();
+      if (!first) {
+        throw new Error("Runtime host capability name is required.");
+      }
+      if (typeof nameOrArgs !== "string") {
+        return first;
+      }
+      const second = String(nameOrArgs || "").trim();
+      if (!second) {
+        throw new Error("Runtime host capability name is required.");
+      }
+      if (capabilityIndex.has(second)) {
+        return second;
+      }
+      const inferred = `${first}_${second}`;
+      if (capabilityIndex.has(inferred)) {
+        return inferred;
+      }
+      return second;
+    }
+    function callCapability(fullNameOrNamespace, nameOrArgs, maybeArgs) {
+      if (!bridge2.devRpc?.call) {
+        throw new Error("pieBridge.devRpc is not available.");
+      }
+      const name = resolveCapabilityName(fullNameOrNamespace, nameOrArgs);
+      const args = typeof nameOrArgs === "string" ? maybeArgs ?? {} : nameOrArgs ?? {};
+      return bridge2.devRpc.call(name, args);
+    }
+    bridge2.host = {
+      registerHost,
+      unregisterHost,
+      call: callCapability,
+      hasCapability(name) {
+        return capabilityIndex.has(String(name || "").trim());
+      },
+      listCapabilities(namespace) {
+        const normalized = String(namespace || "").trim();
+        const items = Array.from(capabilityIndex.values()).map((entry) => entry.descriptor);
+        return normalized ? items.filter((descriptor) => String(descriptor.namespace || "") === normalized) : items;
+      }
+    };
+    globalThis.__pieRuntimeHostBridge = {
+      invokeCapability(name, argsJson) {
+        const entry = capabilityIndex.get(String(name || "").trim());
+        if (!entry) {
+          throw new Error(`Runtime host capability not found: ${name}`);
+        }
+        const result = entry.handler(parseArgsJson(argsJson));
+        if (result && typeof result.then === "function") {
+          throw new Error(`Runtime host capability ${name} must return synchronously.`);
+        }
+        return JSON.stringify(result ?? null);
+      },
+      hasRegisteredHostBridge() {
+        return !!bridge2.host;
       }
     };
   }
@@ -24402,6 +24395,10 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
             host.persistCurrentSessionSafely();
             const decision = evaluateTodoClosureAfterFailedTurn(host.getTodoLoopState());
             host.setTodoLoopState(decision.loop);
+            if (decision.action === "pause_failed") {
+              host.persistCurrentSessionSafely();
+              host.emitSessionSync();
+            }
             if (decision.action === "clear_failed") {
               todoTool2.reset();
               host.setTodoLoopState(null);
@@ -24567,9 +24564,6 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
       "ask_user_multi",
       "manage_todo_list",
       "web_search",
-      "read_skill",
-      "read_resource",
-      "resolve_resource",
       "read_file",
       "write_file",
       "edit_file",
@@ -24589,7 +24583,7 @@ return module.exports?.default ?? module.exports ?? exports.default ?? exports;`
       lines.push("Tool model routes:");
       for (const summary of routeSummaries) lines.push(`- ${summary}`);
     }
-    lines.push(`Project memory: ${readProjectMemory(host.projectRoot) ? "present" : "missing"}`);
+    lines.push(`AGENTS.md: ${readProjectAgentsFile(host.projectRoot) ? "present" : "missing"}`);
     return lines.join("\n");
   }
 
@@ -24741,10 +24735,10 @@ Loaded: ${loaded ? loaded.id : "(missing)"}`
         return true;
       }
       if (command === "/memory") {
-        const memory = readProjectMemory(host.projectRoot);
-        host.emitLocalAssistantMessage(memory ? `Project memory loaded from Assets/Pie/AGENTS.md
+        const agents = readProjectAgentsFile(host.projectRoot);
+        host.emitLocalAssistantMessage(agents ? `AGENTS.md loaded from project root
 
-${memory}` : "No project memory found. Use /init to create an initial AGENTS.md.");
+${agents}` : "No AGENTS.md found at the project root. Use /init to create one.");
         return true;
       }
       if (command === "/model") {
@@ -24804,15 +24798,14 @@ ${loaded.join("\n")}` : "No project extensions loaded. Add .js files under Asset
       }
       if (command === "/init") {
         const snapshot = getUnityContextSnapshot(host.projectRoot, host.isEditor);
-        const initialMemory = buildInitialProjectMemory(snapshot);
-        const writeTool = createWriteProjectMemoryTool(host.projectRoot);
-        await writeTool.execute("local-init", { content: initialMemory });
+        const initialAgentsFile = buildInitialProjectAgentsFile(snapshot);
+        writeProjectAgentsFile(host.projectRoot, initialAgentsFile);
         const surface = host.buildCurrentAgentSurface();
         host.setAgentSystemPrompt(surface.systemPrompt);
         host.agentSessionController.updateRuntimeContext({ systemPrompt: surface.systemPrompt, tools: surface.tools });
-        host.emitLocalAssistantMessage(`Initialized project memory at Assets/Pie/AGENTS.md
+        host.emitLocalAssistantMessage(`Initialized AGENTS.md at the project root
 
-${initialMemory}`);
+${initialAgentsFile}`);
         return true;
       }
       return false;
@@ -25179,9 +25172,78 @@ ${initialMemory}`);
     return { webSearchTool: webSearchTool2, webFetchTool: webFetchTool2, webResearchTool: webResearchTool2 };
   }
 
+  // src/session-message-utils.ts
+  function isRecord8(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  function hasRealUsage(usage) {
+    if (!isRecord8(usage)) return false;
+    return Number(usage.input || 0) > 0 || Number(usage.output || 0) > 0 || Number(usage.cacheRead || 0) > 0 || Number(usage.cacheWrite || 0) > 0 || Number(usage.totalTokens || 0) > 0;
+  }
+  function estimateTokensFromText(text) {
+    const normalized = (text || "").trim();
+    if (!normalized) return 0;
+    return Math.max(1, Math.ceil(normalized.length / 4));
+  }
+  function collectMessageText(message) {
+    if (!message) return "";
+    if (!isRecord8(message)) return "";
+    const content = message.content;
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) return "";
+    return content.map((block) => {
+      if (!isRecord8(block)) return "";
+      if (block.type === "text") return typeof block.text === "string" ? block.text : "";
+      if (block.type === "thinking") return typeof block.thinking === "string" ? block.thinking : "";
+      if (block.type === "toolCall") {
+        const name = typeof block.name === "string" ? block.name : "";
+        const args = block.arguments !== void 0 ? JSON.stringify(block.arguments) : "";
+        return `${name}${args}`;
+      }
+      return "";
+    }).join("");
+  }
+  function buildUsagePayload(messages, message, fallbackIndex) {
+    const messageRecord = isRecord8(message) ? message : {};
+    const usage = messageRecord.usage;
+    if (hasRealUsage(usage) && isRecord8(usage)) {
+      return {
+        input: Number(usage.input || 0),
+        output: Number(usage.output || 0),
+        cacheRead: Number(usage.cacheRead || 0),
+        cacheWrite: Number(usage.cacheWrite || 0),
+        totalTokens: Number(usage.totalTokens || 0),
+        estimated: false
+      };
+    }
+    if ((messageRecord.role || "") !== "assistant") {
+      return null;
+    }
+    const resolvedIndex = typeof fallbackIndex === "number" ? fallbackIndex : Math.max(0, messages.lastIndexOf(message));
+    let inputTokens = 0;
+    for (let i = resolvedIndex - 1; i >= 0; i--) {
+      const candidate = messages[i];
+      if ((candidate?.role || "") !== "user") continue;
+      inputTokens = estimateTokensFromText(collectMessageText(candidate));
+      if (inputTokens > 0) break;
+    }
+    const outputTokens = estimateTokensFromText(collectMessageText(message));
+    const totalTokens = inputTokens + outputTokens;
+    if (totalTokens <= 0) return null;
+    return {
+      input: inputTokens,
+      output: outputTokens,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens,
+      estimated: true
+    };
+  }
+
   // src/index.ts
   var bridge = getPieBridge();
   installDevRpcBridge(bridge);
+  installRuntimeHostBridge(bridge);
   installUnityScriptHost(bridge);
   initializeUnityLogger(bridge);
   var projectRoot = bridge.getProjectRoot();
@@ -25409,7 +25471,7 @@ ${initialMemory}`);
     todoTool.restore(record.todoState || []);
     refreshTodoLoopState();
   }
-  function isRecord8(value) {
+  function isRecord9(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
   }
   function cloneMessage(message) {
@@ -25501,77 +25563,14 @@ ${initialMemory}`);
     bridge.sendToUnity("turn_end", { role: "assistant", stopReason: "stop" });
     bridge.sendToUnity("agent_end", {});
   }
-  function hasRealUsage(usage) {
-    if (!isRecord8(usage)) return false;
-    return Number(usage.input || 0) > 0 || Number(usage.output || 0) > 0 || Number(usage.cacheRead || 0) > 0 || Number(usage.cacheWrite || 0) > 0 || Number(usage.totalTokens || 0) > 0;
-  }
-  function estimateTokensFromText(text) {
-    const normalized = (text || "").trim();
-    if (!normalized) return 0;
-    return Math.max(1, Math.ceil(normalized.length / 4));
-  }
-  function collectMessageText(message) {
-    if (!message) return "";
-    if (!isRecord8(message)) return "";
-    const content = message.content;
-    if (typeof content === "string") return content;
-    if (!Array.isArray(content)) return "";
-    return content.map((block) => {
-      if (!isRecord8(block)) return "";
-      if (block.type === "text") return typeof block.text === "string" ? block.text : "";
-      if (block.type === "thinking") return typeof block.thinking === "string" ? block.thinking : "";
-      if (block.type === "toolCall") {
-        const name = typeof block.name === "string" ? block.name : "";
-        const args = block.arguments !== void 0 ? JSON.stringify(block.arguments) : "";
-        return `${name}${args}`;
-      }
-      return "";
-    }).join("");
-  }
-  function buildUsagePayload(messages, message, fallbackIndex) {
-    const messageRecord = isRecord8(message) ? message : {};
-    const usage = messageRecord.usage;
-    if (hasRealUsage(usage) && isRecord8(usage)) {
-      return {
-        input: Number(usage.input || 0),
-        output: Number(usage.output || 0),
-        cacheRead: Number(usage.cacheRead || 0),
-        cacheWrite: Number(usage.cacheWrite || 0),
-        totalTokens: Number(usage.totalTokens || 0),
-        estimated: false
-      };
-    }
-    if ((messageRecord.role || "") !== "assistant") {
-      return null;
-    }
-    const resolvedIndex = typeof fallbackIndex === "number" ? fallbackIndex : Math.max(0, messages.lastIndexOf(message));
-    let inputTokens = 0;
-    for (let i = resolvedIndex - 1; i >= 0; i--) {
-      const candidate = messages[i];
-      if ((candidate?.role || "") !== "user") continue;
-      inputTokens = estimateTokensFromText(collectMessageText(candidate));
-      if (inputTokens > 0) break;
-    }
-    const outputTokens = estimateTokensFromText(collectMessageText(message));
-    const totalTokens = inputTokens + outputTokens;
-    if (totalTokens <= 0) return null;
-    return {
-      input: inputTokens,
-      output: outputTokens,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens,
-      estimated: true
-    };
-  }
   function emitSessionSync(record) {
     const sourceRecord = record || _currentSession;
     const stateMessages = Array.isArray(sourceRecord?.messages) ? sourceRecord.messages : agent.state.messages || [];
     const messages = stateMessages.map((message, index) => {
-      const messageRecord = isRecord8(message) ? message : {};
+      const messageRecord = isRecord9(message) ? message : {};
       return {
         role: String(messageRecord.role || "assistant"),
-        content: Array.isArray(messageRecord.content) ? messageRecord.content.filter((block) => isRecord8(block)).map((block) => ({
+        content: Array.isArray(messageRecord.content) ? messageRecord.content.filter((block) => isRecord9(block)).map((block) => ({
           type: String(block.type || "text"),
           text: typeof block.text === "string" ? block.text : ""
         })) : [],
@@ -25620,14 +25619,14 @@ ${initialMemory}`);
   function extractToolText(result) {
     if (!result) return "";
     if (typeof result === "string") return result;
-    if (isRecord8(result) && Array.isArray(result.content)) {
-      return result.content.filter((item) => isRecord8(item) && item.type === "text").map((item) => String(item.text ?? "")).join("\n").trim();
+    if (isRecord9(result) && Array.isArray(result.content)) {
+      return result.content.filter((item) => isRecord9(item) && item.type === "text").map((item) => String(item.text ?? "")).join("\n").trim();
     }
     return "";
   }
   function extractEffectiveArgs(toolName, args, details) {
-    const argRecord = isRecord8(args) ? args : {};
-    const detailRecord = isRecord8(details) ? details : {};
+    const argRecord = isRecord9(args) ? args : {};
+    const detailRecord = isRecord9(details) ? details : {};
     if (toolName === "find_files") {
       return {
         rawPattern: detailRecord.rawPattern ?? argRecord.pattern ?? argRecord.query ?? argRecord.name ?? argRecord.file_name ?? "",

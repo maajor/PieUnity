@@ -22,7 +22,7 @@ namespace Pie
         public string selectedObject = "";
         public int rootObjectCount;
         public string[] rootObjects;
-        public bool hasProjectMemory;
+        public bool hasAgentsFile;
         public string[] skillSearchPaths;
     }
 
@@ -47,7 +47,7 @@ namespace Pie
                 selectedObject = GetSelectedObjectName(isEditor),
                 rootObjectCount = roots.Length,
                 rootObjects = rootNames,
-                hasProjectMemory = File.Exists(PieProjectPaths.GetProjectMemoryPath(projectRoot)),
+                hasAgentsFile = File.Exists(PieProjectPaths.GetProjectAgentsPath(projectRoot)),
                 skillSearchPaths = ToArray(PieProjectPaths.GetSkillSearchPaths(projectRoot)),
             };
 

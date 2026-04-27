@@ -63,7 +63,7 @@ export function loadRegistry(directoryPath = REGISTRY_DIR) {
 	} catch {
 		return [];
 	}
-	return dedupeInstances(items.filter(Boolean));
+	return filterDiscoverableInstances(dedupeInstances(items.filter(Boolean)));
 }
 
 export function getActiveInstances(instances, nowUnix = Math.floor(Date.now() / 1000)) {
@@ -616,6 +616,30 @@ function dedupeInstances(items) {
 		next.push(item);
 	}
 	return next;
+}
+
+function filterDiscoverableInstances(items) {
+	const groups = new Map();
+	for (const item of items) {
+		const key = normalizePath(item?.projectPath || "") || String(item?.instanceId || "");
+		if (!groups.has(key)) {
+			groups.set(key, []);
+		}
+		groups.get(key).push(item);
+	}
+
+	const next = [];
+	for (const group of groups.values()) {
+		const sorted = [...group].sort((left, right) => {
+			const leftRuntime = String(left?.mode || "").toLowerCase() === "runtime" ? 1 : 0;
+			const rightRuntime = String(right?.mode || "").toLowerCase() === "runtime" ? 1 : 0;
+			if (leftRuntime !== rightRuntime) return rightRuntime - leftRuntime;
+			return Number(right?.lastSeenUnix || 0) - Number(left?.lastSeenUnix || 0);
+		});
+		if (sorted[0]) next.push(sorted[0]);
+	}
+
+	return next.sort((left, right) => Number(right?.lastSeenUnix || 0) - Number(left?.lastSeenUnix || 0));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -16,7 +16,12 @@ namespace Pie
         private static string _productName = "";
         private static string _unityProductName = "";
         private static string _applicationIdentifier = "";
-        private static DateTime _nextHeartbeatUtc = DateTime.MinValue;
+        private static DateTime _nextEditorHeartbeatUtc = DateTime.MinValue;
+        private static DateTime _nextRuntimeHeartbeatUtc = DateTime.MinValue;
+        private static string _editorInstanceId = "";
+        private static string _editorProjectPath = "";
+        private static string _runtimeInstanceId = "";
+        private static string _runtimeProjectPath = "";
         public static string ProductName => _productName;
         public static string UnityProductName => _unityProductName;
         public static string ApplicationIdentifier => _applicationIdentifier;
@@ -44,8 +49,10 @@ namespace Pie
             var projectPath = GetProjectPath();
             _productName = DeriveProjectName(projectPath);
             CaptureUnityApplicationMetadata();
-            _nextHeartbeatUtc = DateTime.UtcNow.Add(HeartbeatInterval);
+            _nextEditorHeartbeatUtc = DateTime.UtcNow.Add(HeartbeatInterval);
             var instanceId = BuildInstanceId(projectPath, "editor", _productName);
+            _editorInstanceId = instanceId;
+            _editorProjectPath = projectPath;
             PieUnityCapabilityRegistry.ConfigureContext(instanceId, projectPath, "editor");
             PieUnityInstanceRegistry.Register(instanceId, projectPath, _productName, "editor", PieDevRpcServer.Port, PieDevRpcServer.AuthToken, GetUnityProductName(), GetApplicationIdentifier());
             RegisterSharedCapabilities(isEditor: true);
@@ -57,8 +64,10 @@ namespace Pie
             var projectPath = GetProjectPath(runner != null ? runner.ProjectRootOverride : null);
             _productName = DeriveProjectName(projectPath);
             CaptureUnityApplicationMetadata();
-            _nextHeartbeatUtc = DateTime.UtcNow.Add(HeartbeatInterval);
+            _nextRuntimeHeartbeatUtc = DateTime.UtcNow.Add(HeartbeatInterval);
             var instanceId = BuildInstanceId(projectPath, "runtime", _productName);
+            _runtimeInstanceId = instanceId;
+            _runtimeProjectPath = projectPath;
             PieUnityCapabilityRegistry.ConfigureContext(instanceId, projectPath, "runtime");
             PieUnityInstanceRegistry.Register(instanceId, projectPath, _productName, "runtime", PieDevRpcServer.Port, PieDevRpcServer.AuthToken, GetUnityProductName(), GetApplicationIdentifier());
             RegisterSharedCapabilities(isEditor: false);
@@ -67,20 +76,51 @@ namespace Pie
 
         public static void Heartbeat()
         {
+            if (!string.IsNullOrWhiteSpace(_runtimeInstanceId))
+            {
+                HeartbeatRuntime();
+                return;
+            }
+
+            HeartbeatEditor();
+        }
+
+        public static void HeartbeatEditor()
+        {
             var now = DateTime.UtcNow;
-            if (now < _nextHeartbeatUtc)
+            if (now < _nextEditorHeartbeatUtc)
                 return;
 
-            _nextHeartbeatUtc = now.Add(HeartbeatInterval);
+            _nextEditorHeartbeatUtc = now.Add(HeartbeatInterval);
             CaptureUnityApplicationMetadata();
-            var instanceId = PieUnityCapabilityRegistry.InstanceId;
-            if (string.IsNullOrWhiteSpace(instanceId))
+            if (string.IsNullOrWhiteSpace(_editorInstanceId))
                 return;
             PieUnityInstanceRegistry.Register(
-                instanceId,
-                PieUnityCapabilityRegistry.ProjectPath,
+                _editorInstanceId,
+                _editorProjectPath,
                 _productName,
-                PieUnityCapabilityRegistry.Mode,
+                "editor",
+                PieDevRpcServer.Port,
+                PieDevRpcServer.AuthToken,
+                GetUnityProductName(),
+                GetApplicationIdentifier());
+        }
+
+        public static void HeartbeatRuntime()
+        {
+            var now = DateTime.UtcNow;
+            if (now < _nextRuntimeHeartbeatUtc)
+                return;
+
+            _nextRuntimeHeartbeatUtc = now.Add(HeartbeatInterval);
+            CaptureUnityApplicationMetadata();
+            if (string.IsNullOrWhiteSpace(_runtimeInstanceId))
+                return;
+            PieUnityInstanceRegistry.Register(
+                _runtimeInstanceId,
+                _runtimeProjectPath,
+                _productName,
+                "runtime",
                 PieDevRpcServer.Port,
                 PieDevRpcServer.AuthToken,
                 GetUnityProductName(),
@@ -89,9 +129,35 @@ namespace Pie
 
         public static void Shutdown()
         {
-            var instanceId = PieUnityCapabilityRegistry.InstanceId;
-            if (!string.IsNullOrWhiteSpace(instanceId))
-                PieUnityInstanceRegistry.Unregister(instanceId);
+            ShutdownAll();
+        }
+
+        public static void ShutdownEditor()
+        {
+            if (string.IsNullOrWhiteSpace(_editorInstanceId))
+                return;
+
+            PieUnityInstanceRegistry.Unregister(_editorInstanceId);
+            _editorInstanceId = "";
+            _editorProjectPath = "";
+            _nextEditorHeartbeatUtc = DateTime.MinValue;
+        }
+
+        public static void ShutdownRuntime()
+        {
+            if (string.IsNullOrWhiteSpace(_runtimeInstanceId))
+                return;
+
+            PieUnityInstanceRegistry.Unregister(_runtimeInstanceId);
+            _runtimeInstanceId = "";
+            _runtimeProjectPath = "";
+            _nextRuntimeHeartbeatUtc = DateTime.MinValue;
+        }
+
+        public static void ShutdownAll()
+        {
+            ShutdownRuntime();
+            ShutdownEditor();
         }
 
         private static void RegisterSharedCapabilities(bool isEditor)
@@ -110,7 +176,7 @@ namespace Pie
             PieUnityCapabilityRegistry.RegisterTool(
                 "unity_project_inspect",
                 "unity",
-                "Inspect the current Unity project/runtime context, including render pipeline, active scene, and project memory status.",
+                "Inspect the current Unity project/runtime context, including render pipeline, active scene, and AGENTS.md status.",
                 "editor+runtime",
                 true,
                 false,

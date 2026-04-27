@@ -66,12 +66,59 @@ namespace Pie
             {
                 lock (FileSyncRoot)
                 {
+                    return SelectDiscoverableOwners(ReadAllInternal()).ToArray();
+                }
+            }
+            catch
+            {
+                return new PieUnityInstance[0];
+            }
+        }
+
+        public static PieUnityInstance[] ReadAllActive()
+        {
+            try
+            {
+                lock (FileSyncRoot)
+                {
                     return ReadAllInternal().ToArray();
                 }
             }
             catch
             {
                 return new PieUnityInstance[0];
+            }
+        }
+
+        public static PieUnityDiscoverableSnapshot GetCurrentProcessSnapshot(string projectPath)
+        {
+            try
+            {
+                lock (FileSyncRoot)
+                {
+                    var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                    var normalizedProjectPath = NormalizeProjectPath(projectPath);
+                    var active = ReadAllInternal();
+                    var local = active.FindAll(item =>
+                        item != null
+                        && item.pid == pid
+                        && (string.IsNullOrWhiteSpace(normalizedProjectPath) || string.Equals(NormalizeProjectPath(item.projectPath), normalizedProjectPath, StringComparison.OrdinalIgnoreCase)));
+
+                    var owner = SelectOwner(local);
+                    var runtimeActive = local.Exists(item => string.Equals(item.mode, "runtime", StringComparison.OrdinalIgnoreCase));
+                    var editorActive = local.Exists(item => string.Equals(item.mode, "editor", StringComparison.OrdinalIgnoreCase));
+                    return new PieUnityDiscoverableSnapshot
+                    {
+                        discoverableOwner = owner,
+                        runtimeActive = runtimeActive,
+                        editorActive = editorActive,
+                        editorSuppressedByRuntime = runtimeActive && editorActive && owner != null && string.Equals(owner.mode, "runtime", StringComparison.OrdinalIgnoreCase),
+                    };
+                }
+            }
+            catch
+            {
+                return new PieUnityDiscoverableSnapshot();
             }
         }
 
@@ -102,6 +149,74 @@ namespace Pie
             }
 
             return next;
+        }
+
+        private static List<PieUnityInstance> SelectDiscoverableOwners(List<PieUnityInstance> active)
+        {
+            var next = new List<PieUnityInstance>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < active.Count; i++)
+            {
+                var item = active[i];
+                var key = NormalizeProjectPath(item != null ? item.projectPath : "");
+                if (string.IsNullOrWhiteSpace(key))
+                    key = item != null ? (item.instanceId ?? "") : "";
+                if (!seen.Add(key))
+                    continue;
+
+                var matches = active.FindAll(candidate =>
+                    string.Equals(NormalizeProjectPath(candidate != null ? candidate.projectPath : ""), key, StringComparison.OrdinalIgnoreCase));
+                var owner = SelectOwner(matches);
+                if (owner != null)
+                    next.Add(owner);
+            }
+
+            return next;
+        }
+
+        private static PieUnityInstance SelectOwner(List<PieUnityInstance> candidates)
+        {
+            if (candidates == null || candidates.Count == 0)
+                return null;
+
+            PieUnityInstance best = null;
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                var item = candidates[i];
+                if (item == null)
+                    continue;
+                if (best == null)
+                {
+                    best = item;
+                    continue;
+                }
+
+                var itemIsRuntime = string.Equals(item.mode, "runtime", StringComparison.OrdinalIgnoreCase);
+                var bestIsRuntime = string.Equals(best.mode, "runtime", StringComparison.OrdinalIgnoreCase);
+                if (itemIsRuntime != bestIsRuntime)
+                {
+                    if (itemIsRuntime)
+                        best = item;
+                    continue;
+                }
+
+                if (item.lastSeenUnix > best.lastSeenUnix)
+                {
+                    best = item;
+                    continue;
+                }
+
+                if (item.lastSeenUnix == best.lastSeenUnix
+                    && string.Compare(item.instanceId ?? "", best.instanceId ?? "", StringComparison.OrdinalIgnoreCase) < 0)
+                    best = item;
+            }
+
+            return best;
+        }
+
+        private static string NormalizeProjectPath(string projectPath)
+        {
+            return (projectPath ?? "").Replace("\\", "/").Trim();
         }
 
         private static void WriteInstanceFile(PieUnityInstance instance)

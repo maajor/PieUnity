@@ -40,6 +40,9 @@ namespace Pie
         public string mode;
         public string availableIn;
         public string capabilityKind;
+        public string source = "unity_builtin";
+        public string hostNamespace = "";
+        public string hostDisplayName = "";
         public string owner = "";
         public string writeScope = "";
         public string returns = "";
@@ -113,9 +116,19 @@ namespace Pie
         public bool domainReloadPending = false;
         public bool bridgeReady = false;
         public bool scriptHostReady = false;
+        public bool hostBridgeReady = false;
+        public bool runtimeBridgeReady = false;
         public string bridgeLastError = "";
         public string bridgeDiagnostic = "";
         public string scriptHostDiagnostic = "";
+        public string discoverableOwnerMode = "";
+        public bool runtimeActive = false;
+        public bool editorActive = false;
+        public bool editorSuppressedByRuntime = false;
+        public int registeredHostCount = 0;
+        public string[] registeredHostNamespaces = new string[0];
+        public int hostCapabilityCount = 0;
+        public string[] hostDiagnostics = new string[0];
         public bool mainThreadResponsive = true;
         public int activeHttpRequests = 0;
         public int activeFileRequests = 0;
@@ -146,6 +159,15 @@ namespace Pie
     {
         public string service = "pie-unity";
         public PieUnityInstance[] instances;
+    }
+
+    [Serializable]
+    public sealed class PieUnityDiscoverableSnapshot
+    {
+        public PieUnityInstance discoverableOwner;
+        public bool runtimeActive = false;
+        public bool editorActive = false;
+        public bool editorSuppressedByRuntime = false;
     }
 
     [Serializable]

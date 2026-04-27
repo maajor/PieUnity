@@ -106,7 +106,7 @@ namespace Pie
             Task loopTask = null;
             lock (SyncRoot)
             {
-                PieUnityCapabilitiesBootstrap.Shutdown();
+                PieUnityCapabilitiesBootstrap.ShutdownAll();
                 PieHttpBridge.CancelAllRequests();
                 PieFileBridge.CancelAllRequests();
                 try { _cts?.Cancel(); } catch { }
@@ -262,28 +262,44 @@ namespace Pie
             var availability = mainThreadResponsive ? PieUnityAvailability.GetAvailabilityNoticeJson() : "";
             var bridgeReady = PieBridge.Instance != null && PieBridge.Instance.IsInitialized;
             var scriptHostReady = PieBridge.Instance != null && PieBridge.Instance.IsUnityScriptHostReady;
+            var hostBridgeReady = PieBridge.Instance != null && PieBridge.Instance.IsRuntimeHostBridgeReady;
+            var runtimeBridgeReady = PieBridge.Instance != null && PieBridge.Instance.IsRuntimeBridgeReady;
             var bridgeLastError = PieBridge.Instance != null ? (PieBridge.Instance.LastError ?? "") : (PieBridge.LastInitializationError ?? "");
             var bridgeDiagnostic = BuildBridgeDiagnostic(bridgeReady, bridgeLastError);
             var scriptHostDiagnostic = BuildScriptHostDiagnostic(bridgeReady, scriptHostReady, bridgeLastError);
             var activeFileRequests = CountActive(PieFileBridge.GetActiveRequestIds());
-            var ready = !_domainReloadPending && mainThreadResponsive && bridgeReady && scriptHostReady;
+            var ready = !_domainReloadPending && mainThreadResponsive && bridgeReady && scriptHostReady && hostBridgeReady && runtimeBridgeReady;
+            var registeredHostNamespaces = PieUnityCapabilityRegistry.GetRegisteredRuntimeHostNamespaces();
+            var hostDiagnostics = PieUnityCapabilityRegistry.GetRuntimeHostDiagnostics();
+            var snapshot = PieUnityInstanceRegistry.GetCurrentProcessSnapshot(PieUnityCapabilityRegistry.ProjectPath);
+            var owner = snapshot != null ? snapshot.discoverableOwner : null;
             return JsonUtility.ToJson(new PieUnityHealthPayload
             {
-                instanceId = PieUnityCapabilityRegistry.InstanceId,
-                projectPath = PieUnityCapabilityRegistry.ProjectPath,
+                instanceId = owner != null ? (owner.instanceId ?? "") : PieUnityCapabilityRegistry.InstanceId,
+                projectPath = owner != null ? (owner.projectPath ?? "") : PieUnityCapabilityRegistry.ProjectPath,
                 projectName = PieUnityCapabilitiesBootstrap.ProductName,
                 productName = PieUnityCapabilitiesBootstrap.UnityProductName ?? "",
                 applicationIdentifier = PieUnityCapabilitiesBootstrap.ApplicationIdentifier ?? "",
-                mode = PieUnityCapabilityRegistry.Mode,
+                mode = owner != null ? (owner.mode ?? "") : PieUnityCapabilityRegistry.Mode,
                 port = Port,
                 running = IsRunning,
                 ready = ready,
                 domainReloadPending = _domainReloadPending,
                 bridgeReady = bridgeReady,
                 scriptHostReady = scriptHostReady,
+                hostBridgeReady = hostBridgeReady,
+                runtimeBridgeReady = runtimeBridgeReady,
                 bridgeLastError = bridgeLastError,
                 bridgeDiagnostic = bridgeDiagnostic,
                 scriptHostDiagnostic = scriptHostDiagnostic,
+                discoverableOwnerMode = owner != null ? (owner.mode ?? "") : "",
+                runtimeActive = snapshot != null && snapshot.runtimeActive,
+                editorActive = snapshot != null && snapshot.editorActive,
+                editorSuppressedByRuntime = snapshot != null && snapshot.editorSuppressedByRuntime,
+                registeredHostCount = registeredHostNamespaces.Length,
+                registeredHostNamespaces = registeredHostNamespaces,
+                hostCapabilityCount = PieUnityCapabilityRegistry.GetRuntimeHostCapabilityCount(),
+                hostDiagnostics = hostDiagnostics,
                 mainThreadResponsive = mainThreadResponsive,
                 activeHttpRequests = PieHttpBridge.ActiveRequestCount,
                 activeFileRequests = activeFileRequests,

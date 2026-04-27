@@ -77,6 +77,7 @@ namespace Pie
             PieDevRpcServer.Start();
             PieHostBridge.Register("pie.interaction", HandleInteractionHostCall);
             PieHostBridge.Register("pie.dev_rpc", PieDevRpc.InvokeHostCall);
+            PieHostBridge.Register("pie.host_bridge", PieHostBridge.InvokeHostBridge);
             RegisterDevRpcMethods();
             PieUnityCapabilitiesBootstrap.InitializeRuntime(this);
             InitializeBridge();
@@ -105,7 +106,7 @@ namespace Pie
         private void Update()
         {
             PieDevRpcDispatcher.Tick();
-            PieUnityCapabilitiesBootstrap.Heartbeat();
+            PieUnityCapabilitiesBootstrap.HeartbeatRuntime();
             _bridge?.Tick();
         }
 
@@ -113,11 +114,16 @@ namespace Pie
         {
             if (ActiveRunner == this)
                 ActiveRunner = null;
-            PieUnityCapabilitiesBootstrap.Shutdown();
-            PieDevRpcServer.Stop();
+            PieUnityCapabilitiesBootstrap.ShutdownRuntime();
             PieHostBridge.Unregister("pie.interaction");
             UnregisterDevRpcMethods();
+#if UNITY_EDITOR
+            PieUnityCapabilitiesBootstrap.InitializeEditor();
+#else
+            PieDevRpcServer.Stop();
             PieHostBridge.Unregister("pie.dev_rpc");
+            PieHostBridge.Unregister("pie.host_bridge");
+#endif
             if (_bridge == null) return;
             _bridge.OnJsEvent -= HandleJsEvent;
             _bridge.Dispose();

@@ -27,6 +27,7 @@ namespace Pie.Editor
             AssemblyReloadEvents.beforeAssemblyReload += HandleBeforeAssemblyReload;
             PieDevRpcServer.Start();
             PieHostBridge.Register("pie.dev_rpc", PieDevRpc.InvokeHostCall);
+            PieHostBridge.Register("pie.host_bridge", PieHostBridge.InvokeHostBridge);
             PieUnityCapabilitiesBootstrap.InitializeEditor();
             PieDevRpc.Register("rpc.thread_info", _ => JsonUtility.ToJson(new ThreadInfoPayload
             {
@@ -45,7 +46,7 @@ namespace Pie.Editor
         private static void Tick()
         {
             PieDevRpcDispatcher.Tick();
-            PieUnityCapabilitiesBootstrap.Heartbeat();
+            PieUnityCapabilitiesBootstrap.HeartbeatEditor();
         }
     }
 }

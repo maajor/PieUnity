@@ -9,7 +9,7 @@ It uses a runtime-first architecture: the agent core runs in Runtime, while the 
 - Runtime and Editor share the same agent core
 - Project assets live under `Assets/Pie`
 - Runtime state lives under `Application.persistentDataPath/Pie`
-- Project skills, project extensions, and project memory are first-class package concepts
+- Project skills, project extensions, and project AGENTS.md context are first-class package concepts
 
 ## Unity RPC Host
 
@@ -46,7 +46,7 @@ PieChat's default agent surface should use one primary tool per concept:
 
 - Files: `read_file`, `write_file`, `edit_file`, `list_dir`
 - Search: `find_files`, `grep_text`
-- Skills: `read_skill`, `read_resource`, `resolve_resource`
+- Skills: prompt-indexed files consumed through `read_file`, `grep_text`, `find_files`, and `bash`
 - Unity project/runtime context: `unity_project_inspect`
 - Unity scene reads: `unity_scene_query`, `unity_scene_object_inspect`
 - Unity scene object edits: `unity_scene_object_edit`
@@ -149,6 +149,8 @@ The shipped runtime bridge is a tracked Unity `TextAsset` contract, not an ad-ho
 
 `unity_script_run` is a cooperative step-bounded runner: use generator tasks, yield for multi-frame work, and expect long synchronous loops to fail with `STEP_TIMEOUT` instead of being arbitrarily preempted.
 
+Runtime debugging is zero-registration by default. When a PlayMode/runtime host is alive, discoverability prefers the runtime owner, and `unity_script_run` exposes `ctx.runtime` for controlled same-`JsEnv` inspection and path-based calls such as `ctx.runtime.call("IJsEnvironment.Environment.ReloadAllMods", [])`. Prefer `ctx.runtime` over assuming raw globals like `VX`, `CS`, or `puer` are part of the public contract.
+
 ## Installation
 
 Install through Unity Package Manager:
@@ -187,9 +189,12 @@ node <resolved-com.pie.agent>/Skills/pie-unity-rpc/pie-unity-rpc.js tool --tool 
 ```
 
 Agents should inspect `/manifest` first and choose a host by the capability
-needed for the user's task. Editor and runtime hosts are both live tool hosts;
-do not infer intended use from host mode. Prefer project namespaces such as
-`voxmod` over generic Unity editing tools when they are available. Do not edit
+needed for the user's task. When a runtime host is alive, pie-unity exposes the
+runtime owner as the primary discoverable instance so runtime debugging does not
+get preempted by editor heartbeats. Prefer project namespaces such as `voxmod`
+over generic Unity editing tools when they are available, but zero-registration
+runtime inspection and calls are available through `unity_script_run` via
+`ctx.runtime`. Do not edit
 prefab YAML or serialized object references directly when an RPC tool exists.
 
 Available local commands include:
@@ -250,7 +255,7 @@ Project assets:
 - `Assets/Pie/PieSettings.asset`
 - `Assets/Pie/Skills`
 - `Assets/Pie/Extensions`
-- `Assets/Pie/AGENTS.md`
+- `AGENTS.md`
 
 Runtime state:
 
@@ -311,7 +316,7 @@ Supported layouts:
 - `Assets/Pie/Skills/<skill-name>/SKILL.md`
 - `Assets/Pie/Skills/<skill-name>.md`
 
-Skills are listed in the system prompt and can be read in full through the `read_skill` tool.
+Skills are listed in the system prompt with ordinary `entry` and `baseDir` paths. Read the entry with `read_file`; resolve skill-local relative paths against `baseDir` and use ordinary file or bash tools.
 
 ## Project Extensions
 
@@ -341,6 +346,8 @@ Unity also adds:
 
 - `projectRoot`
 - `isEditor`
+- `host.listCapabilities(namespace?)`
+- `host.call(namespace, name, args?)`
 
 Minimal example:
 
@@ -389,16 +396,23 @@ For repeatable regression steps and reliability runs, see:
 
 ## Sessions And Memory
 
-Project memory:
+Project context:
 
-- Stored at `Assets/Pie/AGENTS.md`
+- Stored at the Unity project root as `AGENTS.md`
 - Shared with the Unity project
 - Intended for project conventions and persistent guidance
+- `/init` creates or replaces the root `AGENTS.md` and immediately refreshes the active PieChat system prompt
+- `/memory` reads the root `AGENTS.md`
 
 Session and runtime state:
 
 - Stored under `Application.persistentDataPath/Pie`
 - Intended for local session history and runtime-owned state
+
+Migration note:
+
+- `read_project_memory` and `write_project_memory` have been removed.
+- Use `/init`, `/memory`, or normal file tools such as `read_file` and `write_file` against `AGENTS.md`.
 
 ## Standalone Release Repository
 

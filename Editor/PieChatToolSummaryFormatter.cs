@@ -17,10 +17,6 @@ namespace Pie.Editor
             }
 
             if (string.IsNullOrEmpty(resultText)) return "Done.";
-            if (toolName == "write_project_memory") return "AGENTS.md updated";
-            if (toolName == "read_project_memory")
-                return resultText.Contains("No project memory found", StringComparison.Ordinal) ? "No AGENTS.md yet" : "Loaded AGENTS.md";
-
             if (toolName == "manage_todo_list")
             {
                 if (resultText.Contains("Todo action failed", StringComparison.Ordinal)) return resultText.Trim();

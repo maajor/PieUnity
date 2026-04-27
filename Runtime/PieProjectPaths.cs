@@ -40,7 +40,7 @@ namespace Pie
         private const string DefaultSettingsAssetPath = "Assets/Pie/PieSettings.asset";
         private const string DefaultExtensionRelativePath = "Assets/Pie/Extensions";
         private const string DefaultSkillRelativePath = "Assets/Pie/Skills";
-        private const string DefaultProjectMemoryRelativePath = "Assets/Pie/AGENTS.md";
+        private const string DefaultAgentsFileRelativePath = "AGENTS.md";
         private const string RuntimeStateFolderName = "Pie";
 
         public static string GetExtensionSearchPathsJson(string projectRoot)
@@ -79,9 +79,9 @@ namespace Pie
             return GetPrimaryPath(projectRoot, GetSkillSearchPaths(projectRoot), DefaultSkillRelativePath);
         }
 
-        public static string GetProjectMemoryPath(string projectRoot)
+        public static string GetProjectAgentsPath(string projectRoot)
         {
-            return NormalizePath(Path.Combine(projectRoot ?? "", DefaultProjectMemoryRelativePath));
+            return NormalizePath(Path.Combine(projectRoot ?? "", DefaultAgentsFileRelativePath));
         }
 
         public static string GetRuntimeStateRoot()

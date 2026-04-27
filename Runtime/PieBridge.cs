@@ -26,12 +26,16 @@ namespace Pie
         private bool _isDisposed = false;
         private string _lastError = null;
         private bool _isUnityScriptHostReady = false;
+        private bool _isRuntimeHostBridgeReady = false;
+        private bool _isRuntimeBridgeReady = false;
 
         /// <summary>Fired when JS calls pieBridge.sendToUnity(event, jsonData).</summary>
         public event Action<string, string> OnJsEvent;
 
         public bool IsInitialized => _isInitialized && !_isDisposed && _jsEnv != null;
         public bool IsUnityScriptHostReady => IsInitialized && _isUnityScriptHostReady;
+        public bool IsRuntimeHostBridgeReady => IsInitialized && _isRuntimeHostBridgeReady;
+        public bool IsRuntimeBridgeReady => IsInitialized && _isRuntimeBridgeReady;
         public string LastError => _lastError;
         // PuerTS 2.2.2 uses the stable JsEnv + BackendType.V8 path here.
         // pie-unity relies on cooperative script step guards instead of native
@@ -126,6 +130,16 @@ namespace Pie
             return _jsEnv.Eval<string>(script);
         }
 
+        public string InvokeRuntimeHostCapability(string capabilityName, string argsJson)
+        {
+            if (_jsEnv == null || _isDisposed)
+                throw new InvalidOperationException("PieBridge is not initialized.");
+
+            RefreshRuntimeHostBridgeReady();
+            var script = $"(function(){{var host=globalThis.__pieRuntimeHostBridge;if(!host||typeof host.invokeCapability!=='function') throw new Error('Runtime host bridge is not ready.'); return host.invokeCapability({JsonString(capabilityName ?? "")},{JsonString(argsJson ?? "{}")});}})()";
+            return _jsEnv.Eval<string>(script);
+        }
+
         public void Dispose()
         {
             if (_isDisposed) return;
@@ -161,6 +175,8 @@ namespace Pie
                 PushFileData();
                 _jsEnv.Eval("(function(){var host=globalThis.__pieUnityScriptHost;if(host&&typeof host.tick==='function') host.tick();})()");
                 RefreshUnityScriptHostReady();
+                RefreshRuntimeHostBridgeReady();
+                RefreshRuntimeBridgeReady();
                 _jsEnv.Tick();
             }
             catch (Exception ex)
@@ -188,6 +204,8 @@ namespace Pie
                 throw new Exception("pie.handleCSharpMessage not found after bundled Pie runtime execution");
 
             RefreshUnityScriptHostReady();
+            RefreshRuntimeHostBridgeReady();
+            RefreshRuntimeBridgeReady();
             if (!_isUnityScriptHostReady)
                 throw new Exception("Unity script host was not installed by the bundled Pie runtime.");
         }
@@ -204,6 +222,9 @@ namespace Pie
             }
             _jsEnv = null;
             _isUnityScriptHostReady = false;
+            _isRuntimeHostBridgeReady = false;
+            _isRuntimeBridgeReady = false;
+            PieUnityCapabilityRegistry.ResetRuntimeHosts();
         }
 
         private string LoadCoreJs()
@@ -304,8 +325,8 @@ namespace Pie
             return globalThis.pieBridge.projectRoot;
         }},
 
-        getProjectMemoryPath: function() {{
-            return CS.Pie.PieProjectPaths.GetProjectMemoryPath(globalThis.pieBridge.projectRoot);
+        getProjectAgentsPath: function() {{
+            return CS.Pie.PieProjectPaths.GetProjectAgentsPath(globalThis.pieBridge.projectRoot);
         }},
 
         getPersistentDataPath: function() {{
@@ -413,6 +434,46 @@ namespace Pie
             {
                 _isUnityScriptHostReady = false;
                 PieDiagnostics.Warning($"[PieBridge] Failed to probe Unity script host readiness: {ex.Message}");
+            }
+        }
+
+        private void RefreshRuntimeHostBridgeReady()
+        {
+            if (_jsEnv == null || _isDisposed)
+            {
+                _isRuntimeHostBridgeReady = false;
+                return;
+            }
+
+            try
+            {
+                _isRuntimeHostBridgeReady = _jsEnv.Eval<bool>(
+                    "!!(globalThis.__pieRuntimeHostBridge && typeof globalThis.__pieRuntimeHostBridge.invokeCapability === 'function' && typeof globalThis.__pieRuntimeHostBridge.hasRegisteredHostBridge === 'function' && globalThis.__pieRuntimeHostBridge.hasRegisteredHostBridge())");
+            }
+            catch (Exception ex)
+            {
+                _isRuntimeHostBridgeReady = false;
+                PieDiagnostics.Warning($"[PieBridge] Failed to probe runtime host bridge readiness: {ex.Message}");
+            }
+        }
+
+        private void RefreshRuntimeBridgeReady()
+        {
+            if (_jsEnv == null || _isDisposed)
+            {
+                _isRuntimeBridgeReady = false;
+                return;
+            }
+
+            try
+            {
+                _isRuntimeBridgeReady = _jsEnv.Eval<bool>(
+                    "!!(globalThis.__pieUnityRuntimeBridge && typeof globalThis.__pieUnityRuntimeBridge.has === 'function' && typeof globalThis.__pieUnityRuntimeBridge.get === 'function' && typeof globalThis.__pieUnityRuntimeBridge.members === 'function' && typeof globalThis.__pieUnityRuntimeBridge.call === 'function')");
+            }
+            catch (Exception ex)
+            {
+                _isRuntimeBridgeReady = false;
+                PieDiagnostics.Warning($"[PieBridge] Failed to probe runtime bridge readiness: {ex.Message}");
             }
         }
 
