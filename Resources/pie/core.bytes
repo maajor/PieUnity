@@ -12363,35 +12363,78 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   });
 
   // ../../packages/agent-core/src/agent-loop.ts
+  function createLoopErrorMessage(error, config, signal) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      role: "assistant",
+      content: [{ type: "text", text: "" }],
+      api: config.model.api,
+      provider: config.model.provider,
+      model: config.model.id,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+      },
+      stopReason: signal?.aborted ? "aborted" : "error",
+      errorMessage: message,
+      timestamp: Date.now()
+    };
+  }
+  async function notifyOnError(config, error, phase) {
+    try {
+      await config.hooks?.onError?.(error instanceof Error ? error : new Error(String(error)), { phase });
+    } catch (hookError) {
+      console.warn(`[AgentLoop] onError hook failed during ${phase}:`, hookError);
+    }
+  }
+  function endStreamWithError(stream, newMessages, config, signal, error) {
+    const errorMessage = createLoopErrorMessage(error, config, signal);
+    newMessages.push(errorMessage);
+    stream.push({ type: "message_start", message: errorMessage });
+    stream.push({ type: "message_end", message: errorMessage });
+    stream.push({ type: "turn_end", message: errorMessage, toolResults: [] });
+    stream.push({ type: "agent_end", messages: newMessages });
+    stream.end(newMessages);
+  }
   function agentLoop(prompts, context, config, signal, streamFn) {
     const stream = createAgentStream();
     (async () => {
-      try {
-        await config.hooks?.beforeAgentStart?.();
-      } catch (e) {
-        console.warn("[AgentLoop] beforeAgentStart hook failed:", e);
-      }
       const newMessages = [...prompts];
-      const currentContext = {
-        ...context,
-        messages: [...context.messages, ...prompts]
-      };
-      stream.push({ type: "agent_start" });
-      stream.push({ type: "turn_start" });
-      for (const prompt of prompts) {
-        stream.push({ type: "message_start", message: prompt });
-        stream.push({ type: "message_end", message: prompt });
-      }
       try {
-        await runLoop(currentContext, newMessages, config, signal, stream, streamFn);
+        try {
+          await config.hooks?.beforeAgentStart?.();
+        } catch (e) {
+          console.warn("[AgentLoop] beforeAgentStart hook failed:", e);
+        }
+        const currentContext = {
+          ...context,
+          messages: [...context.messages, ...prompts]
+        };
+        stream.push({ type: "agent_start" });
+        stream.push({ type: "turn_start" });
+        for (const prompt of prompts) {
+          stream.push({ type: "message_start", message: prompt });
+          stream.push({ type: "message_end", message: prompt });
+        }
+        try {
+          await runLoop(currentContext, newMessages, config, signal, stream, streamFn);
+        } catch (error) {
+          await notifyOnError(config, error, "runLoop");
+          endStreamWithError(stream, newMessages, config, signal, error);
+          return;
+        }
+        try {
+          await config.hooks?.afterAgentEnd?.(newMessages);
+        } catch (e) {
+          console.warn("[AgentLoop] afterAgentEnd hook failed:", e);
+        }
       } catch (error) {
-        config.hooks?.onError?.(error, { phase: "runLoop" });
-        throw error;
-      }
-      try {
-        await config.hooks?.afterAgentEnd?.(newMessages);
-      } catch (e) {
-        console.warn("[AgentLoop] afterAgentEnd hook failed:", e);
+        await notifyOnError(config, error, "agentLoop");
+        endStreamWithError(stream, newMessages, config, signal, error);
       }
     })();
     return stream;
@@ -12405,25 +12448,31 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     }
     const stream = createAgentStream();
     (async () => {
-      try {
-        await config.hooks?.beforeAgentStart?.();
-      } catch (e) {
-        console.warn("[AgentLoop] beforeAgentStart hook failed:", e);
-      }
       const newMessages = [];
-      const currentContext = { ...context };
-      stream.push({ type: "agent_start" });
-      stream.push({ type: "turn_start" });
       try {
-        await runLoop(currentContext, newMessages, config, signal, stream, streamFn);
+        try {
+          await config.hooks?.beforeAgentStart?.();
+        } catch (e) {
+          console.warn("[AgentLoop] beforeAgentStart hook failed:", e);
+        }
+        const currentContext = { ...context };
+        stream.push({ type: "agent_start" });
+        stream.push({ type: "turn_start" });
+        try {
+          await runLoop(currentContext, newMessages, config, signal, stream, streamFn);
+        } catch (error) {
+          await notifyOnError(config, error, "runLoop");
+          endStreamWithError(stream, newMessages, config, signal, error);
+          return;
+        }
+        try {
+          await config.hooks?.afterAgentEnd?.(newMessages);
+        } catch (e) {
+          console.warn("[AgentLoop] afterAgentEnd hook failed:", e);
+        }
       } catch (error) {
-        config.hooks?.onError?.(error, { phase: "runLoop" });
-        throw error;
-      }
-      try {
-        await config.hooks?.afterAgentEnd?.(newMessages);
-      } catch (e) {
-        console.warn("[AgentLoop] afterAgentEnd hook failed:", e);
+        await notifyOnError(config, error, "agentLoopContinue");
+        endStreamWithError(stream, newMessages, config, signal, error);
       }
     })();
     return stream;
@@ -12459,7 +12508,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         try {
           message = await streamAssistantResponse(currentContext, config, signal, stream, streamFn);
         } catch (error) {
-          config.hooks?.onError?.(error, { phase: "streamAssistantResponse" });
+          await notifyOnError(config, error, "streamAssistantResponse");
           throw error;
         }
         newMessages.push(message);
@@ -12635,10 +12684,14 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
             details: {}
           };
           isError = true;
-          hooks?.onError?.(e instanceof Error ? e : new Error(String(e)), {
-            toolName: toolCall.name,
-            phase: "toolExecution"
-          });
+          try {
+            await hooks?.onError?.(e instanceof Error ? e : new Error(String(e)), {
+              toolName: toolCall.name,
+              phase: "toolExecution"
+            });
+          } catch (hookError) {
+            console.warn(`[AgentLoop] onError hook failed during toolExecution for ${toolCall.name}:`, hookError);
+          }
         }
       }
       try {
@@ -13150,15 +13203,30 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         this.abortController = void 0;
       }
     }
+    reportObserverError(kind2, eventType, error) {
+      console.warn(`[Agent] ${kind2} failed while handling ${eventType}:`, error);
+    }
     emit(e) {
       for (const listener of this.listeners) {
-        listener(e);
+        try {
+          listener(e);
+        } catch (error) {
+          this.reportObserverError("agent event listener", e.type, error);
+        }
       }
-      this.emitDerivedSemanticEvents(e);
+      try {
+        this.emitDerivedSemanticEvents(e);
+      } catch (error) {
+        this.reportObserverError("derived semantic event", e.type, error);
+      }
     }
     emitSemantic(e) {
       for (const listener of this.semanticListeners) {
-        listener(e);
+        try {
+          listener(e);
+        } catch (error) {
+          this.reportObserverError("semantic event listener", e.type, error);
+        }
       }
     }
     updateStatusSnapshot(next) {
@@ -14420,7 +14488,11 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         this.flushTimer = null;
       }
       if (!this.cachedController || !this.cachedSessionId) return;
-      this.options.saveTrace(this.cachedController.getSnapshot());
+      try {
+        this.options.saveTrace(this.cachedController.getSnapshot());
+      } catch (error) {
+        console.warn("[SessionTrace] Failed to save session trace:", error);
+      }
     }
     notePendingUserText(text) {
       this.mutate((controller) => {
@@ -14778,7 +14850,7 @@ Subagent guarded mode uses the same bash risk policy as the parent agent. Destru
   function isParentHandoffRequired(task) {
     return task.needsParentWrite || task.status === "timeout" || task.status === "failed" || task.confidenceSignals.some((signal) => signal.type === "tool_error" || signal.type === "no_tool_use");
   }
-  async function runSubagentWithProgress(deps, task, reportProgress) {
+  async function runSubagentWithProgress(deps, task, reportProgress, signal) {
     const startTime = Date.now();
     task.status = "running";
     let timedOut = false;
@@ -14798,6 +14870,9 @@ Subagent guarded mode uses the same bash risk policy as the parent agent. Destru
       }
       if (!apiKey) {
         throw new Error("No API key available for subagent execution.");
+      }
+      if (signal?.aborted) {
+        throw new Error("Subagent aborted by parent");
       }
       deps.log(`[Subagent ${task.name}] Plan: ${plan.complexity}/${plan.modelClass}, ${tools.length} tools`);
       deps.debugLog?.("plan", "SubagentPlan", plan);
@@ -14822,6 +14897,7 @@ ${formatSkillsForPrompt(deps.skills ?? [])}`;
       let rejectTimeout = () => void 0;
       let timeout;
       let unsubscribe;
+      let removeAbortListener;
       const timeoutPromise = new Promise((_, reject) => {
         rejectTimeout = reject;
       });
@@ -14831,6 +14907,19 @@ ${formatSkillsForPrompt(deps.skills ?? [])}`;
         subagent.abort?.();
         rejectTimeout(new Error(timeoutMessage));
       }, plan.timeoutSeconds * 1e3);
+      const abortPromise = new Promise((_, reject) => {
+        if (!signal) return;
+        const abortSubagent = () => {
+          subagent.abort?.();
+          reject(new Error("Subagent aborted by parent"));
+        };
+        if (signal.aborted) {
+          abortSubagent();
+          return;
+        }
+        signal.addEventListener("abort", abortSubagent, { once: true });
+        removeAbortListener = () => signal.removeEventListener("abort", abortSubagent);
+      });
       unsubscribe = subagent.subscribe((event) => {
         if (event.type === "tool_execution_start") {
           toolCalls++;
@@ -14865,12 +14954,14 @@ ${formatSkillsForPrompt(deps.skills ?? [])}`;
             await subagent.prompt(prompt);
             await subagent.waitForIdle?.();
           })(),
-          timeoutPromise
+          timeoutPromise,
+          abortPromise
         ]);
       } finally {
         if (timeout) {
           clearTimeout(timeout);
         }
+        removeAbortListener?.();
         unsubscribe?.();
       }
       const messages = subagent.state.messages;
@@ -15006,9 +15097,19 @@ Use this for independent investigation, search, review, or triage work. Provide 
           { description: "Array of tasks to run in parallel", minItems: 1, maxItems: 10 }
         )
       }, { additionalProperties: false }),
-      async execute(first, second) {
+      async execute(first, second, third, fourth) {
         const args = typeof first === "string" ? second : first;
-        const toolContext = typeof first === "string" ? { log: deps.log } : second;
+        const signal = typeof first === "string" ? third : second?.signal;
+        const reportProgress = typeof first === "string" ? fourth ? (update) => {
+          fourth({
+            content: update.message ? [{ type: "text", text: update.message }] : [],
+            details: { increment: update.increment }
+          });
+        } : () => void 0 : second?.reportProgress ?? (() => void 0);
+        const toolContext = {
+          log: typeof first === "string" ? deps.log : second?.log ?? deps.log,
+          reportProgress
+        };
         const normalized = normalizeTaskDefs(args);
         if ("error" in normalized) {
           return {
@@ -15036,7 +15137,7 @@ Use this for independent investigation, search, review, or triage work. Provide 
         toolContext.log?.(`Spawning ${tasks.length} parallel subagents: ${tasks.map((task) => task.name).join(", ")}`);
         toolContext.reportProgress?.({ message: `Launching ${tasks.length} parallel subagents...`, increment: 5 });
         const startTime = Date.now();
-        await Promise.all(tasks.map((task) => runSubagentWithProgress(deps, task, toolContext.reportProgress ?? (() => void 0))));
+        await Promise.all(tasks.map((task) => runSubagentWithProgress(deps, task, toolContext.reportProgress, signal)));
         const totalDuration = Date.now() - startTime;
         const completed = tasks.filter((task) => task.status === "completed").length;
         const failed = tasks.filter((task) => task.status === "failed" || task.status === "timeout").length;
@@ -15832,7 +15933,7 @@ ${compactSummary}`;
     };
   }
   function writeFileAtomic(gateway, filePath, content) {
-    const tempPath = filePath + ".tmp";
+    const tempPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
     gateway.writeFile(tempPath, content, "utf-8");
     try {
       const req = globalThis.require;
@@ -16627,6 +16728,8 @@ ${compactSummary}`;
     const text = content.filter((block) => !!block && typeof block === "object" && "type" in block).filter((block) => block.type === "text").map((block) => block.text || "").join("\n").trim();
     return text || stableStringify(result);
   }
+  var RUNAWAY_TOOLCALL_WHITESPACE_DELTA_CHARS = 16384;
+  var RUNAWAY_TOOLCALL_WHITESPACE_DELTA_EVENTS = 40;
   function cloneQueuedInput(input) {
     return {
       ...input,
@@ -16659,6 +16762,10 @@ ${compactSummary}`;
     pendingAutoCompact;
     queueIdCounter = 0;
     repeatedToolFailures = /* @__PURE__ */ new Map();
+    streamGuard = {
+      whitespaceToolCallDeltaChars: 0,
+      whitespaceToolCallDeltaEvents: 0
+    };
     runtimeGuardTriggered = false;
     constructor(options) {
       this.agent = options.agent;
@@ -16681,6 +16788,9 @@ ${compactSummary}`;
         if (event.type === "agent_start") {
           this.resetRuntimeGuardState();
           this.emit({ type: "streaming_changed", isStreaming: true });
+        }
+        if (event.type === "message_update") {
+          this.recordMessageUpdateForGuard(event);
         }
         if (event.type === "tool_execution_end") {
           this.recordToolExecutionEndForGuard(event);
@@ -17276,7 +17386,51 @@ ${compactSummary}`;
     }
     resetRuntimeGuardState() {
       this.repeatedToolFailures.clear();
+      this.streamGuard = {
+        whitespaceToolCallDeltaChars: 0,
+        whitespaceToolCallDeltaEvents: 0
+      };
       this.runtimeGuardTriggered = false;
+    }
+    triggerRuntimeGuard(toolName, repeatCount, reason) {
+      if (this.runtimeGuardTriggered) {
+        return;
+      }
+      this.runtimeGuardTriggered = true;
+      this.cancelRetry();
+      this.cancelAutoCompactTimerOnly();
+      this.cancelDispatchTimerOnly();
+      this.cancelAutoContinueTimerOnly();
+      this.emit({ type: "runtime_guard_triggered", toolName, repeatCount, reason });
+      this.agent.abort();
+    }
+    recordMessageUpdateForGuard(event) {
+      if (this.runtimeGuardTriggered) {
+        return;
+      }
+      const assistantEvent = event.assistantMessageEvent;
+      if (assistantEvent.type !== "toolcall_delta") {
+        this.streamGuard.whitespaceToolCallDeltaChars = 0;
+        this.streamGuard.whitespaceToolCallDeltaEvents = 0;
+        return;
+      }
+      if (assistantEvent.delta.trim().length > 0) {
+        this.streamGuard.whitespaceToolCallDeltaChars = 0;
+        this.streamGuard.whitespaceToolCallDeltaEvents = 0;
+        return;
+      }
+      this.streamGuard.whitespaceToolCallDeltaChars += assistantEvent.delta.length;
+      this.streamGuard.whitespaceToolCallDeltaEvents += 1;
+      const content = event.message.role === "assistant" && Array.isArray(event.message.content) ? event.message.content[assistantEvent.contentIndex] : void 0;
+      const partialArgs = typeof content?.partialArgs === "string" ? content.partialArgs : "";
+      const sparsePartialArgs = partialArgs.length >= RUNAWAY_TOOLCALL_WHITESPACE_DELTA_CHARS && partialArgs.replace(/\s/g, "").length / partialArgs.length < 0.05;
+      if (sparsePartialArgs || this.streamGuard.whitespaceToolCallDeltaChars >= RUNAWAY_TOOLCALL_WHITESPACE_DELTA_CHARS && this.streamGuard.whitespaceToolCallDeltaEvents >= RUNAWAY_TOOLCALL_WHITESPACE_DELTA_EVENTS) {
+        this.triggerRuntimeGuard(
+          "assistant_stream",
+          this.streamGuard.whitespaceToolCallDeltaEvents,
+          "runaway_tool_call_arguments"
+        );
+      }
     }
     recordToolExecutionEndForGuard(event) {
       if (!event.isError) {
@@ -17295,14 +17449,7 @@ ${compactSummary}`;
       if (repeatCount < 3 || this.runtimeGuardTriggered) {
         return;
       }
-      this.runtimeGuardTriggered = true;
-      this.cancelRetry();
-      this.cancelAutoCompactTimerOnly();
-      this.cancelDispatchTimerOnly();
-      this.cancelAutoContinueTimerOnly();
-      const reason = "repeated_tool_error";
-      this.emit({ type: "runtime_guard_triggered", toolName: event.toolName, repeatCount, reason });
-      this.agent.abort();
+      this.triggerRuntimeGuard(event.toolName, repeatCount, "repeated_tool_error");
     }
     emit(event) {
       for (const listener of this.listeners) {
