@@ -3824,6 +3824,7 @@ var _PieAgent = (() => {
     async request(url, options = {}) {
       const requestStartTime = Date.now();
       const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const requestTimeoutMs = options.timeoutMs ?? 6e4;
       logHttp("DEBUG", `Request [${requestId}] started`, {
         url: url.slice(0, 100),
         method: options.method || "GET",
@@ -3923,13 +3924,32 @@ var _PieAgent = (() => {
               let done = false;
               let error = null;
               let waiting = null;
-              const flushBuffer = () => {
+              const wake = (value) => {
+                if (!waiting) return;
+                const w = waiting;
+                waiting = null;
+                w(value);
+              };
+              const failStream = (e) => {
+                if (done && error) return;
+                error = e;
+                done = true;
+                wake({ done: true, value: void 0 });
+                logHttp("ERROR", `Request [${requestId}] SSE stream error`, { error: e.message });
+              };
+              const flushBuffer = (final = false) => {
                 if (bufferLength === 0) return;
                 const buffer = Buffer.concat(bufferChunks, bufferLength);
                 const bufferStr = buffer.toString("utf-8");
                 const lines = bufferStr.split("\n");
                 const lastLine = lines.pop();
-                if (lastLine !== void 0) {
+                if (final) {
+                  if (lastLine !== void 0 && lastLine.length > 0) {
+                    lines.push(lastLine);
+                  }
+                  bufferChunks = [];
+                  bufferLength = 0;
+                } else if (lastLine !== void 0) {
                   bufferChunks = [Buffer.from(lastLine)];
                   bufferLength = lastLine.length;
                 } else {
@@ -3940,10 +3960,17 @@ var _PieAgent = (() => {
                   lineQueue.push(line);
                 }
               };
+              let abortHandler = null;
               if (signal) {
-                signal.addEventListener("abort", () => {
-                  res.destroy();
-                }, { once: true });
+                abortHandler = () => {
+                  failStream(new Error("Request was aborted"));
+                  res.destroy(new Error("Request was aborted"));
+                };
+                if (signal.aborted) {
+                  abortHandler();
+                } else {
+                  signal.addEventListener("abort", abortHandler, { once: true });
+                }
               }
               res.on("data", (chunk) => {
                 totalBytes += chunk.length;
@@ -3952,22 +3979,18 @@ var _PieAgent = (() => {
                 if (bufferLength > 16384 || chunk.includes(10)) {
                   flushBuffer();
                 }
-                if (waiting) {
-                  const w = waiting;
-                  waiting = null;
-                  w({ done: false, value: void 0 });
-                }
+                wake({ done: false, value: void 0 });
               });
               res.on("end", () => {
                 if (bufferLength > 0) {
-                  flushBuffer();
+                  flushBuffer(true);
+                }
+                if (!res.complete) {
+                  failStream(new Error("SSE stream ended before response completed"));
+                  return;
                 }
                 done = true;
-                if (waiting) {
-                  const w = waiting;
-                  waiting = null;
-                  w({ done: true, value: void 0 });
-                }
+                wake({ done: true, value: void 0 });
                 logHttp("DEBUG", `Request [${requestId}] SSE stream ended`, {
                   totalBytes,
                   lineCount,
@@ -3975,14 +3998,15 @@ var _PieAgent = (() => {
                 });
               });
               res.on("error", (e) => {
-                error = e;
-                done = true;
-                if (waiting) {
-                  const w = waiting;
-                  waiting = null;
-                  w({ done: true, value: void 0 });
+                failStream(e);
+              });
+              res.on("aborted", () => {
+                failStream(new Error("SSE stream aborted"));
+              });
+              res.on("close", () => {
+                if (!done || !res.complete) {
+                  failStream(new Error("SSE stream closed before end"));
                 }
-                logHttp("ERROR", `Request [${requestId}] SSE stream error`, { error: e.message });
               });
               try {
                 while (true) {
@@ -4002,9 +4026,12 @@ var _PieAgent = (() => {
                   const waitResult = await new Promise((r) => {
                     waiting = r;
                   });
-                  if (waitResult.done) break;
+                  void waitResult;
                 }
               } finally {
+                if (signal && abortHandler) {
+                  signal.removeEventListener("abort", abortHandler);
+                }
                 if (!done && !res.destroyed) {
                   res.destroy();
                 }
@@ -4031,6 +4058,7 @@ var _PieAgent = (() => {
           logHttp("ERROR", `Request [${requestId}] timeout`);
           req.destroy(new Error("Request timeout"));
         });
+        req.setTimeout(requestTimeoutMs);
         if (options.signal) {
           options.signal.addEventListener("abort", () => {
             logHttp("DEBUG", `Request [${requestId}] aborted`);
@@ -4432,6 +4460,47 @@ var _PieAgent = (() => {
       }
       const fs = nodeRequire("fs");
       fs.writeFileSync(path, content, encoding);
+    }
+    /**
+     * Copy a file.
+     */
+    copyFile(source, destination) {
+      if (!this.allowWrites) {
+        throw new Error(`Writes not allowed: ${destination}`);
+      }
+      this.validatePath(source, "copy");
+      this.validatePath(destination, "copy");
+      const platform = detectPlatform();
+      const dir = this.dirname(destination);
+      this.mkdir(dir, { recursive: true });
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        CS.System.IO.File.Copy(source, destination, true);
+        return;
+      }
+      const fs = nodeRequire("fs");
+      fs.copyFileSync(source, destination);
+    }
+    /**
+     * Rename or move a file.
+     */
+    renameFile(source, destination) {
+      if (!this.allowWrites) {
+        throw new Error(`Writes not allowed: ${destination}`);
+      }
+      this.validatePath(source, "rename");
+      this.validatePath(destination, "rename");
+      const platform = detectPlatform();
+      const dir = this.dirname(destination);
+      this.mkdir(dir, { recursive: true });
+      if (platform === "puerts" && typeof CS !== "undefined") {
+        if (CS.System.IO.File.Exists(destination)) {
+          CS.System.IO.File.Delete(destination);
+        }
+        CS.System.IO.File.Move(source, destination);
+        return;
+      }
+      const fs = nodeRequire("fs");
+      fs.renameSync(source, destination);
     }
     /**
      * Delete file
@@ -5004,6 +5073,52 @@ var _PieAgent = (() => {
     }
   }
 
+  // ../../packages/ai/src/providers/assistant-content-validation.ts
+  var EMPTY_ASSISTANT_CONTENT_ERROR = "stream ended without assistant content";
+  var EMPTY_ASSISTANT_CONTENT_ERROR_CODE = "empty_assistant_content";
+  var EmptyAssistantContentError = class extends Error {
+    code = EMPTY_ASSISTANT_CONTENT_ERROR_CODE;
+    constructor(message = EMPTY_ASSISTANT_CONTENT_ERROR) {
+      super(message);
+      this.name = "EmptyAssistantContentError";
+    }
+  };
+  function hasAssistantContent(message) {
+    return message.content.some((block) => {
+      if (block.type === "text") {
+        return block.text.trim().length > 0;
+      }
+      if (block.type === "thinking") {
+        return block.thinking.trim().length > 0;
+      }
+      if (block.type === "toolCall") {
+        return block.name.trim().length > 0;
+      }
+      return false;
+    });
+  }
+  function assertAssistantHasContent(message) {
+    if (!hasAssistantContent(message)) {
+      throw new EmptyAssistantContentError();
+    }
+  }
+  function isEmptyAssistantContentError(error) {
+    return error instanceof EmptyAssistantContentError || typeof error === "object" && error !== null && "code" in error && error.code === EMPTY_ASSISTANT_CONTENT_ERROR_CODE;
+  }
+  function logEmptyAssistantContentError(error, model, options) {
+    if (!isEmptyAssistantContentError(error)) {
+      return;
+    }
+    getLogger().child({ module: "ai.provider" }).warn(EMPTY_ASSISTANT_CONTENT_ERROR, {
+      code: EMPTY_ASSISTANT_CONTENT_ERROR_CODE,
+      provider: model.provider,
+      model: model.id,
+      api: model.api,
+      sessionId: options?.sessionId,
+      metadata: options?.metadata
+    });
+  }
+
   // ../../packages/ai/src/providers/openai-compat.ts
   var streamOpenAICompletions = (model, context, options) => {
     const stream = new AssistantMessageEventStream();
@@ -5239,9 +5354,11 @@ var _PieAgent = (() => {
         if (output.stopReason === "aborted" || output.stopReason === "error") {
           throw new Error("An unknown error occurred");
         }
+        assertAssistantHasContent(output);
         stream.push({ type: "done", reason: output.stopReason, message: output });
         stream.end();
       } catch (error) {
+        logEmptyAssistantContentError(error, model, options);
         output.stopReason = options?.signal?.aborted ? "aborted" : "error";
         output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
         stream.push({ type: "error", reason: output.stopReason, error: output });
@@ -8914,9 +9031,11 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         if (options?.signal?.aborted) {
           throw new Error("Request was aborted");
         }
+        assertAssistantHasContent(output);
         stream.push({ type: "done", reason: output.stopReason, message: output });
         stream.end();
       } catch (error) {
+        logEmptyAssistantContentError(error, model, options);
         for (const block of output.content) delete block.index;
         output.stopReason = options?.signal?.aborted ? "aborted" : "error";
         output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
@@ -15872,6 +15991,182 @@ ${compactSummary}`;
     };
   }
 
+  // ../../packages/agent-framework/src/session/durable-file.ts
+  var DEFAULT_FILE_RETRY_DELAYS_MS = [0, 25, 75, 150];
+  function durableFilePaths(filePath) {
+    return {
+      main: filePath,
+      backup: `${filePath}.bak`,
+      previous: `${filePath}.prev`
+    };
+  }
+  function isTransientFileError(error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+    const message = error instanceof Error ? error.message : String(error);
+    return /^(EPERM|EACCES|EBUSY|ENOTEMPTY)$/.test(code) || /\b(EPERM|EACCES|EBUSY|locked|busy)\b/i.test(message);
+  }
+  function sleep2(ms) {
+    return new Promise((resolve2) => setTimeout(resolve2, ms));
+  }
+  async function retryFileOperation(operation, retryDelaysMs) {
+    let lastError;
+    for (const [index, delayMs] of retryDelaysMs.entries()) {
+      if (delayMs > 0) {
+        await sleep2(delayMs);
+      }
+      try {
+        operation();
+        return;
+      } catch (error) {
+        lastError = error;
+        if (!isTransientFileError(error) || index === retryDelaysMs.length - 1) {
+          throw error;
+        }
+      }
+    }
+    throw lastError;
+  }
+  function retryDelays(options) {
+    return options.retryDelaysMs ?? DEFAULT_FILE_RETRY_DELAYS_MS;
+  }
+  function tempPathFor(filePath, operation) {
+    return `${filePath}.${operation}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  }
+  async function replaceFile(gateway, filePath, content, retryDelaysMs) {
+    const tempPath = tempPathFor(filePath, "durable");
+    gateway.writeFile(tempPath, content, "utf-8");
+    try {
+      try {
+        await retryFileOperation(() => gateway.renameFile(tempPath, filePath), retryDelaysMs);
+      } catch {
+        await retryFileOperation(() => gateway.copyFile(tempPath, filePath), retryDelaysMs);
+        try {
+          gateway.deleteFile(tempPath);
+        } catch {
+        }
+      }
+    } catch (error) {
+      try {
+        gateway.deleteFile(tempPath);
+      } catch {
+      }
+      throw error;
+    }
+  }
+  async function copyExistingFile(gateway, sourcePath, destinationPath, retryDelaysMs) {
+    if (!gateway.exists(sourcePath)) {
+      return false;
+    }
+    await retryFileOperation(() => gateway.copyFile(sourcePath, destinationPath), retryDelaysMs);
+    return true;
+  }
+  function readCandidate(options, role, path) {
+    if (!options.gateway.exists(path)) {
+      return null;
+    }
+    const rawContent = options.gateway.readFile(path, "utf-8");
+    const parsed = options.parse(rawContent, path);
+    const updatedAt = Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : 0;
+    return {
+      ...parsed,
+      updatedAt,
+      role,
+      path,
+      rawContent
+    };
+  }
+  function candidatePriority(role) {
+    if (role === "main") return 3;
+    if (role === "backup") return 2;
+    return 1;
+  }
+  function chooseBestCandidate(candidates) {
+    return [...candidates].sort((a, b) => {
+      const updatedAtDiff = b.updatedAt - a.updatedAt;
+      if (updatedAtDiff !== 0) return updatedAtDiff;
+      return candidatePriority(b.role) - candidatePriority(a.role);
+    })[0];
+  }
+  async function writeDurableFile(options, content) {
+    const parsed = options.parse(content, options.filePath);
+    const durableContent = parsed.content;
+    const paths = durableFilePaths(options.filePath);
+    const delays = retryDelays(options);
+    if (options.gateway.exists(paths.backup)) {
+      await copyExistingFile(options.gateway, paths.backup, paths.previous, delays);
+    }
+    await replaceFile(options.gateway, paths.backup, durableContent, delays);
+    await replaceFile(options.gateway, paths.main, durableContent, delays);
+  }
+  async function loadDurableFile(options) {
+    const paths = durableFilePaths(options.filePath);
+    const roles = [
+      ["main", paths.main],
+      ["backup", paths.backup],
+      ["previous", paths.previous]
+    ];
+    const candidates = [];
+    for (const [role, path] of roles) {
+      try {
+        const candidate = readCandidate(options, role, path);
+        if (candidate) {
+          candidates.push(candidate);
+        }
+      } catch {
+      }
+    }
+    if (candidates.length === 0) {
+      return null;
+    }
+    const best = chooseBestCandidate(candidates);
+    const main = candidates.find((candidate) => candidate.role === "main");
+    const backup = candidates.find((candidate) => candidate.role === "backup");
+    const needsMainRestore = !main || main.rawContent !== best.content;
+    const needsBackupRefresh = !backup || backup.rawContent !== best.content;
+    let restoredMain = false;
+    let refreshedBackup = false;
+    let repairError;
+    const delays = retryDelays(options);
+    try {
+      if (needsBackupRefresh) {
+        if (backup && backup.rawContent !== best.content) {
+          await replaceFile(options.gateway, paths.previous, backup.content, delays);
+        }
+        await replaceFile(options.gateway, paths.backup, best.content, delays);
+        refreshedBackup = true;
+      }
+      if (needsMainRestore) {
+        await replaceFile(options.gateway, paths.main, best.content, delays);
+        restoredMain = true;
+      }
+    } catch (error) {
+      repairError = error;
+    }
+    return {
+      data: best.data,
+      content: best.content,
+      source: best.role,
+      restoredMain,
+      refreshedBackup,
+      repairError
+    };
+  }
+  function durableFileExists(gateway, filePath) {
+    const paths = durableFilePaths(filePath);
+    return gateway.exists(paths.main) || gateway.exists(paths.backup) || gateway.exists(paths.previous);
+  }
+  function deleteDurableFile(gateway, filePath) {
+    const paths = durableFilePaths(filePath);
+    let deleted = false;
+    for (const path of [paths.main, paths.backup, paths.previous]) {
+      if (gateway.exists(path)) {
+        gateway.deleteFile(path);
+        deleted = true;
+      }
+    }
+    return deleted;
+  }
+
   // ../../packages/agent-framework/src/session/store.ts
   var SESSION_VERSION = 2;
   function isSessionEntry(value) {
@@ -15932,28 +16227,6 @@ ${compactSummary}`;
       // Keep for backward compatibility
     };
   }
-  function writeFileAtomic(gateway, filePath, content) {
-    const tempPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-    gateway.writeFile(tempPath, content, "utf-8");
-    try {
-      const req = globalThis.require;
-      if (typeof req === "function") {
-        req("fs").renameSync(tempPath, filePath);
-      } else {
-        gateway.writeFile(filePath, content, "utf-8");
-        try {
-          gateway.deleteFile(tempPath);
-        } catch {
-        }
-      }
-    } catch {
-      gateway.writeFile(filePath, content, "utf-8");
-      try {
-        gateway.deleteFile(tempPath);
-      } catch {
-      }
-    }
-  }
   var FileSessionStore = class {
     sessionsDir;
     gateway;
@@ -15982,6 +16255,33 @@ ${compactSummary}`;
     getSessionPath(sessionId) {
       const safeId = sessionId.replace(/[^a-zA-Z0-9_-]/g, "_");
       return this.gateway.join(this.sessionsDir, `${safeId}.json`);
+    }
+    normalizeLoadedData(data) {
+      if (data.version === LEGACY_VERSION || !data.version) {
+        return { data: migrateV1ToV2(data), shouldPersist: true };
+      }
+      if (data.version !== SESSION_VERSION) {
+        console.warn(
+          `[SessionStore] Session version mismatch: ${data.version} vs ${SESSION_VERSION}`
+        );
+      }
+      if (!data.entries) {
+        data.entries = [];
+      }
+      return { data, shouldPersist: false };
+    }
+    parseSessionContent(content, filePath) {
+      if (!content || content.trim().length === 0) {
+        throw new Error("empty session file");
+      }
+      const parsed = JSON.parse(content);
+      const normalized = this.normalizeLoadedData(parsed);
+      const persistedContent = normalized.shouldPersist ? JSON.stringify(normalized.data, null, 2) : content;
+      return {
+        data: normalized.data,
+        content: persistedContent,
+        updatedAt: normalized.data.metadata?.updatedAt ?? 0
+      };
     }
     /**
      * Save a session to disk (v2 format)
@@ -16012,7 +16312,11 @@ ${compactSummary}`;
       };
       const json = JSON.stringify(sessionData, null, 2);
       const filePath = this.getSessionPath(sessionId);
-      writeFileAtomic(this.gateway, filePath, json);
+      await writeDurableFile({
+        gateway: this.gateway,
+        filePath,
+        parse: (content, path) => this.parseSessionContent(content, path)
+      }, json);
     }
     /**
      * Legacy save method for backward compatibility
@@ -16040,32 +16344,23 @@ ${compactSummary}`;
      */
     async load(sessionId) {
       const filePath = this.getSessionPath(sessionId);
-      if (!this.gateway.exists(filePath)) {
-        return null;
-      }
       try {
-        const json = this.gateway.readFile(filePath, "utf-8");
-        if (!json || json.trim().length === 0) {
-          console.warn(`[SessionStore] Empty session file: ${sessionId}, removing`);
-          this.gateway.deleteFile(filePath);
+        const loaded = await loadDurableFile({
+          gateway: this.gateway,
+          filePath,
+          parse: (content, path) => this.parseSessionContent(content, path)
+        });
+        if (!loaded) {
           return null;
         }
-        const data = JSON.parse(json);
-        if (data.version === LEGACY_VERSION || !data.version) {
-          const migrated = migrateV1ToV2(data);
-          const migratedJson = JSON.stringify(migrated, null, 2);
-          writeFileAtomic(this.gateway, filePath, migratedJson);
-          return migrated;
-        }
-        if (data.version !== SESSION_VERSION) {
+        if (loaded.restoredMain || loaded.refreshedBackup) {
           console.warn(
-            `[SessionStore] Session version mismatch: ${data.version} vs ${SESSION_VERSION}`
+            `[SessionStore] Repaired session ${sessionId} from ${loaded.source}` + (loaded.repairError ? ` with repair warning: ${loaded.repairError}` : "")
           );
+        } else if (loaded.repairError) {
+          console.warn(`[SessionStore] Loaded session ${sessionId} but sidecar refresh failed: ${loaded.repairError}`);
         }
-        if (!data.entries) {
-          data.entries = [];
-        }
-        return data;
+        return loaded.data;
       } catch (e) {
         console.error(`[SessionStore] Failed to load session: ${sessionId}`, e);
         return null;
@@ -16076,12 +16371,8 @@ ${compactSummary}`;
      */
     async delete(sessionId) {
       const filePath = this.getSessionPath(sessionId);
-      if (!this.gateway.exists(filePath)) {
-        return false;
-      }
       try {
-        this.gateway.deleteFile(filePath);
-        return true;
+        return deleteDurableFile(this.gateway, filePath);
       } catch (e) {
         console.error(`[SessionStore] Failed to delete session: ${sessionId}`, e);
         return false;
@@ -16092,7 +16383,7 @@ ${compactSummary}`;
      */
     async exists(sessionId) {
       const filePath = this.getSessionPath(sessionId);
-      return this.gateway.exists(filePath);
+      return durableFileExists(this.gateway, filePath);
     }
     /**
      * List all session IDs
@@ -16102,7 +16393,20 @@ ${compactSummary}`;
         return [];
       }
       const files = this.gateway.readdir(this.sessionsDir);
-      return files.filter((f) => f.endsWith(".json")).filter((f) => !f.endsWith("-files.json")).map((f) => f.replace(/\.json$/i, ""));
+      const sessionIds = /* @__PURE__ */ new Set();
+      for (const file of files) {
+        if (file.endsWith("-files.json") || file.endsWith("-files.json.bak") || file.endsWith("-files.json.prev")) {
+          continue;
+        }
+        if (file.endsWith(".json")) {
+          sessionIds.add(file.replace(/\.json$/i, ""));
+        } else if (file.endsWith(".json.bak")) {
+          sessionIds.add(file.replace(/\.json\.bak$/i, ""));
+        } else if (file.endsWith(".json.prev")) {
+          sessionIds.add(file.replace(/\.json\.prev$/i, ""));
+        }
+      }
+      return [...sessionIds];
     }
     /**
      * List all session metadata
@@ -21155,7 +21459,7 @@ Queries tried: ${details.actualQueries.join("; ") || query}` }],
   }
 
   // src/unity-http-client.ts
-  function sleep2(ms) {
+  function sleep3(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   var sseBuffers = /* @__PURE__ */ new Map();
@@ -21277,7 +21581,7 @@ Queries tried: ${details.actualQueries.join("; ") || query}` }],
           if (retryMatch) retryAfterMs = parseInt(retryMatch[1], 10) * 1e3;
           const backoffMs = Math.max(retryAfterMs, 2 ** attempt * 1e3 + Math.random() * 500);
           globalThis.pieBridge?.log?.("warn", `[UnityHttpClient] ${httpStatus} \u2013 retrying in ${Math.round(backoffMs)}ms (attempt ${attempt + 1}/${_UnityHttpClient.MAX_RETRIES})`);
-          await sleep2(backoffMs);
+          await sleep3(backoffMs);
           continue;
         }
         const errorBody = sseBuffers.get(requestId)?.httpError ?? `HTTP ${httpStatus}`;
@@ -25656,7 +25960,7 @@ ${initialAgentsFile}`);
     bridge.sendToUnity("turn_end", { role: "assistant", stopReason: "stop" });
     bridge.sendToUnity("agent_end", {});
   }
-  function sleep3(ms) {
+  function sleep4(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   async function runDebugLocalStream(commandText, promptText) {
@@ -25690,7 +25994,7 @@ ${initialAgentsFile}`);
     const chunkDelayMs = slowMode ? 400 : 250;
     for (const chunk of chunks) {
       bridge.sendToUnity("message_update", { type: "text_delta", delta: chunk });
-      await sleep3(chunkDelayMs);
+      await sleep4(chunkDelayMs);
     }
     const assistantText2 = chunks.join("");
     const assistantMessage = {
