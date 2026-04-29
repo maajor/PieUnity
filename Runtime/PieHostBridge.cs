@@ -1,39 +1,8 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace Pie
 {
-    [Serializable]
-    internal sealed class PieHostBridgeCapabilityPayload
-    {
-        public string kind;
-        public string name;
-        public string @namespace;
-        public string description;
-        public string mode;
-        public bool readOnly;
-        public bool requiresMainThread = true;
-        public string owner;
-        public string writeScope;
-        public string returns;
-        public string recommendedWorkflow;
-        public string[] examples;
-        public string[] errorCodes;
-        public bool destructive;
-        public bool canTriggerDomainReload;
-        public PieUnityParameterDescriptor[] parameters;
-    }
-
-    [Serializable]
-    internal sealed class PieHostBridgeRequest
-    {
-        public string action;
-        public string hostNamespace;
-        public string hostDisplayName;
-        public PieHostBridgeCapabilityPayload[] capabilities;
-    }
-
     /// <summary>
     /// Structured host bridge surface for JS-side runtime hosts and legacy C# handlers.
     /// JS uses pieBridge.callHost("pie.host_bridge", { action, ... }) for registration.
@@ -98,7 +67,7 @@ namespace Pie
 
         public static string InvokeHostBridge(string argsJson)
         {
-            var request = JsonUtility.FromJson<PieHostBridgeRequest>(argsJson ?? "{}") ?? new PieHostBridgeRequest();
+            var request = PieHostBridgeProtocol.ParseRequest(argsJson);
             var action = (request.action ?? "").Trim().ToLowerInvariant();
             var hostNamespace = (request.hostNamespace ?? "").Trim();
 
@@ -108,7 +77,7 @@ namespace Pie
                     return RegisterRuntimeHost(hostNamespace, request.hostDisplayName, request.capabilities);
                 case "unregister_host":
                     PieUnityCapabilityRegistry.UnregisterRuntimeHost(hostNamespace);
-                    return "{\"ok\":true}";
+                    return PieHostBridgeProtocol.SuccessJson();
                 default:
                     throw new InvalidOperationException("Unsupported host bridge action: " + action);
             }
@@ -120,33 +89,7 @@ namespace Pie
             var items = payloads ?? new PieHostBridgeCapabilityPayload[0];
             for (var i = 0; i < items.Length; i++)
             {
-                var payload = items[i] ?? new PieHostBridgeCapabilityPayload();
-                descriptors.Add(new PieUnityCapabilityDescriptor
-                {
-                    kind = payload.kind ?? "tool",
-                    name = payload.name ?? "",
-                    ns = string.IsNullOrWhiteSpace(payload.@namespace) ? hostNamespace : payload.@namespace,
-                    description = payload.description ?? "",
-                    mode = string.IsNullOrWhiteSpace(payload.mode) ? "runtime" : payload.mode,
-                    availableIn = string.IsNullOrWhiteSpace(payload.mode) ? "runtime" : payload.mode,
-                    capabilityKind = "host",
-                    owner = payload.owner ?? "",
-                    writeScope = payload.writeScope ?? "",
-                    returns = payload.returns ?? "",
-                    recommendedWorkflow = payload.recommendedWorkflow ?? "",
-                    examples = payload.examples ?? new string[0],
-                    errorCodes = payload.errorCodes ?? new string[0],
-                    readOnly = payload.readOnly,
-                    deprecated = false,
-                    convenience = false,
-                    requiresMainThread = payload.requiresMainThread,
-                    destructive = payload.destructive,
-                    editorOnly = false,
-                    runtimeOnly = true,
-                    canTriggerDomainReload = payload.canTriggerDomainReload,
-                    aliases = new string[0],
-                    parameters = payload.parameters ?? new PieUnityParameterDescriptor[0],
-                });
+                descriptors.Add(PieHostBridgeProtocol.ToDescriptor(hostNamespace, items[i]));
             }
 
             if (!PieUnityCapabilityRegistry.TryReplaceRuntimeHost(
